@@ -5,18 +5,7 @@
 // is expected at app/libs/mobile.aar before Gradle runs — the release workflow copies
 // it there after `gomobile bind`.
 buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.5.2'
-    }
-}
-
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
     }
 }
