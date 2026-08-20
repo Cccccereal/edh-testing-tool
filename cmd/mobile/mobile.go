@@ -1,4 +1,4 @@
-// Command mobilebuild is the gomobile bind entry point for the Android APK.
+// Package mobile is the gomobile bind entry point for the Android APK.
 //
 // It exposes a single generated-Java API (App.Start(port) -> string) that spins up the
 // full analysis server in-process over loopback, returning the base URL the WebView
@@ -6,10 +6,7 @@
 // listen on 127.0.0.1:<port> (a free port supplied by the Android shell via
 // TcpListener) and skips the browser-open / signal-handling logic that only makes sense
 // on a host OS.
-//
-// gomobile requires a `package main` with an exported function, so this file is the
-// canonical "mobile" package rather than a plain importable library.
-package main
+package mobile
 
 import (
 	"embed"
@@ -118,5 +115,3 @@ func Start(port int) string {
 
 	return fmt.Sprintf("http://127.0.0.1:%d/", realPort)
 }
-
-func main() {}
