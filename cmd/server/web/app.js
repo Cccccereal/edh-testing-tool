@@ -2088,7 +2088,9 @@ function initScrollAnimations() {
     rootMargin: '-100px 0px -100px 0px'
   });
 
-  document.querySelectorAll('.catalog-section, .result-card').forEach((el) => {
+  // Apply animations to major sections, but exclude recommendation section
+  // (it contains many dynamic cards, better to keep it stable)
+  document.querySelectorAll('.catalog-section:not(#recommendation-section), .result-card').forEach((el) => {
     el.classList.add('fade-in-hidden');
     observer.observe(el);
   });
