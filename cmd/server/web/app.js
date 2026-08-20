@@ -1174,6 +1174,9 @@ function render(payload) {
   beginEditing(payload.deck?.id || '', currentDeckCards);
   results.hidden = false;
   results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  
+  // Initialize scroll-triggered animations after content is rendered
+  setTimeout(() => initScrollAnimations(), 100);
 }
 
 function renderManabase(manabase) {
@@ -2064,4 +2067,24 @@ function escapeHTML(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
   })[char]);
+}
+
+// Scroll-triggered fade-in animation (Bek Ventures style)
+function initScrollAnimations() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('fade-in-visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, {
+    threshold: 0.1,
+    rootMargin: '0px 0px -50px 0px'
+  });
+
+  document.querySelectorAll('.catalog-section, .result-card, .deck-strip').forEach((el) => {
+    el.classList.add('fade-in-hidden');
+    observer.observe(el);
+  });
 }
