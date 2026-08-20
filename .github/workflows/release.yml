@@ -193,7 +193,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: platforms;android-34 build-tools;34.0.0
+          packages: platforms;android-34 build-tools;34.0.0 ndk;25.2.9519653
 
       # 壳工程已提交 gradlew + gradle-wrapper.jar + wrapper.properties，
       # 所以这里直接用 wrapper 构建，无需现场生成、也无需系统 gradle。
