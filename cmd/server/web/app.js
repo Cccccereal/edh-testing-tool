@@ -1423,9 +1423,12 @@ function renderRecommendations(recommendations, keywords) {
   const container = document.querySelector('#recommendation-list');
   section.hidden = !recommendations.length;
   document.querySelector('#recommendation-keywords').textContent = keywords.length ? `EDHREC 主题：${keywords.join(' · ')}` : '';
-  container.innerHTML = recommendations.map((group) => `
-    <section class="recommendation-group" data-tag="${escapeHTML(group.tag || '')}">
-      <div class="recommendation-group-heading"><h3>${escapeHTML(group.header || 'Recommendations')}</h3><span>${group.cards?.length || 0}</span></div>
+  container.innerHTML = recommendations.map((group, index) => `
+    <section class="recommendation-group is-collapsed" data-tag="${escapeHTML(group.tag || '')}" data-group-index="${index}">
+      <div class="recommendation-group-heading toggleable" role="button" tabindex="0" data-recommendation-toggle="${index}">
+        <div><h3>${escapeHTML(group.header || 'Recommendations')}</h3><span>${group.cards?.length || 0} 张推荐</span></div>
+        <button type="button" class="section-heading-toggle" aria-label="展开">展开</button>
+      </div>
       <div class="recommendation-row">${(group.cards || []).map((item) => {
         const fills = (item.fills || []).map((fill) => `<li><strong>${escapeHTML(fill.label)} · 还缺 ${Number(fill.gap) || 0}</strong><span>${escapeHTML(fill.reason || '')}</span></li>`).join('');
         return `<article class="recommendation-card">
@@ -1441,6 +1444,17 @@ function renderRecommendations(recommendations, keywords) {
         </article>`;
       }).join('')}</div>
     </section>`).join('');
+  
+  // Attach toggle handlers for each recommendation group
+  container.querySelectorAll('[data-recommendation-toggle]').forEach((toggle) => {
+    toggle.addEventListener('click', handleRecommendationToggle);
+    toggle.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleRecommendationToggle.call(toggle, e);
+      }
+    });
+  });
 }
 
 function renderDeckCards(cards) {
@@ -2084,8 +2098,8 @@ function initScrollAnimations() {
       }
     });
   }, {
-    threshold: 0.15,
-    rootMargin: '-100px 0px -100px 0px'
+    threshold: 0.2,  // Increased to reduce flicker at boundaries
+    rootMargin: '-80px 0px -80px 0px'  // Reduced margin for more stable triggering
   });
 
   // Apply animations to major sections, but exclude recommendation section
@@ -2094,4 +2108,34 @@ function initScrollAnimations() {
     el.classList.add('fade-in-hidden');
     observer.observe(el);
   });
+}
+
+function handleRecommendationToggle(e) {
+  const toggle = e.currentTarget;
+  const index = toggle.getAttribute('data-recommendation-toggle');
+  const group = document.querySelector(`.recommendation-group[data-group-index="${index}"]`);
+  const button = toggle.querySelector('.section-heading-toggle');
+  
+  if (!group) return;
+  
+  const isCollapsed = group.classList.contains('is-collapsed');
+  
+  if (isCollapsed) {
+    // Expand and scroll into view with focus
+    group.classList.remove('is-collapsed');
+    button.textContent = '收起';
+    button.setAttribute('aria-label', '收起');
+    
+    // Scroll the group into center of viewport
+    setTimeout(() => {
+      const rect = group.getBoundingClientRect();
+      const scrollTarget = window.scrollY + rect.top - (window.innerHeight / 2) + (rect.height / 2);
+      window.scrollTo({ top: scrollTarget, behavior: 'smooth' });
+    }, 100);
+  } else {
+    // Collapse
+    group.classList.add('is-collapsed');
+    button.textContent = '展开';
+    button.setAttribute('aria-label', '展开');
+  }
 }
