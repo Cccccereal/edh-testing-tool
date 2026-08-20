@@ -10,6 +10,7 @@ const retryButton = document.querySelector('#retry-button');
 const decklistToggle = document.querySelector('#decklist-toggle');
 const copyDecklistButton = document.querySelector('#copy-decklist');
 const clearDecklistButton = document.querySelector('#clear-decklist');
+const themeToggle = document.querySelector('#theme-toggle');
 let currentDeckText = '';
 let currentDeckCards = [];
 let pendingSwapAdd = '';
@@ -1079,6 +1080,20 @@ decklistToggle.addEventListener('click', () => {
   const collapsed = list.classList.toggle('collapsed');
   decklistToggle.textContent = collapsed ? '展开牌表' : '收起牌表';
 });
+
+// Theme toggle
+themeToggle.addEventListener('click', () => {
+  const root = document.documentElement;
+  const isLight = root.classList.toggle('light-mode');
+  themeToggle.textContent = isLight ? '亮色' : '暗色';
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+});
+
+// Load saved theme preference
+if (localStorage.getItem('theme') === 'light') {
+  document.documentElement.classList.add('light-mode');
+  themeToggle.textContent = '亮色';
+}
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
