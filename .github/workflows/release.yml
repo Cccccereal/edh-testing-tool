@@ -203,6 +203,8 @@ jobs:
           gomobile init
 
       - name: Build mobile AAR (gomobile bind)
+        env:
+          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
         run: |
           mkdir -p android/app/libs
           gomobile bind -target=android -o android/app/libs/mobile.aar ./cmd/mobile
