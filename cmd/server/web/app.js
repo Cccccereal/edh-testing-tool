@@ -2074,16 +2074,21 @@ function initScrollAnimations() {
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
       if (entry.isIntersecting) {
+        // Fade in when entering viewport
         entry.target.classList.add('fade-in-visible');
-        observer.unobserve(entry.target);
+        entry.target.classList.remove('fade-out-visible');
+      } else {
+        // Fade out when leaving viewport
+        entry.target.classList.remove('fade-in-visible');
+        entry.target.classList.add('fade-out-visible');
       }
     });
   }, {
-    threshold: 0.1,
-    rootMargin: '0px 0px -50px 0px'
+    threshold: 0.15,
+    rootMargin: '-100px 0px -100px 0px'
   });
 
-  document.querySelectorAll('.catalog-section, .result-card, .deck-strip').forEach((el) => {
+  document.querySelectorAll('.catalog-section, .result-card').forEach((el) => {
     el.classList.add('fade-in-hidden');
     observer.observe(el);
   });

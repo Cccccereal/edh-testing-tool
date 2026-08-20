@@ -85,9 +85,11 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .skeleton-heading { height: 32px; width: 60%; margin-bottom: 16px; }
 .skeleton-metric { height: 80px; margin-bottom: 12px; }
 @keyframes skeleton-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-@keyframes fadeInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-.fade-in-hidden { opacity: 0; transform: translateY(32px); }
-.fade-in-visible { animation: fadeInUp 0.7s ease-out forwards; }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(60px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0.3; transform: translateY(-20px); } }
+.fade-in-hidden { opacity: 0; transform: translateY(60px); }
+.fade-in-visible { animation: fadeInUp 0.8s ease-out forwards; }
+.fade-out-visible { animation: fadeOut 0.5s ease-out forwards; }
 .results { margin-top: 54px; content-visibility: auto; }
 .deck-strip { display: flex; justify-content: space-between; gap: 20px; align-items: end; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
 .deck-strip h2 { font-size: clamp(30px, 4vw, 52px); }
