@@ -1144,11 +1144,15 @@ function isMoxfieldDeckURL(value) {
 
 function setLoading(active) {
   loading.hidden = !active;
+  const skeleton = document.querySelector('#skeleton');
+  if (skeleton) skeleton.hidden = !active;
   submitButton.disabled = active;
   submitButton.querySelector('.button-label').textContent = active ? '分析中…' : '开始分析';
 }
 
 function render(payload) {
+  const skeleton = document.querySelector('#skeleton');
+  if (skeleton) skeleton.hidden = true;
   document.querySelector('#deck-name').textContent = payload.deck.name || payload.deck.commanders.join(' / ');
   document.querySelector('#deck-meta').textContent = `${payload.deck.commanders.join(' / ')} · ${payload.deck.card_count} 张牌`;
   renderProvider('salt', payload.results.commandersalt, [

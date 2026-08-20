@@ -4,8 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="同时查询 CommanderSalt 与 EDH Power Level 的 Commander 牌组评分。">
+  <meta name="color-scheme" content="dark">
   <title>Commander Power Check</title>
   <link rel="stylesheet" href="/styles.css">
+
 </head>
 <body>
   <main class="shell">
@@ -126,6 +128,34 @@
     <section id="loading" class="loading" hidden aria-live="polite">
       <div class="loader"></div>
       <div><strong>正在分析牌组</strong><span>EDH Power Level 可能需要约一分钟</span></div>
+    </section>
+
+    <section id="skeleton" class="results" hidden aria-hidden="true">
+      <div class="deck-strip">
+        <div>
+          <p class="eyebrow">ANALYSIS COMPLETE</p>
+          <div class="skeleton skeleton-heading"></div>
+          <div class="skeleton skeleton-text" style="width: 40%;"></div>
+        </div>
+      </div>
+      <div class="result-grid">
+        <article class="result-card">
+          <div style="height: 5px; background: var(--orange);"></div>
+          <div style="padding: 28px 22px;">
+            <div class="skeleton skeleton-text" style="width: 50%;"></div>
+            <div class="skeleton skeleton-metric"></div>
+            <div class="skeleton skeleton-metric"></div>
+          </div>
+        </article>
+        <article class="result-card">
+          <div style="height: 5px; background: var(--blue);"></div>
+          <div style="padding: 28px 22px;">
+            <div class="skeleton skeleton-text" style="width: 50%;"></div>
+            <div class="skeleton skeleton-metric"></div>
+            <div class="skeleton skeleton-metric"></div>
+          </div>
+        </article>
+      </div>
     </section>
 
     <section id="results" class="results" hidden aria-live="polite">
