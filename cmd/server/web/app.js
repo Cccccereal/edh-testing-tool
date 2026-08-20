@@ -1175,6 +1175,9 @@ function render(payload) {
   results.hidden = false;
   results.scrollIntoView({ behavior: 'smooth', block: 'start' });
   
+  // Show sticky navigation
+  showStickyNav();
+  
   // Initialize scroll-triggered animations after content is rendered
   setTimeout(() => initScrollAnimations(), 100);
 }
@@ -2138,4 +2141,48 @@ function handleRecommendationToggle(e) {
     button.textContent = '展开';
     button.setAttribute('aria-label', '展开');
   }
+}
+
+function showStickyNav() {
+  const nav = document.querySelector('#sticky-nav');
+  nav.hidden = false;
+  document.body.classList.add('has-sticky-nav');
+  
+  // Set up intersection observer for active link highlighting
+  const sections = document.querySelectorAll('#results, #manabase-section, #construction-section, #combo-section, #recommendation-section, #decklist-section');
+  const navLinks = document.querySelectorAll('.sticky-nav-link');
+  
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navLinks.forEach((link) => {
+          if (link.getAttribute('href') === `#${id}`) {
+            link.classList.add('active');
+          } else {
+            link.classList.remove('active');
+          }
+        });
+      }
+    });
+  }, {
+    threshold: 0.3,
+    rootMargin: '-80px 0px -60% 0px'
+  });
+  
+  sections.forEach((section) => observer.observe(section));
+  
+  // Smooth scroll on nav click
+  navLinks.forEach((link) => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetId = link.getAttribute('href').substring(1);
+      const target = document.getElementById(targetId);
+      if (target) {
+        const navHeight = nav.offsetHeight;
+        const targetPosition = target.getBoundingClientRect().top + window.scrollY - navHeight - 20;
+        window.scrollTo({ top: targetPosition, behavior: 'smooth' });
+      }
+    });
+  });
 }

@@ -44,7 +44,13 @@ body::before {
 }
 button, input { font: inherit; }
 button { cursor: pointer; }
+.sticky-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: rgba(16, 17, 15, 0.95); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+.sticky-nav-inner { max-width: 1400px; margin: 0 auto; padding: 0 24px; display: flex; gap: 2px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.sticky-nav-link { padding: 16px 20px; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .05em; text-decoration: none; white-space: nowrap; transition: color .15s, background .15s; border-bottom: 2px solid transparent; }
+.sticky-nav-link:hover { color: var(--ink); background: rgba(200, 232, 74, .06); }
+.sticky-nav-link.active { color: var(--acid); border-bottom-color: var(--acid); }
 .shell { max-width: 1400px; width: min(100%, calc(100% - 48px)); margin: 0 auto; padding: 72px 24px 56px; position: relative; }
+body.has-sticky-nav .shell { padding-top: 120px; }
 .hero { max-width: 880px; margin-bottom: 58px; }
 .eyebrow { margin: 0 0 14px; color: var(--acid); font: 700 13px/1.2 var(--font-ui); letter-spacing: .16em; }
 h1 { margin: 0; font-family: var(--font-display); font-size: clamp(56px, 8vw, 106px); line-height: .9; letter-spacing: -.06em; font-weight: 780; }
