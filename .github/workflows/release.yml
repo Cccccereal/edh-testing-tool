@@ -195,8 +195,19 @@ jobs:
         with:
           packages: platforms;android-34 build-tools;34.0.0 ndk;25.2.9519653
 
-      # 壳工程已提交 gradlew + gradle-wrapper.jar + wrapper.properties，
-      # 所以这里直接用 wrapper 构建，无需现场生成、也无需系统 gradle。
+      # 生成 release 签名用的 keystore。keytool 随 JDK 自带。
+      # 本地没有 keystore 时生成一个新的（密码写死仅用于 CI 产物签名；
+      # 若需分发长期稳定签名，应改为从 GitHub Secrets 读取固定 keystore）。
+      - name: Generate release keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore android/release.keystore \
+            -alias edhpowerlevel \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass edhpowerlevel-ci \
+            -keypass edhpowerlevel-ci \
+            -dname "CN=EDH Power Level, OU=Dev, O=EDH, L=Beijing, ST=Beijing, C=CN"
+
       - name: Install gomobile
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
@@ -209,19 +220,30 @@ jobs:
           mkdir -p android/app/libs
           gomobile bind -target=android -androidapi 24 -o android/app/libs/mobile.aar ./cmd/mobile
 
-      - name: Assemble APK
+      - name: Assemble signed APK
         working-directory: android
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
+          KEYSTORE_FILE: ${{ github.workspace }}/android/release.keystore
+          KEYSTORE_PASSWORD: edhpowerlevel-ci
+          KEY_ALIAS: edhpowerlevel
+          KEY_PASSWORD: edhpowerlevel-ci
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
+
+      - name: Verify APK signatures (v1 + v2)
+        run: |
+          APK=$(ls android/app/build/outputs/apk/release/*.apk)
+          echo "APK: $APK"
+          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          "$APKSIGNER" verify --print-certs "$APK" || (echo "apksigner verify failed" && exit 1)
 
       - name: Resolve version and stage APK
         run: |
           v="$(git log -1 --date=format:'%Y%m%d-%H%M' --format=%cd)"
           echo "VERSION=$v" >> "$GITHUB_ENV"
-          APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          APK="android/app/build/outputs/apk/release/app-release.apk"
           cp "$APK" "edh-powerlevel-$v.apk"
           echo "APK_PATH=edh-powerlevel-$v.apk" >> "$GITHUB_ENV"
 
