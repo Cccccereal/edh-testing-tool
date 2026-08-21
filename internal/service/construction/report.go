@@ -142,15 +142,37 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 			return true, "Targeted removal or interaction"
 		}
 	case "draw_discard":
+		// 牌差件：抽牌、弃牌、放逐牌组顶、坟场利用
 		if strings.Contains(text, "draw a card") || strings.Contains(text, "draw cards") || strings.Contains(text, "draw that many") || strings.Contains(text, "discard") {
 			return true, "Draws cards or causes discard"
+		}
+		// 放逐牌组顶（impulse draw / exile from top）
+		if strings.Contains(text, "exile the top") || (strings.Contains(text, "exile") && strings.Contains(text, "top") && strings.Contains(text, "library")) {
+			return true, "Exile from library top (impulse draw)"
+		}
+		// 坟场利用（flashback, jump-start, escape, 等）
+		if strings.Contains(text, "from your graveyard") || strings.Contains(text, "flashback") || strings.Contains(text, "escape") || strings.Contains(text, "jump-start") {
+			return true, "Graveyard card advantage"
 		}
 	case "ramp":
 		if strings.Contains(typeLine, "land") {
 			return false, ""
 		}
+		// 传统加速：产法力、找基本地、降费
 		if strings.Contains(text, "add {") || strings.Contains(text, "additional land") || strings.Contains(text, "search your library for a basic land") || strings.Contains(text, "costs {") {
 			return true, "Produces mana, finds lands, or reduces cost"
+		}
+		// 珍宝 (Treasure tokens)
+		if strings.Contains(text, "treasure") {
+			return true, "Creates Treasure tokens"
+		}
+		// 找非基本地进场（包括 shock lands, triomes, 等）
+		if (strings.Contains(text, "search your library for a land") || strings.Contains(text, "search your library for a plains") || strings.Contains(text, "search your library for an island") || strings.Contains(text, "search your library for a swamp") || strings.Contains(text, "search your library for a mountain") || strings.Contains(text, "search your library for a forest")) && !strings.Contains(text, "basic") {
+			return true, "Finds non-basic lands"
+		}
+		// 通用找地短语（如 "search for a land card"）
+		if strings.Contains(text, "search") && strings.Contains(text, "land") && strings.Contains(text, "battlefield") {
+			return true, "Tutors lands onto battlefield"
 		}
 	case "plan":
 		if strings.Contains(text, "token") || strings.Contains(text, "proliferate") || strings.Contains(text, "infect") || strings.Contains(text, "poison") || strings.Contains(text, "whenever") {
