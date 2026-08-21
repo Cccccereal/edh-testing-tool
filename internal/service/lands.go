@@ -52,6 +52,9 @@ var LandCategories = []LandCategory{
 	{ID: "multiplayer", Label: "多人地"},
 	{ID: "fetch", Label: "找地"},
 	{ID: "triome", Label: "三色圈"},
+	{ID: "check", Label: "检查地"},
+	{ID: "reveal", Label: "展示地"},
+	{ID: "slow", Label: "慢地"},
 }
 
 // landPool maps a category id to its full, unfiltered card list. Color identity is
@@ -100,6 +103,27 @@ var landPool = map[string][]colorLand{
 		// Ikoria triomes.
 		{"Indatha Triome", "BGW"}, {"Ketria Triome", "GRU"}, {"Raugrin Triome", "RUW"},
 		{"Savai Triome", "BRW"}, {"Zagoth Triome", "BGU"},
+	},
+	// 操控两个基本地即可竖进的双色地（check lands）。
+	"check": {
+		{"Glacial Fortress", "WU"}, {"Drowned Catacomb", "UB"}, {"Dragonskull Summit", "BR"},
+		{"Rootbound Crag", "RG"}, {"Sunpetal Grove", "GW"}, {"Isolated Chapel", "WB"},
+		{"Clifftop Retreat", "RW"}, {"Hinterland Harbor", "GU"}, {"Woodland Cemetery", "BG"},
+		{"Sulfur Falls", "UR"},
+	},
+	// 操控对应类别地即可竖进的双色地（reveal lands）。
+	"reveal": {
+		{"Prairie Stream", "WU"}, {"Sunken Hollow", "UB"}, {"Smoldering Marsh", "BR"},
+		{"Cinder Glade", "RG"}, {"Canopy Vista", "GW"}, {"Fetid Pools", "WB"},
+		{"Foreboding Ruins", "RW"}, {"Port Town", "GU"}, {"Choked Estuary", "BG"},
+		{"Game Trail", "UR"},
+	},
+	// 基本地类别横进或慢地：竖进有条件的"慢圈"（slow lands）。
+	"slow": {
+		{"Deserted Beach", "WU"}, {"Shipwreck Marsh", "UB"}, {"Haunted Ridge", "BR"},
+		{"Rockfall Vale", "RG"}, {"Overgrown Farmland", "GW"}, {"Frostboil Snarl", "UR"},
+		{"Shadows' Verge", "WB"}, {"Sundown Pass", "RW"}, {"Dreamroot Cascade", "GU"},
+		{"Deathcap Glade", "BG"},
 	},
 }
 

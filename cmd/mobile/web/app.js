@@ -63,6 +63,7 @@ const builderStaplesPanel = document.querySelector('#builder-staples-panel');
 const builderStaplesCategories = document.querySelector('#builder-staples-categories');
 const builderSidebar = document.querySelector('#builder-sidebar');
 const builderComplete = document.querySelector('#builder-complete');
+const builderBackEdit = document.querySelector('#builder-back-edit');
 const builderExport = document.querySelector('#builder-export');
 const builderAnalyze = document.querySelector('#builder-analyze');
 const builderRandomButton = document.querySelector('#builder-random');
@@ -245,7 +246,10 @@ const LAND_CATEGORIES = [
   { id: 'scry', label: '占卜地' },
   { id: 'multiplayer', label: '多人地' },
   { id: 'fetch', label: '找地' },
-  { id: 'triome', label: '三色圈' }
+  { id: 'triome', label: '三色圈' },
+  { id: 'check', label: '检查地' },
+  { id: 'reveal', label: '展示地' },
+  { id: 'slow', label: '慢地' }
 ];
 
 // 常见单卡分类。ID 与后端 service.StapleCategories 对齐；点单类后按主将色组过滤。
@@ -860,6 +864,14 @@ function removeBuildCard(name) {
   renderBuilderSidebar();
 }
 
+// "继续微调" from the completed state: keep the workflow open so the user can keep
+// editing the 100-card draft without ever exceeding the target.
+function backToBuilderEdit() {
+  builderComplete.hidden = true;
+  builderWorkflow.hidden = false;
+  renderBuilderSidebar();
+}
+
 function renderBuilderSidebar() {
   const current = {};
   for (const item of buildCards) {
@@ -1012,6 +1024,7 @@ builderAnalyze.addEventListener('click', () => {
   closeBuilder();
   analyze();
 });
+builderBackEdit.addEventListener('click', backToBuilderEdit);
 
 // Delegate builder candidate clicks through the global click listener. Basic lands
 // are wired here, self-contained and gated to the commander's color identity is
@@ -1827,14 +1840,20 @@ let previewImageCache = new Map(); // url -> resolved element (pre-loaded large 
 // For multi-faced cards, each face's type line and oracle are joined so a split/DFC
 // card shows both halves. The front-end builds this from the payload already served
 // by the API, so no extra lookup happens on hover.
+// When a Chinese translation exists (chinese_type_line / chinese_oracle_text), it is
+// shown below the English text so the full card list and the builder hover agree.
 function previewTextFor(card) {
   const cardObj = card || {};
   const lines = [];
   const addFace = (face) => {
     const type = String(face?.type_line || '').trim();
     const oracle = String(face?.oracle_text || '').trim();
+    const zhType = String(face?.chinese_type_line || '').trim();
+    const zhOracle = String(face?.chinese_oracle_text || '').trim();
     if (type) lines.push(type);
+    if (zhType && zhType !== type) lines.push(zhType);
     if (oracle) lines.push(oracle);
+    if (zhOracle && zhOracle !== oracle) lines.push(zhOracle);
   };
   addFace(cardObj);
   for (const face of Array.isArray(cardObj.faces) ? cardObj.faces : []) {
@@ -1845,6 +1864,12 @@ function previewTextFor(card) {
 
 // Alias kept for the decklist card renderer, which uses the longer name.
 function previewTextForCard(card) {
+  return previewTextFor(card);
+}
+
+// The hover preview's text block. Same content as the full decklist cards, but
+// the builder flow keeps it in the same place so both show the Chinese oracle.
+function builderPreviewTextFor(card) {
   return previewTextFor(card);
 }
 

@@ -87,6 +87,8 @@ h1 span { color: transparent; -webkit-text-stroke: 1px #7d8177; }
 .step { display: grid; place-items: center; width: 42px; height: 42px; background: var(--acid); color: #11130d; font: 800 14px var(--font-ui); }
 h2 { margin: 0; font-size: 27px; letter-spacing: -.02em; }
 .panel-heading p, .deck-strip p { margin: 5px 0 0; color: var(--muted); font-size: 14px; }
+.moxfield-link { display: inline-block; margin-bottom: 10px; color: var(--blue); font-weight: 700; font-size: 14px; text-decoration: none; transition: color .15s; }
+.moxfield-link:hover { color: var(--ink); text-decoration: underline; }
 .input-row { display: grid; grid-template-columns: 1fr auto; border: 1px solid #555a50; background: #0e100d; }
 :root.light-mode .input-row { border-color: #a8ada2; background: #f9faf8; }
 input { min-width: 0; border: 0; outline: 0; color: var(--ink); background: transparent; padding: 19px 20px; font-family: var(--font-ui); font-size: 16px; }

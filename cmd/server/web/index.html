@@ -38,6 +38,7 @@
       </div>
       <form id="analyze-form" novalidate>
         <label class="sr-only" for="deck-url">Moxfield 牌组地址</label>
+        <a class="moxfield-link" href="https://moxfield.com/" target="_blank" rel="noopener noreferrer">前往 Moxfield 首页 ↗</a>
         <div class="input-row">
           <input id="deck-url" name="url" type="url" autocomplete="url" spellcheck="false"
             placeholder="https://moxfield.com/decks/…"
@@ -128,10 +129,11 @@
         <aside id="builder-sidebar" class="builder-sidebar"></aside>
       </div>
       <div id="builder-complete" class="builder-complete" hidden>
-        <div class="builder-complete-head"><p class="eyebrow">DECK COMPLETE</p><h3>牌组已组满 100 张</h3><p class="section-note">现在可以导出牌表，或直接把它送去完整分析。</p></div>
+        <div class="builder-complete-head"><p class="eyebrow">DECK COMPLETE</p><h3>牌组已组满 100 张</h3><p class="section-note">可以继续微调牌表（不会超过 100 张），或直接送去完整分析。</p></div>
         <div class="builder-complete-actions">
           <button id="builder-export" class="ghost-button" type="button">导出牌表</button>
           <button id="builder-analyze" class="primary-button" type="button">送去完整分析</button>
+          <button id="builder-back-edit" class="ghost-button" type="button">继续微调</button>
         </div>
       </div>
     </section>

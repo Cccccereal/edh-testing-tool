@@ -47,6 +47,11 @@ type Card struct {
 	Cmc           float64           `json:"cmc,omitempty"`
 	ProducedMana  []string          `json:"produced_mana,omitempty"`
 	Power         string            `json:"power,omitempty"`
+	// Localized (Simplified Chinese) payloads, populated when Scryfall serves a "zhs"
+	// variant. Empty when no translation exists for the card.
+	ChineseName       string `json:"chinese_name,omitempty"`
+	ChineseTypeLine   string `json:"chinese_type_line,omitempty"`
+	ChineseOracleText string `json:"chinese_oracle_text,omitempty"`
 }
 
 // ManaValue returns the card's converted mana cost (Scryfall cmc). The manabase
@@ -184,6 +189,12 @@ type scryfallCard struct {
 		OracleText  string            `json:"oracle_text"`
 		ImageURIs   map[string]string `json:"image_uris"`
 	} `json:"card_faces"`
+	// Localized fields (Scryfall returns these only for non-English lang requests).
+	ChineseName      string `json:"-"`
+	ChineseTypeLine  string `json:"-"`
+	ChineseOracle    string `json:"-"`
+	PrintedTypeLine  string `json:"printed_type_line,omitempty"`
+	PrintedOracle    string `json:"printed_oracle_text,omitempty"`
 }
 
 // Autocomplete returns a list of canonical card names whose beginnings match the
@@ -390,6 +401,7 @@ func normalizeCard(raw scryfallCard) Card {
 		ColorIdentity: raw.ColorIdentity, Keywords: raw.Keywords, Legalities: raw.Legalities,
 		ImageNormal: images["normal"], ImageSmall: images["small"], Layout: raw.Layout, Faces: faces,
 		Cmc: raw.Cmc, ProducedMana: raw.ProducedMana, Power: raw.Power,
+		ChineseName: raw.ChineseName, ChineseTypeLine: raw.ChineseTypeLine, ChineseOracleText: raw.ChineseOracle,
 	}
 }
 
