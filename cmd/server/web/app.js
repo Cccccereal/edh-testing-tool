@@ -281,6 +281,7 @@ function openBuilder() {
   buildColors = [];
   buildCandidates = [];
   recentShown = [];
+  hasShownCompletePulse = false;
   builderCommanderPreview.hidden = true;
   builderCommanderPreview.innerHTML = '';
   builderPartnerRow.hidden = true;
@@ -554,8 +555,11 @@ function addStapleCard(name, card, gameChanger) {
   buildCards.push(entry);
   renderBuilderSidebar();
   if (isBuilderComplete()) {
-    builderWorkflow.hidden = true;
-    builderComplete.hidden = false;
+    if (!hasShownCompletePulse) {
+      hasShownCompletePulse = true;
+      builderSidebar.classList.add('complete-pulse');
+      setTimeout(() => builderSidebar.classList.remove('complete-pulse'), 2000);
+    }
   } else {
     refreshIfCandidateCollides();
   }
@@ -645,8 +649,11 @@ function addLandCard(name) {
   buildCards.push({ name, card: { name, type_line: 'Land' } });
   renderBuilderSidebar();
   if (isBuilderComplete()) {
-    builderWorkflow.hidden = true;
-    builderComplete.hidden = false;
+    if (!hasShownCompletePulse) {
+      hasShownCompletePulse = true;
+      builderSidebar.classList.add('complete-pulse');
+      setTimeout(() => builderSidebar.classList.remove('complete-pulse'), 2000);
+    }
   } else {
     refreshIfCandidateCollides();
   }
@@ -655,6 +662,11 @@ function addLandCard(name) {
 function isBuilderComplete() {
   return buildCards.length + (buildCommanders.length || (buildCommander ? 1 : 0)) >= BUILD_TARGET;
 }
+
+// Track whether we've shown the 100-card completion animation. Reset when dropping
+// below 100 or starting a new build, so users get visual feedback each time they
+// complete the deck after editing.
+let hasShownCompletePulse = false;
 
 // After a quick-add (land / basic / staple / candidate) puts a card into the draft,
 // refresh the 3-choose-1 hand if any currently shown candidate is now already chosen.
@@ -707,6 +719,7 @@ async function startBuild() {
     buildChosen = [];
     buildCards = [];
     recentShown = [];
+    hasShownCompletePulse = false;
     builderWorkflow.hidden = false;
     builderComplete.hidden = true;
     const first = Array.isArray(payload.candidates) ? payload.candidates : [];
@@ -821,8 +834,11 @@ function addBuildCard(candidate) {
   buildCards.push(entry);
   renderBuilderSidebar();
   if (isBuilderComplete()) {
-    builderWorkflow.hidden = true;
-    builderComplete.hidden = false;
+    if (!hasShownCompletePulse) {
+      hasShownCompletePulse = true;
+      builderSidebar.classList.add('complete-pulse');
+      setTimeout(() => builderSidebar.classList.remove('complete-pulse'), 2000);
+    }
   } else {
     // Fetch a fresh random hand immediately; the un-picked cards vanish with it.
     nextBuildBatch();
@@ -838,8 +854,11 @@ function addBasicLand(type) {
   buildCards.push({ name: type, card: { name: type, type_line: `Basic Land — ${type}` } });
   renderBuilderSidebar();
   if (isBuilderComplete()) {
-    builderWorkflow.hidden = true;
-    builderComplete.hidden = false;
+    if (!hasShownCompletePulse) {
+      hasShownCompletePulse = true;
+      builderSidebar.classList.add('complete-pulse');
+      setTimeout(() => builderSidebar.classList.remove('complete-pulse'), 2000);
+    }
   } else {
     refreshIfCandidateCollides();
   }
@@ -849,6 +868,10 @@ function addBasicLand(type) {
 // name also leaves buildChosen, so the 3-choose-1 pool may offer it again on a later
 // refresh. Reopening the completed deck (if the builder had finished) is left to the
 // caller, but here we simply re-show the workflow if the draft drops below 100.
+// Remove one copy of the named card from the draft. When the last copy is removed the
+// name also leaves buildChosen, so the 3-choose-1 pool may offer it again on a later
+// refresh. When dropping below 100, reset the pulse flag so the next completion shows
+// the green border animation again.
 function removeBuildCard(name) {
   if (!name) return;
   const index = buildCards.findIndex((card) => normalizeBuildName(card.name) === normalizeBuildName(name));
@@ -859,8 +882,7 @@ function removeBuildCard(name) {
   if (!stillPresent) {
     buildChosen = buildChosen.filter((chosen) => chosen !== key);
   }
-  builderComplete.hidden = true;
-  builderWorkflow.hidden = false;
+  hasShownCompletePulse = false;
   renderBuilderSidebar();
 }
 
