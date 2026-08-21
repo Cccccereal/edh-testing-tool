@@ -190,6 +190,9 @@ func (a *Analyzer) BuildSuggest(ctx context.Context, request BuildSuggestRequest
 		a.buildPoolCache.set(cacheKey, pool, time.Now())
 	}
 
+	// Extract commander theme for context-aware "plan" classification.
+	commanderTheme := construction.ExtractTheme([]cardcatalog.Card{commander})
+
 	// Base draw pool: everything not chosen (chosen cards are never re-offered).
 	// Cards can be added both here and through the quick-add panels; both share the
 	// same `chosen` exclusion, so the randomized hand does not artificially hide
@@ -230,11 +233,16 @@ func (a *Analyzer) BuildSuggest(ctx context.Context, request BuildSuggestRequest
 
 	candidates := make([]BuildCandidate, 0, len(selected))
 	for _, item := range selected {
+		// Use theme-aware classification with synergy score
+		ctx := construction.ClassifyContext{
+			CommanderTheme: &commanderTheme,
+			CardSynergy:    item.synergy,
+		}
 		candidates = append(candidates, BuildCandidate{
 			Name:        item.name,
 			Synergy:     item.synergy,
 			Inclusion:   item.inclusion,
-			Fills:       classifyIDs(construction.Classify(item.card)),
+			Fills:       classifyIDs(construction.ClassifyWithContext(item.card, ctx)),
 			Card:        item.card,
 			SourceURL:   item.source,
 			GameChanger: isGameChanger(item.card),

@@ -40,6 +40,12 @@ type Match struct {
 	Reason string `json:"reason"`
 }
 
+// ClassifyContext holds optional context for classification, such as commander theme.
+type ClassifyContext struct {
+	CommanderTheme *Theme
+	CardSynergy    float64 // EDHREC synergy score for this card (0.0 if unknown)
+}
+
 var targets = []struct {
 	id, label string
 	target    int
@@ -89,9 +95,25 @@ func Build(cards []InputCard) Report {
 }
 
 func Classify(card cardcatalog.Card) []Match {
+	return ClassifyWithContext(card, ClassifyContext{})
+}
+
+// ClassifyWithContext classifies a card into construction metrics, optionally using
+// commander theme context for more accurate "plan" categorization.
+func ClassifyWithContext(card cardcatalog.Card, ctx ClassifyContext) []Match {
 	matches := make([]Match, 0, len(targets))
 	for _, target := range targets {
-		matched, reason := classify(target.id, card)
+		var matched bool
+		var reason string
+		
+		if target.id == "plan" && ctx.CommanderTheme != nil {
+			// Use theme-aware plan matching
+			matched, reason = ctx.CommanderTheme.MatchesPlan(card, ctx.CardSynergy)
+		} else {
+			// Use default classification
+			matched, reason = classify(target.id, card)
+		}
+		
 		if matched {
 			matches = append(matches, Match{ID: target.id, Label: target.label, Reason: reason})
 		}
