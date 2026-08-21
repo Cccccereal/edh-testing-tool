@@ -195,18 +195,43 @@ jobs:
         with:
           packages: platforms;android-34 build-tools;34.0.0 ndk;25.2.9519653
 
-      # 生成 release 签名用的 keystore。keytool 随 JDK 自带。
-      # 本地没有 keystore 时生成一个新的（密码写死仅用于 CI 产物签名；
-      # 若需分发长期稳定签名，应改为从 GitHub Secrets 读取固定 keystore）。
-      - name: Generate release keystore
+      # 从 GitHub Secrets 恢复 release 签名 keystore。
+      # 需要先在仓库 Settings -> Secrets and variables -> Actions 配置：
+      #   ANDROID_KEYSTORE_BASE64  - keystore 文件的 base64 内容
+      #   KEYSTORE_PASSWORD        - keystore 存储密码
+      #   KEY_ALIAS                - 签名别名
+      #   KEY_PASSWORD             - 别名对应的密钥密码
+      # Secrets 未配置时回退为 CI 临时 keystore（每次构建不同，仅用于测试分发）。
+      - name: Restore release keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.KEY_PASSWORD }}
         run: |
-          keytool -genkeypair -v \
-            -keystore android/release.keystore \
-            -alias edhpowerlevel \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass edhpowerlevel-ci \
-            -keypass edhpowerlevel-ci \
-            -dname "CN=EDH Power Level, OU=Dev, O=EDH, L=Beijing, ST=Beijing, C=CN"
+          set -euo pipefail
+          mkdir -p android
+          if [ -n "${KEYSTORE_B64:-}" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > android/release.keystore
+            echo "KEYSTORE_FILE=${{ github.workspace }}/android/release.keystore" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$STORE_PASS" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+            echo "Using secret-backed keystore"
+          else
+            keytool -genkeypair -v \
+              -keystore android/release.keystore \
+              -alias edhpowerlevel \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass edhpowerlevel-ci \
+              -keypass edhpowerlevel-ci \
+              -dname "CN=EDH Power Level, OU=Dev, O=EDH, L=Beijing, ST=Beijing, C=CN"
+            echo "KEYSTORE_FILE=${{ github.workspace }}/android/release.keystore" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=edhpowerlevel-ci" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=edhpowerlevel" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=edhpowerlevel-ci" >> "$GITHUB_ENV"
+            echo "Using ephemeral CI keystore (signatures change each build)"
+          fi
 
       - name: Install gomobile
         run: |
@@ -224,10 +249,10 @@ jobs:
         working-directory: android
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
-          KEYSTORE_FILE: ${{ github.workspace }}/android/release.keystore
-          KEYSTORE_PASSWORD: edhpowerlevel-ci
-          KEY_ALIAS: edhpowerlevel
-          KEY_PASSWORD: edhpowerlevel-ci
+          KEYSTORE_FILE: ${{ env.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ env.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ env.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
