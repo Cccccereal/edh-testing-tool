@@ -56,6 +56,7 @@ var targets = []struct {
 	{"single_interaction", "单体干扰", 12},
 	{"draw_discard", "牌差件", 12},
 	{"ramp", "加速", 10},
+	{"tutors", "检索", 5},
 }
 
 func Build(cards []InputCard) Report {
@@ -143,7 +144,7 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 		}
 	case "draw_discard":
 		// 牌差件：抽牌、弃牌、放逐牌组顶、坟场利用
-		if strings.Contains(text, "draw a card") || strings.Contains(text, "draw cards") || strings.Contains(text, "draw that many") || strings.Contains(text, "discard") {
+		if strings.Contains(text, "draw a card") || strings.Contains(text, "draw cards") || strings.Contains(text, "draw that many") || strings.Contains(text, "discard") || strings.Contains(text, "draw two") || strings.Contains(text, "draw three") {
 			return true, "Draws cards or causes discard"
 		}
 		// 放逐牌组顶（impulse draw / exile from top）
@@ -153,6 +154,30 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 		// 坟场利用（flashback, jump-start, escape, 等）
 		if strings.Contains(text, "from your graveyard") || strings.Contains(text, "flashback") || strings.Contains(text, "escape") || strings.Contains(text, "jump-start") {
 			return true, "Graveyard card advantage"
+		}
+		// 释放牌库顶的牌（play/cast from top）
+		if (strings.Contains(text, "play") || strings.Contains(text, "cast")) && (strings.Contains(text, "top") || strings.Contains(text, "from your library")) {
+			return true, "Play/cast from library top"
+		}
+		// 将牌库顶的牌加入手牌（包括 look/reveal 机制）
+		if (strings.Contains(text, "put") || strings.Contains(text, "reveal") || strings.Contains(text, "look")) && strings.Contains(text, "into your hand") && (strings.Contains(text, "top") || strings.Contains(text, "library")) {
+			return true, "Put cards from library into hand"
+		}
+	case "tutors":
+		// 检索：从牌库搜索特定卡牌到手牌或战场
+		// 排除找地（已在 ramp 中）
+		if strings.Contains(text, "search your library") || strings.Contains(text, "search their library") {
+			// 排除纯找地效应（已经在 ramp 里）
+			if strings.Contains(text, "land") && !strings.Contains(text, "nonland") {
+				// 可能是找地牌，跳过
+				if !strings.Contains(text, "creature") && !strings.Contains(text, "artifact") && !strings.Contains(text, "enchantment") && !strings.Contains(text, "instant") && !strings.Contains(text, "sorcery") && !strings.Contains(text, "planeswalker") {
+					return false, ""
+				}
+			}
+			// 通用检索
+			if strings.Contains(text, "card") || strings.Contains(text, "creature") || strings.Contains(text, "artifact") || strings.Contains(text, "enchantment") || strings.Contains(text, "instant") || strings.Contains(text, "sorcery") || strings.Contains(text, "planeswalker") {
+				return true, "Tutors cards from library"
+			}
 		}
 	case "ramp":
 		if strings.Contains(typeLine, "land") {
