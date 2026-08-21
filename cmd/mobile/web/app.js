@@ -9,6 +9,8 @@ const warning = document.querySelector('#warning');
 const retryButton = document.querySelector('#retry-button');
 const decklistToggle = document.querySelector('#decklist-toggle');
 const copyDecklistButton = document.querySelector('#copy-decklist');
+const clearDecklistButton = document.querySelector('#clear-decklist');
+const themeToggle = document.querySelector('#theme-toggle');
 let currentDeckText = '';
 let currentDeckCards = [];
 let pendingSwapAdd = '';
@@ -1079,6 +1081,20 @@ decklistToggle.addEventListener('click', () => {
   decklistToggle.textContent = collapsed ? '展开牌表' : '收起牌表';
 });
 
+// Theme toggle
+themeToggle.addEventListener('click', () => {
+  const root = document.documentElement;
+  const isLight = root.classList.toggle('light-mode');
+  themeToggle.textContent = isLight ? '亮色' : '暗色';
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+});
+
+// Load saved theme preference
+if (localStorage.getItem('theme') === 'light') {
+  document.documentElement.classList.add('light-mode');
+  themeToggle.textContent = '亮色';
+}
+
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   await analyze();
@@ -1088,6 +1104,11 @@ retryButton.addEventListener('click', () => {
   results.hidden = true;
   input.focus();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+clearDecklistButton.addEventListener('click', () => {
+  decklistInput.value = '';
+  decklistInput.focus();
 });
 
 async function analyze() {
@@ -1138,11 +1159,15 @@ function isMoxfieldDeckURL(value) {
 
 function setLoading(active) {
   loading.hidden = !active;
+  const skeleton = document.querySelector('#skeleton');
+  if (skeleton) skeleton.hidden = !active;
   submitButton.disabled = active;
   submitButton.querySelector('.button-label').textContent = active ? '分析中…' : '开始分析';
 }
 
 function render(payload) {
+  const skeleton = document.querySelector('#skeleton');
+  if (skeleton) skeleton.hidden = true;
   document.querySelector('#deck-name').textContent = payload.deck.name || payload.deck.commanders.join(' / ');
   document.querySelector('#deck-meta').textContent = `${payload.deck.commanders.join(' / ')} · ${payload.deck.card_count} 张牌`;
   renderProvider('salt', payload.results.commandersalt, [
@@ -1164,6 +1189,12 @@ function render(payload) {
   beginEditing(payload.deck?.id || '', currentDeckCards);
   results.hidden = false;
   results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  
+  // Show sticky navigation
+  showStickyNav();
+  
+  // Initialize scroll-triggered animations after content is rendered
+  setTimeout(() => initScrollAnimations(), 100);
 }
 
 function renderManabase(manabase) {
@@ -1410,9 +1441,12 @@ function renderRecommendations(recommendations, keywords) {
   const container = document.querySelector('#recommendation-list');
   section.hidden = !recommendations.length;
   document.querySelector('#recommendation-keywords').textContent = keywords.length ? `EDHREC 主题：${keywords.join(' · ')}` : '';
-  container.innerHTML = recommendations.map((group) => `
-    <section class="recommendation-group" data-tag="${escapeHTML(group.tag || '')}">
-      <div class="recommendation-group-heading"><h3>${escapeHTML(group.header || 'Recommendations')}</h3><span>${group.cards?.length || 0}</span></div>
+  container.innerHTML = recommendations.map((group, index) => `
+    <section class="recommendation-group is-collapsed" data-tag="${escapeHTML(group.tag || '')}" data-group-index="${index}">
+      <div class="recommendation-group-heading toggleable" role="button" tabindex="0" data-recommendation-toggle="${index}">
+        <div><h3>${escapeHTML(group.header || 'Recommendations')}</h3><span>${group.cards?.length || 0} 张推荐</span></div>
+        <button type="button" class="section-heading-toggle" aria-label="展开">展开</button>
+      </div>
       <div class="recommendation-row">${(group.cards || []).map((item) => {
         const fills = (item.fills || []).map((fill) => `<li><strong>${escapeHTML(fill.label)} · 还缺 ${Number(fill.gap) || 0}</strong><span>${escapeHTML(fill.reason || '')}</span></li>`).join('');
         return `<article class="recommendation-card">
@@ -1428,6 +1462,17 @@ function renderRecommendations(recommendations, keywords) {
         </article>`;
       }).join('')}</div>
     </section>`).join('');
+  
+  // Attach toggle handlers for each recommendation group
+  container.querySelectorAll('[data-recommendation-toggle]').forEach((toggle) => {
+    toggle.addEventListener('click', handleRecommendationToggle);
+    toggle.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleRecommendationToggle.call(toggle, e);
+      }
+    });
+  });
 }
 
 function renderDeckCards(cards) {
@@ -2054,4 +2099,105 @@ function escapeHTML(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
   })[char]);
+}
+
+// Scroll-triggered fade-in animation (Bek Ventures style)
+function initScrollAnimations() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        // Fade in when entering viewport
+        entry.target.classList.add('fade-in-visible');
+        entry.target.classList.remove('fade-out-visible');
+      } else {
+        // Fade out when leaving viewport
+        entry.target.classList.remove('fade-in-visible');
+        entry.target.classList.add('fade-out-visible');
+      }
+    });
+  }, {
+    threshold: 0.2,  // Increased to reduce flicker at boundaries
+    rootMargin: '-80px 0px -80px 0px'  // Reduced margin for more stable triggering
+  });
+
+  // Apply animations to major sections, but exclude recommendation section
+  // (it contains many dynamic cards, better to keep it stable)
+  document.querySelectorAll('.catalog-section:not(#recommendation-section), .result-card').forEach((el) => {
+    el.classList.add('fade-in-hidden');
+    observer.observe(el);
+  });
+}
+
+function handleRecommendationToggle(e) {
+  const toggle = e.currentTarget;
+  const index = toggle.getAttribute('data-recommendation-toggle');
+  const group = document.querySelector(`.recommendation-group[data-group-index="${index}"]`);
+  const button = toggle.querySelector('.section-heading-toggle');
+  
+  if (!group) return;
+  
+  const isCollapsed = group.classList.contains('is-collapsed');
+  
+  if (isCollapsed) {
+    // Expand and scroll into view with focus
+    group.classList.remove('is-collapsed');
+    button.textContent = '收起';
+    button.setAttribute('aria-label', '收起');
+    
+    // Scroll the group into center of viewport
+    setTimeout(() => {
+      const rect = group.getBoundingClientRect();
+      const scrollTarget = window.scrollY + rect.top - (window.innerHeight / 2) + (rect.height / 2);
+      window.scrollTo({ top: scrollTarget, behavior: 'smooth' });
+    }, 100);
+  } else {
+    // Collapse
+    group.classList.add('is-collapsed');
+    button.textContent = '展开';
+    button.setAttribute('aria-label', '展开');
+  }
+}
+
+function showStickyNav() {
+  const nav = document.querySelector('#sticky-nav');
+  nav.hidden = false;
+  document.body.classList.add('has-sticky-nav');
+  
+  // Set up intersection observer for active link highlighting
+  const sections = document.querySelectorAll('#results, #manabase-section, #construction-section, #combo-section, #recommendation-section, #decklist-section');
+  const navLinks = document.querySelectorAll('.sticky-nav-link');
+  
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navLinks.forEach((link) => {
+          if (link.getAttribute('href') === `#${id}`) {
+            link.classList.add('active');
+          } else {
+            link.classList.remove('active');
+          }
+        });
+      }
+    });
+  }, {
+    threshold: 0.3,
+    rootMargin: '-80px 0px -60% 0px'
+  });
+  
+  sections.forEach((section) => observer.observe(section));
+  
+  // Smooth scroll on nav click
+  navLinks.forEach((link) => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetId = link.getAttribute('href').substring(1);
+      const target = document.getElementById(targetId);
+      if (target) {
+        const navHeight = nav.offsetHeight;
+        const targetPosition = target.getBoundingClientRect().top + window.scrollY - navHeight - 20;
+        window.scrollTo({ top: targetPosition, behavior: 'smooth' });
+      }
+    });
+  });
 }
