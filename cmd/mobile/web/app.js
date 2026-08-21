@@ -1032,8 +1032,9 @@ document.addEventListener('click', (event) => {
 document.addEventListener('click', (event) => {
   const toggle = event.target.closest('[data-section-toggle]');
   if (!toggle) return;
-  // Ignore clicks on action buttons nested inside the header (copy decklist, etc.).
-  if (event.target.closest('[data-section-actions] button')) return;
+  // Ignore clicks on action buttons nested inside the header (copy decklist, etc.),
+  // but allow the section-heading-toggle button itself
+  if (event.target.closest('[data-section-actions]') && !event.target.closest('.section-heading-toggle')) return;
   const section = toggle.closest('.catalog-section');
   if (!section) return;
   const collapsed = section.classList.toggle('is-collapsed');

@@ -516,26 +516,6 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .card-edit-controls button { flex: 1; padding: 8px 0; border: 0; color: var(--ink); background: #20231d; font-size: 15px; font-weight: 800; line-height: 1; }
 .card-edit-controls button:hover { color: #11130d; background: var(--acid); }
 .deck-card-list.collapsed { max-height: 510px; overflow: hidden; position: relative; }
-.deck-card-list.collapsed::after { 
-  content: "点击展开完整牌表 ▾"; 
-  position: absolute; 
-  inset: auto 0 0; 
-  height: 130px; 
-  background: linear-gradient(transparent, #11130f); 
-  pointer-events: auto;
-  cursor: pointer;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 24px;
-  color: var(--acid);
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.05em;
-  transition: color 0.2s;
-}
-:root.light-mode .deck-card-list.collapsed::after { background: linear-gradient(transparent, #fafbf9); }
-.deck-card-list.collapsed::after:hover { color: var(--ink); }
 .deck-card-list-expand-overlay {
   display: none;
   position: absolute;
@@ -551,6 +531,7 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
   font-size: 15px;
   letter-spacing: 0.05em;
   transition: color 0.2s;
+  z-index: 10;
 }
 :root.light-mode .deck-card-list-expand-overlay { background: linear-gradient(transparent, #fafbf9); }
 .deck-card-list-expand-overlay:hover { color: var(--ink); }
