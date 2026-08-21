@@ -48,14 +48,15 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                // Block cleartext to anything but our own loopback server.
                 Uri uri = request.getUrl();
                 String host = uri.getHost();
-                if (host == null || (!host.equals("127.0.0.1") && !host.equals("localhost"))) {
-                    return new WebResourceResponse("text/plain", "UTF-8",
-                            new ByteArrayInputStream("".getBytes()));
-                }
-                return null;
+                // Loopback server and HTTPS (Scryfall images, EDHREC assets) are allowed;
+                // only cleartext HTTP to third parties is blocked.
+                if (host == null) return null;
+                if (host.equals("127.0.0.1") || host.equals("localhost")) return null;
+                if ("https".equalsIgnoreCase(uri.getScheme())) return null;
+                return new WebResourceResponse("text/plain", "UTF-8",
+                        new ByteArrayInputStream("".getBytes()));
             }
         });
         setContentView(webView);

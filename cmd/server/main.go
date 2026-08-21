@@ -86,10 +86,18 @@ func main() {
 		cfg.CacheMaxEntries,
 	)
 
-	webRoot, err := fs.Sub(embeddedWeb, "web")
-	if err != nil {
-		logger.Error("load embedded web files", "error", err)
-		os.Exit(1)
+	// Development mode: set DEV=1 to serve frontend files from disk for hot reload
+	var webRoot fs.FS
+	if os.Getenv("DEV") == "1" {
+		logger.Info("development mode enabled - serving web files from disk")
+		webRoot = os.DirFS("cmd/server/web")
+	} else {
+		var err error
+		webRoot, err = fs.Sub(embeddedWeb, "web")
+		if err != nil {
+			logger.Error("load embedded web files", "error", err)
+			os.Exit(1)
+		}
 	}
 	server := &http.Server{
 		Addr:              cfg.Address,
