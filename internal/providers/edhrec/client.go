@@ -67,7 +67,9 @@ func (c *Client) Recommend(ctx context.Context, commanderSlug string, perGroupLi
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/pages/commanders/"+commanderSlug+".json", nil)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "PowerLevelAggregator/0.4")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Referer", "https://edhrec.com/")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("request EDHREC: %w", err)
@@ -78,7 +80,12 @@ func (c *Client) Recommend(ctx context.Context, commanderSlug string, perGroupLi
 		return nil, nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("EDHREC returned HTTP %d", resp.StatusCode)
+		// Log response body for debugging
+		bodyPreview := string(data)
+		if len(bodyPreview) > 200 {
+			bodyPreview = bodyPreview[:200]
+		}
+		return nil, nil, fmt.Errorf("EDHREC returned HTTP %d, body preview: %s", resp.StatusCode, bodyPreview)
 	}
 	var payload page
 	if err := json.Unmarshal(data, &payload); err != nil {
@@ -119,7 +126,9 @@ func (c *Client) Recommend(ctx context.Context, commanderSlug string, perGroupLi
 func (c *Client) CommanderRankings(ctx context.Context) ([]CommanderRanking, error) {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/pages/commanders/year.json", nil)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "PowerLevelAggregator/0.4")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Referer", "https://edhrec.com/")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request EDHREC commander rankings: %w", err)

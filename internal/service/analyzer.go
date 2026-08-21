@@ -328,6 +328,8 @@ func normalizeCardName(name string) string {
 
 func slugify(value string) string {
 	value = strings.ToLower(value)
+	// Remove apostrophes first (Legion's -> Legions)
+	value = strings.ReplaceAll(value, "'", "")
 	var builder strings.Builder
 	lastDash := false
 	for _, char := range value {

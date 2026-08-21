@@ -403,6 +403,8 @@ func buildSuggestError(err error) (int, string, string) {
 		if strings.Contains(err.Error(), "legal as a Commander") {
 			return http.StatusBadRequest, "COMMANDER_NOT_LEGAL", err.Error()
 		}
+		// Log the actual error for debugging
+		slog.Error("BuildSuggest failed", "error", err)
 		return http.StatusBadGateway, "BUILD_SUGGEST_FAILED", "暂时无法生成组牌建议。"
 	}
 }

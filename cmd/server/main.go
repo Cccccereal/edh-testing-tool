@@ -34,9 +34,26 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	httpClient := &http.Client{
 		Transport: &http.Transport{
+			Proxy:       http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+			// Disable HTTP/2 to avoid TLS renegotiation issues with some CDNs (e.g., CloudFront/EDHREC)
+			ForceAttemptHTTP2:     false,
+			MaxIdleConns:          20,
+			MaxIdleConnsPerHost:   10,
+			MaxConnsPerHost:       10,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: cfg.ProviderTimeout,
+		},
+		Timeout: cfg.ProviderTimeout,
+		// Allow redirects for all providers - EDHREC may redirect to S3
+	}
+	// Create a separate client for Moxfield that blocks redirects
+	moxfieldHTTPClient := &http.Client{
+		Transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
 			DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
-			ForceAttemptHTTP2:     true,
+			ForceAttemptHTTP2:     false,
 			MaxIdleConns:          20,
 			MaxIdleConnsPerHost:   10,
 			MaxConnsPerHost:       10,
@@ -50,7 +67,7 @@ func main() {
 		},
 	}
 	commanderSaltClient := commandersalt.New(cfg.CommanderSaltAPIURL, httpClient)
-	moxfieldClient := moxfield.New(cfg.MoxfieldAPIURL, httpClient)
+	moxfieldClient := moxfield.New(cfg.MoxfieldAPIURL, moxfieldHTTPClient)
 	cardCatalogClient := cardcatalog.New(cfg.ScryfallAPIURL, httpClient, cfg.CardCatalogTTL)
 	spellbookClient := spellbook.New(cfg.SpellbookAPIURL, httpClient)
 	edhrecClient := edhrec.New(cfg.EDHRECJSONURL, httpClient)
