@@ -124,6 +124,11 @@ var landPool = map[string][]colorLand{
 		{"Rockfall Vale", "RG"}, {"Overgrown Farmland", "GW"}, {"Frostboil Snarl", "UR"},
 		{"Shadows' Verge", "WB"}, {"Sundown Pass", "RW"}, {"Dreamroot Cascade", "GU"},
 		{"Deathcap Glade", "BG"},
+		// 8地竖进（场上合计有8个地才能竖进）
+		{"Skycloud Expanse", "WU"}, {"Darkwater Catacombs", "UB"}, {"Shadowblood Ridge", "BR"},
+		{"Mossfire Valley", "RG"}, {"Sungrass Prairie", "GW"}, {"Shivan Reef", "UR"},
+		{"Caves of Koilos", "WB"}, {"Battlefield Forge", "RW"}, {"Yavimaya Coast", "GU"},
+		{"Llanowar Wastes", "BG"},
 	},
 }
 

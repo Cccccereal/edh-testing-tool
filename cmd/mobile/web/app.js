@@ -739,10 +739,11 @@ function applyBuildCandidates(candidates) {
   builderCandidates.innerHTML = buildCandidates.map((card, index) => {
     const image = cardImage(card.card);
     const preview = cardPreviewImage(card.card);
+    const cardText = previewTextFor(card.card);
     const fills = (card.fills || []).map((id) => buildMetricLabel(id)).filter(Boolean).join(' · ');
     const gcBadge = card.game_changer ? '<span class="builder-gc-tag" title="Game Changer">GC</span>' : '';
     return `
-      <button type="button" class="builder-candidate" data-candidate="${index}" data-preview-src="${escapeHTML(preview)}" data-preview-name="${escapeHTML(card.name)}">
+      <button type="button" class="builder-candidate" data-candidate="${index}" data-preview-src="${escapeHTML(preview)}" data-preview-name="${escapeHTML(card.name)}" data-card-text="${escapeHTML(cardText)}">
         ${image ? `<img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(card.name)}">` : '<div class="builder-candidate-placeholder"></div>'}
         <div class="builder-candidate-body">
           <div class="builder-candidate-title">${gcBadge}<strong>${escapeHTML(card.name)}</strong></div>
