@@ -236,7 +236,7 @@ jobs:
       # 同步桌面端前端到移动端，保证 APK 内嵌的是最新 UI
       - name: Sync frontend to mobile
         run: |
-          powershell -ExecutionPolicy Bypass -File scripts/sync-web.ps1
+          bash scripts/sync-web.sh
 
       - name: Install gomobile
         run: |

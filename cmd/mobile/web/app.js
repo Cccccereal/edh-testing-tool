@@ -2149,23 +2149,28 @@ function escapeHTML(value) {
   })[char]);
 }
 
-// Scroll-triggered fade-in animation (Bek Ventures style)
+// Scroll-triggered fade-in animation with hysteresis to prevent flicker
 function initScrollAnimations() {
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        // Fade in when entering viewport
+      // Use a larger threshold to create a "dead zone" at boundaries
+      // Only trigger state changes when element crosses 30% visibility
+      const isVisible = entry.isIntersecting && entry.intersectionRatio >= 0.25;
+      
+      if (isVisible) {
+        // Fade in when entering viewport (with sufficient overlap)
         entry.target.classList.add('fade-in-visible');
-        entry.target.classList.remove('fade-out-visible');
-      } else {
-        // Fade out when leaving viewport
+        entry.target.classList.remove('fade-out-visible', 'fade-in-hidden');
+      } else if (entry.intersectionRatio < 0.1) {
+        // Only fade out when almost completely out of view
         entry.target.classList.remove('fade-in-visible');
         entry.target.classList.add('fade-out-visible');
       }
+      // Between 10% and 25%: do nothing (hysteresis zone to prevent flicker)
     });
   }, {
-    threshold: 0.2,  // Increased to reduce flicker at boundaries
-    rootMargin: '-80px 0px -80px 0px'  // Reduced margin for more stable triggering
+    threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0],  // Multiple thresholds for smooth detection
+    rootMargin: '50px 0px 50px 0px'  // Extended margin for earlier detection
   });
 
   // Apply animations to major sections, but exclude recommendation section
