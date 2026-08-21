@@ -258,6 +258,14 @@
     <span id="card-preview-name"></span>
     <span id="card-preview-oracle"></span>
   </div>
+  <div id="card-zoom" class="card-zoom" hidden>
+    <div class="card-zoom-backdrop" data-card-zoom-close></div>
+    <section class="card-zoom-panel" role="dialog" aria-modal="true" aria-labelledby="card-zoom-name">
+      <img id="card-zoom-image" alt="">
+      <span id="card-zoom-name"></span>
+      <span id="card-zoom-oracle" hidden></span>
+    </section>
+  </div>
   <script src="/app.js" defer></script>
   <script>document.querySelector('#editor-versions-close').addEventListener('click', () => { document.querySelector('#editor-versions-panel').hidden = true; });</script>
 </body>

@@ -138,11 +138,15 @@ function renderCommanderPreview(commanders) {
     const card = commander.card || {};
     const image = cardImage(card) || cardPreviewImage(card);
     const isPartner = commander.is_partner;
+    const previewImage = cardPreviewImage(card) || image;
     return `
-      <img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(commander.name)}" data-preview-src="${escapeHTML(cardPreviewImage(card) || image)}" data-preview-name="${escapeHTML(commander.name)}" data-card-text="${escapeHTML(previewTextFor(card))}">
-      <div class="builder-commander-preview-body">
-        <strong>${escapeHTML(commander.name)}</strong>
-        ${isPartner ? '<small>可搭配 Partner / Friends Forever / 选择身世</small>' : ''}
+      <div class="builder-commander-preview-entry" data-preview-src="${escapeHTML(previewImage)}" data-preview-name="${escapeHTML(commander.name)}" data-card-text="${escapeHTML(previewTextFor(card))}">
+        <img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(commander.name)}">
+        <button type="button" class="card-zoom-button" data-zoom-src="${escapeHTML(previewImage)}" data-preview-name="${escapeHTML(commander.name)}" data-card-text="${escapeHTML(previewTextFor(card))}" aria-label="查看 ${escapeHTML(commander.name)} 大图">大</button>
+        <div class="builder-commander-preview-body">
+          <strong>${escapeHTML(commander.name)}</strong>
+          ${isPartner ? '<small>可搭配 Partner / Friends Forever / 选择身世</small>' : ''}
+        </div>
       </div>`;
   }).join('');
   builderCommanderPreview.hidden = false;
@@ -743,14 +747,15 @@ function applyBuildCandidates(candidates) {
     const fills = (card.fills || []).map((id) => buildMetricLabel(id)).filter(Boolean).join(' · ');
     const gcBadge = card.game_changer ? '<span class="builder-gc-tag" title="Game Changer">GC</span>' : '';
     return `
-      <button type="button" class="builder-candidate" data-candidate="${index}" data-preview-src="${escapeHTML(preview)}" data-preview-name="${escapeHTML(card.name)}" data-card-text="${escapeHTML(cardText)}">
+      <div role="button" tabindex="0" class="builder-candidate" data-candidate="${index}" data-preview-src="${escapeHTML(preview)}" data-preview-name="${escapeHTML(card.name)}" data-card-text="${escapeHTML(cardText)}">
         ${image ? `<img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(card.name)}">` : '<div class="builder-candidate-placeholder"></div>'}
         <div class="builder-candidate-body">
           <div class="builder-candidate-title">${gcBadge}<strong>${escapeHTML(card.name)}</strong></div>
           <span class="builder-synergy">Synergy ${(Number(card.synergy) || 0).toFixed(2)}%</span>
           ${fills ? `<small>补足：${escapeHTML(fills)}</small>` : ''}
         </div>
-      </button>`;
+        <button type="button" class="card-zoom-button" data-zoom-src="${escapeHTML(preview)}" data-preview-name="${escapeHTML(card.name)}" data-card-text="${escapeHTML(cardText)}" aria-label="查看 ${escapeHTML(card.name)} 大图">大</button>
+      </div>`;
   }).join('') || '<p class="editor-empty">暂时没有更多建议，可快速加基本地或直接完成。</p>';
 }
 
@@ -1056,6 +1061,8 @@ builderBackEdit.addEventListener('click', backToBuilderEdit);
 document.addEventListener('click', (event) => {
   const candidateButton = event.target.closest('[data-candidate]');
   if (candidateButton) {
+    // Ignore clicks on the zoom button inside a candidate
+    if (event.target.closest('.card-zoom-button')) return;
     const index = Number(candidateButton.dataset.candidate);
     const candidate = buildCandidates[index];
     if (candidate) addBuildCard(candidate);
@@ -1871,9 +1878,58 @@ const preview = document.querySelector('#card-preview');
 const previewImage = document.querySelector('#card-preview-image');
 const previewName = document.querySelector('#card-preview-name');
 const previewOracle = document.querySelector('#card-preview-oracle');
+const zoomModal = document.querySelector('#card-zoom');
+const zoomImage = document.querySelector('#card-zoom-image');
+const zoomName = document.querySelector('#card-zoom-name');
+const zoomOracle = document.querySelector('#card-zoom-oracle');
 const canHover = window.matchMedia('(hover: hover) and (pointer: fine)');
 let activePreviewCard = null;
 let previewImageCache = new Map(); // url -> resolved element (pre-loaded large art)
+
+// Open a large card art view (mobile-friendly tap target). The trigger carries the
+// large art URL in data-zoom-src; clicking the backdrop or pressing Escape closes it.
+function openCardZoom(trigger) {
+  const card = trigger.closest('[data-zoom-src]');
+  if (!card) return;
+  const source = card.dataset.zoomSrc || card.dataset.previewSrc;
+  if (!source) return;
+  zoomImage.src = source;
+  zoomImage.alt = card.dataset.previewName || '';
+  zoomName.textContent = card.dataset.previewName || '';
+  const oracle = card.dataset.cardText || '';
+  if (oracle) {
+    zoomOracle.textContent = oracle;
+    zoomOracle.hidden = false;
+  } else {
+    zoomOracle.textContent = '';
+    zoomOracle.hidden = true;
+  }
+  zoomModal.hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+function closeCardZoom() {
+  zoomModal.hidden = true;
+  zoomImage.removeAttribute('src');
+  zoomOracle.textContent = '';
+  zoomOracle.hidden = true;
+  document.body.style.overflow = '';
+}
+document.addEventListener('click', (event) => {
+  const zoomTrigger = event.target.closest('[data-zoom-src]');
+  if (zoomTrigger) {
+    event.preventDefault();
+    event.stopPropagation();
+    openCardZoom(zoomTrigger);
+    return;
+  }
+  if (event.target.closest('[data-card-zoom-close]')) {
+    closeCardZoom();
+    return;
+  }
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !zoomModal.hidden) closeCardZoom();
+});
 
 // Compose the hover preview's text block from a card's type line and rules text.
 // For multi-faced cards, each face's type line and oracle are joined so a split/DFC
