@@ -1111,10 +1111,23 @@ copyDecklistButton.addEventListener('click', async () => {
   }
 });
 
-decklistToggle.addEventListener('click', () => {
-  const list = document.querySelector('#deck-card-list');
-  const collapsed = list.classList.toggle('collapsed');
-  decklistToggle.textContent = collapsed ? '展开牌表' : '收起牌表';
+// Delegate decklist expand/collapse to the container
+document.addEventListener('click', (event) => {
+  const expandTrigger = event.target.closest('[data-decklist-expand]');
+  if (expandTrigger) {
+    const list = document.querySelector('#deck-card-list');
+    if (list) list.classList.remove('collapsed');
+    return;
+  }
+  const collapseTrigger = event.target.closest('[data-decklist-collapse]');
+  if (collapseTrigger) {
+    const list = document.querySelector('#deck-card-list');
+    if (list) {
+      list.classList.add('collapsed');
+      list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    return;
+  }
 });
 
 // Theme toggle
@@ -1521,7 +1534,9 @@ function renderDeckCards(cards) {
     ['Lands', cards.filter((item) => !item.commander && item.land)]
   ];
   container.innerHTML = groups.filter(([, items]) => items.length).map(([title, items]) => `
-    <section class="deck-group"><h3>${title} <span>${items.reduce((sum, item) => sum + item.quantity, 0)}</span></h3><div class="card-grid">${items.map(renderCard).join('')}</div></section>`).join('');
+    <section class="deck-group"><h3>${title} <span>${items.reduce((sum, item) => sum + item.quantity, 0)}</span></h3><div class="card-grid">${items.map(renderCard).join('')}</div></section>`).join('') + 
+    '<div class="deck-card-list-expand-overlay" data-decklist-expand>点击展开完整牌表 ▾</div>' +
+    '<button type="button" class="deck-card-list-collapse-button" data-decklist-collapse>收起牌表 ▴</button>';
 }
 
 // --- light deck editor --------------------------------------------------------
