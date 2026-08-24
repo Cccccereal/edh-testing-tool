@@ -43,6 +43,7 @@ func Analyze(entries []ClassifyEntry) Report {
 		FastMana:                deck.FastMana,
 		CostCounts:              buildCostCounts(deck),
 		ColorPips:               buildColorPipCounts(deck),
+		LandColorPips:           buildLandColorPipCounts(deck),
 		ColorFindings:           buildColorFindings(deck, deckSize),
 	}
 	return report
@@ -96,6 +97,33 @@ func buildColorPipCounts(deck ManabaseDeck) map[string]int {
 				continue
 			}
 			counts[color.String()] += pips * spell.Quantity
+		}
+	}
+	return counts
+}
+
+// buildLandColorPipCounts tallies the colored pips each land in the deck can produce
+// (W/U/B/R/G) — the "symbols on lands" share of the Moxfield-style mana production
+// readout. Sources carry one entry per copy, and every copy counts once toward each
+// color it can tap for (a dual land is one {U} symbol and one {G} symbol), matching
+// Moxfield's land bucketing. The Karsten weight is deliberately NOT applied here —
+// a 0.67-weighted fetch still physically produces its colors; weighting is a
+// consistency concept for source counts, not for raw symbol totals. Fetchlands
+// resolve through the classifier's derived colors, so a fetch shows up under the
+// basics it can grab; colorless lands contribute nothing. Colors with no land
+// source at all never appear, so the row is genuinely "how much of what the lands
+// produce" rather than a fixed WUBRG zero-padding.
+func buildLandColorPipCounts(deck ManabaseDeck) map[string]int {
+	counts := make(map[string]int)
+	for _, source := range deck.Sources {
+		if !source.IsLand {
+			continue
+		}
+		for _, color := range source.Produces {
+			if color == ColorColorless {
+				continue
+			}
+			counts[color.String()]++
 		}
 	}
 	return counts

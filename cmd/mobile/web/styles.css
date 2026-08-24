@@ -261,17 +261,26 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .manabase-table-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 18px 0 10px; }
 .manabase-table-heading span { font: 700 12px var(--font-ui); letter-spacing: .08em; color: var(--acid); }
 .manabase-table-heading small { color: var(--muted); font-size: 12px; }
-.manabase-pips { display: grid; gap: 8px; }
-.manabase-pip-row { display: grid; grid-template-columns: 34px 1fr 40px; align-items: center; gap: 12px; }
-.manabase-pip-track { height: 12px; background: #30342d; border-radius: 6px; overflow: hidden; }
+.manabase-pips { display: grid; gap: 12px; }
+.manabase-pip-row { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 14px; }
+/* Moxfield-style mana production: bars come first — they are the main visual — with
+   the two percentage readouts trailing after them. The fill is a real <i> child so
+   the rAF pixel-width pass can animate it (inline percents get dropped by some
+   embedded renderers). */
+.manabase-pip-tracks { display: grid; gap: 4px; min-width: 0; }
+.manabase-pip-track { height: 8px; background: #30342d; border-radius: 4px; overflow: hidden; }
 :root.light-mode .manabase-pip-track { background: #c8cdc4; }
-.manabase-pip-track i { display: block; width: 0; height: 100%; border-radius: 6px; transition: width .5s ease; }
+.manabase-pip-track i { display: block; width: 0; height: 100%; border-radius: 4px; transition: width .5s ease; }
 .manabase-pip-row[data-color="W"] .manabase-pip-track i { background: #f9f6e8; }
 .manabase-pip-row[data-color="U"] .manabase-pip-track i { background: #6db7e3; }
 .manabase-pip-row[data-color="B"] .manabase-pip-track i { background: #6a6a74; }
 .manabase-pip-row[data-color="R"] .manabase-pip-track i { background: #e0674f; }
 .manabase-pip-row[data-color="G"] .manabase-pip-track i { background: #7fb06d; }
-.manabase-pip-row strong { text-align: right; font-variant-numeric: tabular-nums; font-size: 14px; }
+.manabase-pip-track.is-land { height: 5px; opacity: .55; }
+.manabase-pip-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-width: 150px; }
+.manabase-pip-metric { display: flex; align-items: baseline; gap: 4px; font-size: 12px; color: var(--muted); }
+.manabase-pip-metric strong { font-size: 16px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.manabase-pip-metric span { white-space: nowrap; }
 .manabase-table { display: grid; grid-template-columns: 2fr 1fr; border: 1px solid var(--line); }
 .manabase-table-row { display: contents; }
 .manabase-table-row span, .manabase-table-row strong { padding: 8px 12px; border-bottom: 1px solid var(--line); }

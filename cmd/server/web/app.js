@@ -1316,26 +1316,41 @@ function renderManabase(manabase) {
     short: '地数不足'
   }[deltaClass];
 
-  // 法术力构成：按颜色法术力标的（蓝/白/黑/红/绿）统计牌组需要多少个彩色法术力符号。
-  // 每根的填充长度 = 该色符文数 / 全部彩色符文总数：不足 100% 的部分是其它颜色
-  // 占掉的比例，让各颜色需求比例一眼可读。
+  // 法术力生产（Moxfield 式）：每行一个颜色，显示该色符号占「全部符号」的比例
+  // （大数，含地牌上能产出的彩色符号）和占「地牌符号」的比例（小数）。两行口径
+  // 同源于后端 color_pips / land_color_pips；全部符号的基数 = 非地符号 + 地牌符号。
   const colorPips = (manabase.color_pips || {});
+  const landColorPips = (manabase.land_color_pips || {});
+  const symbolCount = (color) => Number(colorPips[color] || 0) + Number(landColorPips[color] || 0);
   let composition = '';
   if (Object.keys(colorPips).length) {
-    const totalPips = Object.values(colorPips).reduce((sum, n) => sum + (Number(n) || 0), 0);
-    const pipRows = MANA_COLORS.map((color) => {
-      const count = Number(colorPips[color] || 0);
-      const pct = totalPips > 0 ? Math.round((count / totalPips) * 100) : 0;
+    const allSymbols = MANA_COLORS.reduce((sum, c) => sum + symbolCount(c), 0);
+    const landSymbols = MANA_COLORS.reduce((sum, c) => sum + Number(landColorPips[c] || 0), 0);
+    const pctOfAll = (n) => (allSymbols > 0 ? Math.round((n / allSymbols) * 100) : 0);
+    const pctOfLands = (n) => (landSymbols > 0 ? Math.round((n / landSymbols) * 100) : 0);
+    // Colors the deck's lands simply don't produce are omitted from the rows —
+    // Moxfield renders only the colors that show up on lands, so a color with
+    // zero land symbols stays off the "of symbols on lands" readout entirely.
+    const rowColors = MANA_COLORS.filter((color) => Number(landColorPips[color] || 0) > 0);
+    const pipRows = rowColors.map((color) => {
+      const count = symbolCount(color);
+      const landCount = Number(landColorPips[color] || 0);
       const symbol = manaSymbolFor(color);
       return `
         <div class="manabase-pip-row" data-color="${color}">
           <span class="mana-symbol ${color.toLowerCase()}">${symbol}</span>
-          <div class="manabase-pip-track"><i data-pct="${pct}"></i></div>
-          <strong>${count}</strong>
+          <div class="manabase-pip-tracks">
+            <div class="manabase-pip-track"><i data-pct="${pctOfAll(count)}" title="全部符号 ${count}"></i></div>
+            <div class="manabase-pip-track is-land"><i data-pct="${pctOfLands(landCount)}" title="地牌符号 ${landCount}"></i></div>
+          </div>
+          <div class="manabase-pip-metrics">
+            <div class="manabase-pip-metric"><strong>${pctOfAll(count)}%</strong><span>of all symbols</span></div>
+            <div class="manabase-pip-metric"><strong>${pctOfLands(landCount)}%</strong><span>of symbols on lands</span></div>
+          </div>
         </div>`;
     }).join('');
     composition = `
-      <div class="manabase-table-heading"><span>法术力构成</span><small>各颜色法术力符号数量</small></div>
+      <div class="manabase-table-heading"><span>法术力生产</span><small>符号占比 · 全部 vs 地牌</small></div>
       <div class="manabase-pips">${pipRows}</div>`;
   }
 

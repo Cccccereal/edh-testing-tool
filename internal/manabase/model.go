@@ -171,6 +171,11 @@ type Report struct {
 	// visualization, mirroring the per-color source demand in a raw pip count.
 	ColorPips map[string]int `json:"color_pips"`
 
+	// LandColorPips tallies the colored pips each land can produce (W/U/B/R/G) —
+	// the "symbols on lands" half of the Moxfield-style mana production readout.
+	// A multicolored land counts once per color it can tap for, weighted by copies.
+	LandColorPips map[string]int `json:"land_color_pips,omitempty"`
+
 	// ColorFindings is per-color source findings. Stage 1 keeps deck order; no
 	// composite tail-risk ordering is applied.
 	ColorFindings []ColorFinding `json:"color_findings"`
