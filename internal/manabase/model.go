@@ -46,6 +46,10 @@ type SpellRequirement struct {
 	// excluded from castability rows but still feed the source pools.
 	IsManaSource bool
 
+	// IsPermanent is true for cards that stay on the battlefield (creature, artifact,
+	// enchantment, planeswalker, battle); false for instant and sorcery.
+	IsPermanent bool
+
 	// IsCommander marks the deck's commander (pinned to the top of any listing).
 	IsCommander bool
 
@@ -71,6 +75,18 @@ type ManabaseDeck struct {
 
 	// AverageManaValue is the mean mana value of the non-land cards.
 	AverageManaValue float64
+
+	// MedianManaValue is the median mana value of the non-land cards.
+	MedianManaValue float64
+
+	// AverageManaValueNoLands is the mean mana value counting lands as 0.
+	AverageManaValueNoLands float64
+
+	// MedianManaValueNoLands is the median mana value counting lands as 0.
+	MedianManaValueNoLands float64
+
+	// TotalManaValue is the sum of all non-land mana values (weighted by quantity).
+	TotalManaValue int
 
 	// RampAndDrawUnderThree is the count of ramp/card-draw spells of mana value 2
 	// or less (the −0.28 land-target credit input).
@@ -105,6 +121,12 @@ type CostCount struct {
 	ManaValue int    `json:"mana_value"`
 	Label     string `json:"label"`
 	Count     int    `json:"count"`
+
+	// PermanentCount is the subset of Count that is a permanent (creature, artifact,
+	// enchantment, planeswalker, battle — anything that stays on the battlefield).
+	// The front-end draws it as the shorter back bar of a double-series stack so the
+	// curve shows both total mana demand and its permanent portion at a glance.
+	PermanentCount int `json:"permanent_count,omitempty"`
 }
 
 // Report is the trimmed mana-base report: land count, ramp, per-color sources, and
@@ -128,7 +150,20 @@ type Report struct {
 	// FastMana is the 0-cost fast-mana credit input.
 	FastMana int `json:"fast_mana"`
 
-	// CostCounts is the mana curve: non-land spell counts by mana value.
+	// MedianManaValue is the median mana value of the non-land cards.
+	MedianManaValue float64 `json:"median_mana_value"`
+
+	// AverageManaValueNoLands is the mean mana value counting lands as 0.
+	AverageManaValueNoLands float64 `json:"average_mana_value_no_lands"`
+
+	// MedianManaValueNoLands is the median mana value counting lands as 0.
+	MedianManaValueNoLands float64 `json:"median_mana_value_no_lands"`
+
+	// TotalManaValue is the sum of all non-land mana values (weighted by quantity).
+	TotalManaValue int `json:"total_mana_value"`
+
+	// CostCounts is the mana curve: non-land spell counts by mana value. Each bucket
+	// also carries the permanent-only subset (see CostCount.PermanentCount).
 	CostCounts []CostCount `json:"cost_counts"`
 
 	// ColorPips is the color composition of the deck's spells: the total number of

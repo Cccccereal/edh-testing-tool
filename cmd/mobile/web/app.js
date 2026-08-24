@@ -42,6 +42,10 @@ const editorVersionsButton = document.querySelector('#editor-versions-toggle');
 const editorVersionsPanel = document.querySelector('#editor-versions-panel');
 const editorVersionsList = document.querySelector('#editor-versions-list');
 const editorDirtyNote = document.querySelector('#editor-dirty-note');
+const decklistFilterNote = document.querySelector('#decklist-filter-note');
+// Mana-value bucket currently selected on the curve (null = show the whole deck).
+// Clicking the bucket's bar again clears the filter; a re-render resets it.
+let curveSelectedMv = null;
 let activeSourceId = '';
 
 // --- guided deck builder state ---------------------------------------------
@@ -1138,6 +1142,31 @@ document.addEventListener('click', (event) => {
   }
 });
 
+// Clicking a mana-curve bar filters the full deck list to cards of that mana value;
+// clicking the same bar again (or a bar outside the filter) clears the selection.
+document.addEventListener('click', (event) => {
+  const row = event.target.closest('.manabase-curve-row');
+  if (!row) return;
+  const mv = row.dataset.manaValue;
+  if (mv === undefined || mv === '') return;
+  const value = Number(mv);
+  if (curveSelectedMv === value) {
+    curveSelectedMv = null;
+  } else {
+    curveSelectedMv = value;
+  }
+  document.querySelectorAll('.manabase-curve-row').forEach((r) => {
+    r.classList.toggle('is-selected', Number(r.dataset.manaValue) === curveSelectedMv);
+  });
+  // Re-render from the current editor state so the filter applies to live edits too.
+  renderDeckCards(editorCards.length ? editorCards : currentDeckCards);
+  const list = document.querySelector('#deck-card-list');
+  if (list) {
+    list.classList.remove('collapsed');
+    list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+});
+
 // Theme toggle
 themeToggle.addEventListener('click', () => {
   const root = document.documentElement;
@@ -1243,6 +1272,7 @@ function render(payload) {
   renderDeckCards(payload.deck_cards || []);
   currentDeckCards = payload.deck_cards || [];
   currentDeckText = payload.canonical_decklist || buildDeckText(currentDeckCards);
+  curveSelectedMv = null; // a fresh analysis starts with the unfiltered deck list
   beginEditing(payload.deck?.id || '', currentDeckCards);
   results.hidden = false;
   results.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1273,6 +1303,12 @@ function renderManabase(manabase) {
   const fastMana = Number(manabase.fast_mana || 0);
   const findings = Array.isArray(manabase.color_findings) ? manabase.color_findings : [];
   const costCounts = Array.isArray(manabase.cost_counts) ? manabase.cost_counts : [];
+  const avgMvAll = Number(manabase.average_mana_value);
+  const medianAll = Number(manabase.median_mana_value);
+  const avgMvNoLands = Number(manabase.average_mana_value_no_lands);
+  const medianNoLands = Number(manabase.median_mana_value_no_lands);
+  const totalMv = Number(manabase.total_mana_value);
+  const statsKnown = Number.isFinite(avgMvAll) && costCounts.length > 0;
 
   const landDeltaLabel = {
     healthy: '地数充足',
@@ -1310,18 +1346,38 @@ function renderManabase(manabase) {
     // data attribute and animated in via a transition after the container is rendered.
     const rows = costCounts.map((bucket) => {
       const count = Number(bucket.count) || 0;
+      const permanent = Number(bucket.permanent_count) || 0;
       const minH = 8;
       const pct = max > 0 ? count / max : 0;
       const barH = minH + pct * (100 - minH);
-      return `<div class="manabase-curve-row" data-mana-value="${bucket.mana_value ?? ''}">
+      const permPct = max > 0 ? permanent / max : 0;
+      const permH = Math.min(barH, minH + permPct * (100 - minH));
+      return `<div class="manabase-curve-row" data-mana-value="${bucket.mana_value ?? ''}" data-curve-total="${count}">
         <span class="manabase-curve-label">${escapeHTML(bucket.label ?? '')}</span>
-        <div class="manabase-curve-bar"><i data-height="${barH.toFixed(1)}"></i></div>
+        <div class="manabase-curve-track"><i data-height="${barH.toFixed(1)}" title="${count} 张"></i><i class="is-permanent" data-height="${permH.toFixed(1)}" title="${permanent} 张永久物"></i></div>
         <strong class="manabase-curve-count">${count}</strong>
       </div>`;
     }).join('');
+
+    // Moxfield-style one-line stats: average / median mana value with and without
+    // lands, plus the deck's total mana value. Values come precomputed from the
+    // manabase report so the rendered numbers always match the curve buckets.
+    const fmt = (value) => (Number.isFinite(value) ? value.toFixed(2) : '—');
+    const statsHTML = `
+      <span class="manabase-stat"><span>平均法力值</span><strong>${fmt(avgMvAll)}</strong><small>含地</small></span>
+      <span class="manabase-stat"><span>中位数</span><strong>${fmt(medianAll)}</strong><small>含地</small></span>
+      <span class="manabase-stat"><span>平均法力值</span><strong>${fmt(avgMvNoLands)}</strong><small>不含地</small></span>
+      <span class="manabase-stat"><span>中位数</span><strong>${fmt(medianNoLands)}</strong><small>不含地</small></span>
+      <span class="manabase-stat"><span>总法力值</span><strong>${Number.isFinite(totalMv) ? Math.round(totalMv) : '—'}</strong><small>全部非地牌</small></span>`;
     return `
       <div class="manabase-table-heading"><span>法术力曲线</span><small>非地牌 · 含主将与加速物</small></div>
-      <div class="manabase-curve">${rows}</div>`;
+      <div class="manabase-curve-legend">
+        <span class="manabase-legend-item is-permanent"><i></i>永久物</span>
+        <span class="manabase-legend-item is-all"><i></i>全部法术</span>
+      </div>
+      <p class="manabase-curve-hint">点击柱子筛选下方牌表中对应法术力值的卡牌</p>
+      <div class="manabase-curve">${rows}</div>
+      ${statsKnown ? `<div class="manabase-stats">${statsHTML}</div>` : ''}`;
   })() : '';
 
   container.innerHTML = `
@@ -1343,9 +1399,12 @@ function renderManabase(manabase) {
   // IAB）会把对内联百分比的解析忽略掉，导致每根都被拉满。像素宽度对该选择器内
   // 的元素不会歧义，始终正确。
   requestAnimationFrame(() => {
-    container.querySelectorAll('.manabase-curve-bar i').forEach((bar) => {
+    container.querySelectorAll('.manabase-curve-track i').forEach((bar) => {
       const height = parseFloat(bar.dataset.height) || 0;
       bar.style.height = height + 'px';
+    });
+    container.querySelectorAll('.manabase-curve-row.is-selected').forEach((row) => {
+      row.scrollIntoView({ block: 'nearest' });
     });
     container.querySelectorAll('.manabase-pip-track i').forEach((bar) => {
       const pct = parseFloat(bar.dataset.pct) || 0;
@@ -1536,13 +1595,23 @@ function renderDeckCards(cards) {
   const section = document.querySelector('#decklist-section');
   const container = document.querySelector('#deck-card-list');
   section.hidden = !cards.length;
+  let visible = cards;
+  if (curveSelectedMv !== null) {
+    visible = cards.filter((item) => Number(item.card?.cmc) === curveSelectedMv);
+  }
+  // Filter note stays outside the re-rendered container so it survives re-renders.
+  if (decklistFilterNote) {
+    decklistFilterNote.hidden = !visible.length || curveSelectedMv === null;
+    decklistFilterNote.textContent = curveSelectedMv === null ? '' : `已按法术力值 ${curveSelectedMv} 筛选完整牌表，共 ${visible.length} 张非地牌。`;
+  }
   const groups = [
-    ['Commander', cards.filter((item) => item.commander)],
-    ['Nonlands', cards.filter((item) => !item.commander && !item.land)],
-    ['Lands', cards.filter((item) => !item.commander && item.land)]
+    ['Commander', visible.filter((item) => item.commander)],
+    ['Nonlands', visible.filter((item) => !item.commander && !item.land)],
+    ['Lands', visible.filter((item) => !item.commander && item.land)]
   ];
   container.innerHTML = groups.filter(([, items]) => items.length).map(([title, items]) => `
-    <section class="deck-group"><h3>${title} <span>${items.reduce((sum, item) => sum + item.quantity, 0)}</span></h3><div class="card-grid">${items.map(renderCard).join('')}</div></section>`).join('') + 
+    <section class="deck-group"><h3>${title} <span>${items.reduce((sum, item) => sum + item.quantity, 0)}</span></h3><div class="card-grid">${items.map(renderCard).join('')}</div></section>`).join('') || 
+    '<p class="decklist-filter-empty">该法力值下没有匹配的卡牌。</p>' +
     '<div class="deck-card-list-expand-overlay" data-decklist-expand>点击展开完整牌表 ▾</div>' +
     '<button type="button" class="deck-card-list-collapse-button" data-decklist-collapse>收起牌表 ▴</button>';
 }

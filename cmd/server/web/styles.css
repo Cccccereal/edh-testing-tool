@@ -5,8 +5,9 @@
   --surface: #171916;
   --line: #353832;
   --acid: #c8e84a; /* 降低饱和度到 70%，提升可读性 */
-  --orange: #ff735c; /* 仅用于数据可视化（CommanderSalt 结果卡） */
-  --blue: #7eb8ff; /* 仅用于数据可视化（EDH Power Level 结果卡） */
+  --acid-soft: #d3e8a0; /* 酸绿同系的淡色，用于法力曲线总量柱 */
+  --orange: #ffb3a6; /* 淡化：用于数据可视化（CommanderSalt 结果卡） */
+  --blue: #a8cdf5; /* 淡化：用于数据可视化（EDH Power Level 结果卡） */
   /* 站点里几种不同的非衬线体，按用途区分，避免整页一个字体。 */
   --font-display: "Avenir Next", "Century Gothic", "Futura", "Trebuchet MS", "Segoe UI", sans-serif;
   --font-body: "Geist", "Inter", "Helvetica Neue", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; /* Geist 优先，Inter fallback */
@@ -21,8 +22,9 @@
   --surface: #e8e9e7;
   --line: #cacfca;
   --acid: #6b8a00;
-  --orange: #d9351c;
-  --blue: #1a5bb8;
+  --acid-soft: #a8b87c;
+  --orange: #f0a392;
+  --blue: #7ab0e0;
 }
 
 * { box-sizing: border-box; }
@@ -181,6 +183,7 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .suggestions-title span { color: var(--acid); font: 700 11px var(--font-ui); letter-spacing: .13em; }
 .edh-bracket-details .suggestions-title span { color: var(--blue); }
 .edh-bracket-details .suggestions-summary { border-left-color: var(--blue); background: rgba(126,184,255,.07); white-space: pre-line; overflow-wrap: anywhere; }
+:root.light-mode .edh-bracket-details .suggestions-summary { color: #1c2a38; background: rgba(122,176,224,.14); border-left-color: var(--blue); }
 .edh-bracket-details .suggestion-item-title strong { line-height: 1.45; }
 .edh-bracket-details .suggestion-item p { white-space: pre-line; overflow-wrap: anywhere; }
 .bracket-counters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
@@ -198,6 +201,7 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 @media (max-width: 640px) { .bracket-counters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .suggestions-title strong { font-size: 20px; }
 .suggestions-summary { margin: 0 0 18px; padding: 13px 14px; border-left: 2px solid var(--acid); color: #d4d2ca; background: rgba(215,255,63,.055); font-size: 14px; line-height: 1.6; }
+:root.light-mode .suggestions-summary { color: #2c2e1f; border-left-color: var(--acid); background: rgba(107,138,0,.07); }
 .suggestion-group + .suggestion-group { margin-top: 18px; }
 .suggestion-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 0; width: 100%; margin-bottom: 8px; padding: 0; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
 .suggestion-heading strong { display: block; font-size: 15px; }
@@ -273,13 +277,36 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .manabase-table-row span, .manabase-table-row strong { padding: 8px 12px; border-bottom: 1px solid var(--line); }
 .manabase-table-row span { color: var(--ink); font-size: 13px; }
 .manabase-table-row strong { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
-.manabase-curve { display: flex; align-items: flex-end; gap: 8px; height: 140px; padding: 4px 2px 0; }
-.manabase-curve-row { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
-.manabase-curve-bar { width: 100%; max-width: 44px; height: 96px; background: #30342d; border-radius: 4px 4px 0 0; display: flex; align-items: flex-end; overflow: hidden; }
-:root.light-mode .manabase-curve-bar { background: #c8cdc4; }
-.manabase-curve-bar i { display: block; width: 100%; background: var(--blue); height: 0; transition: height .6s cubic-bezier(.22, .8, .3, 1); }
-.manabase-curve-label { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.manabase-curve { display: flex; align-items: flex-end; gap: 8px; height: 168px; padding: 0 2px; }
+.manabase-curve-row { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; cursor: pointer; border-radius: 8px; transition: background .15s; }
+.manabase-curve-row:hover { background: rgba(255, 255, 255, .04); }
+:root.light-mode .manabase-curve-row:hover { background: rgba(0, 0, 0, .05); }
+.manabase-curve-row.is-selected { background: rgba(200, 232, 74, .08); outline: 1px solid rgba(200, 232, 74, .35); outline-offset: -1px; }
+:root.light-mode .manabase-curve-row.is-selected { background: rgba(107, 138, 0, .1); outline-color: rgba(107, 138, 0, .45); }
+/* Double-series bar: the wider "all spells" column sits at the back with the
+   narrower "permanent" column stacked in front of it. The all-spells bar never
+   covers the permanent bar entirely, so both shares stay visible. Bars grow inside
+   a fixed-height track; the track plus the label/count row below it are pinned to
+   the container's bottom edge, so the tallest bar can never reach the numbers that
+   sit above the curve. */
+.manabase-curve-track { position: relative; width: 100%; max-width: 44px; height: 96px; border-radius: 4px 4px 0 0; overflow: visible; }
+.manabase-curve-track > i { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); display: block; border-radius: 4px 4px 0 0; height: 0; transition: height .6s cubic-bezier(.22, .8, .3, 1); }
+.manabase-curve-track > i:not(.is-permanent) { width: 100%; background: var(--acid-soft); }
+.manabase-curve-track > i.is-permanent { width: 42%; background: var(--acid); opacity: .9; }
+.manabase-curve-label { margin-top: 4px; color: var(--muted); font-size: 12px; }
 .manabase-curve-count { margin-top: 2px; color: var(--ink); font-size: 13px; font-variant-numeric: tabular-nums; }
+.manabase-curve-legend { display: flex; gap: 16px; margin: 10px 0 6px; font-size: 12px; color: var(--muted); }
+.manabase-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.manabase-legend-item i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.manabase-legend-item.is-permanent i { background: var(--acid); opacity: .9; }
+.manabase-legend-item.is-all i { background: var(--acid-soft); }
+.manabase-curve-hint { margin: 0 0 4px; font-size: 12px; color: var(--muted); }
+.manabase-stats { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.manabase-stats strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.manabase-stat { display: inline-flex; align-items: baseline; gap: 6px; }
+.manabase-stat small { color: var(--muted); font-size: 11px; }
+.decklist-filter-note { margin: 10px 0 0; padding: 8px 12px; border: 1px solid rgba(200, 232, 74, .35); border-radius: 8px; background: rgba(200, 232, 74, .06); color: var(--ink); font-size: 13px; }
+.decklist-filter-empty { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
 .construction-metric { border: 1px solid var(--line); background: var(--surface); align-self: start; }
 .construction-metric summary { list-style: none; padding: 16px; cursor: pointer; }
 .construction-metric summary::-webkit-details-marker { display: none; }

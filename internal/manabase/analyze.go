@@ -31,15 +31,19 @@ func Analyze(entries []ClassifyEntry) Report {
 	)
 
 	report := Report{
-		ActualLands:           actualLands,
-		TargetLands:           targetLands,
-		LandDelta:             float64(actualLands) - targetLands,
-		AverageManaValue:      deck.AverageManaValue,
-		RampAndDrawUnderThree: deck.RampAndDrawUnderThree,
-		FastMana:              deck.FastMana,
-		CostCounts:            buildCostCounts(deck),
-		ColorPips:             buildColorPipCounts(deck),
-		ColorFindings:         buildColorFindings(deck, deckSize),
+		ActualLands:             actualLands,
+		TargetLands:             targetLands,
+		LandDelta:               float64(actualLands) - targetLands,
+		AverageManaValue:        deck.AverageManaValue,
+		MedianManaValue:         deck.MedianManaValue,
+		AverageManaValueNoLands: deck.AverageManaValueNoLands,
+		MedianManaValueNoLands:  deck.MedianManaValueNoLands,
+		TotalManaValue:          deck.TotalManaValue,
+		RampAndDrawUnderThree:   deck.RampAndDrawUnderThree,
+		FastMana:                deck.FastMana,
+		CostCounts:              buildCostCounts(deck),
+		ColorPips:               buildColorPipCounts(deck),
+		ColorFindings:           buildColorFindings(deck, deckSize),
 	}
 	return report
 }
@@ -50,9 +54,11 @@ func Analyze(entries []ClassifyEntry) Report {
 // so the table stays compact. Commanders and mana sources (rocks/dorks) are included —
 // the curve is meant to show where the deck's total mana demand sits. Each spell's deck
 // quantity is added, so basic lands (which never enter Spells) stay out while 2× of a
-// spell counts twice.
+// spell counts twice. Each bucket also records how many of its cards are permanents
+// (non-instant, non-sorcery) so the front-end can overlay the permanent share.
 func buildCostCounts(deck ManabaseDeck) []CostCount {
-	buckets := make([]int, 8)
+	total := make([]int, 8)
+	permanent := make([]int, 8)
 	for _, card := range deck.Spells {
 		mv := card.ManaValue
 		if mv < 0 {
@@ -61,15 +67,18 @@ func buildCostCounts(deck ManabaseDeck) []CostCount {
 		if mv >= 7 {
 			mv = 7
 		}
-		buckets[mv] += card.Quantity
+		total[mv] += card.Quantity
+		if card.IsPermanent {
+			permanent[mv] += card.Quantity
+		}
 	}
-	counts := make([]CostCount, 0, len(buckets))
-	for mv, count := range buckets {
+	counts := make([]CostCount, 0, len(total))
+	for mv, count := range total {
 		label := strconv.Itoa(mv)
 		if mv == 7 {
 			label = "7+"
 		}
-		counts = append(counts, CostCount{ManaValue: mv, Label: label, Count: count})
+		counts = append(counts, CostCount{ManaValue: mv, Label: label, Count: count, PermanentCount: permanent[mv]})
 	}
 	return counts
 }

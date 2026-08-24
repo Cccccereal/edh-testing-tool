@@ -3,6 +3,7 @@ package manabase
 import (
 	"math"
 	"regexp"
+	"sort"
 	"strings"
 
 	"powerlevel/internal/providers/cardcatalog"
@@ -41,14 +42,14 @@ type CardFact struct {
 }
 
 var (
-	reminderTextRe  = regexp.MustCompile(`\([^)]*\)`)
-	basicFetchRe    = regexp.MustCompile(`(?i)search your library for`)
-	basicLandRe     = regexp.MustCompile(`(?i)basic land`)
-	tapClauseAddRe  = regexp.MustCompile(`(?i)\{t\}, tap[^.\n"\r]*:\s*add`)
-	quotedSpanRe    = regexp.MustCompile(`"([^"]*)"`)
+	reminderTextRe    = regexp.MustCompile(`\([^)]*\)`)
+	basicFetchRe      = regexp.MustCompile(`(?i)search your library for`)
+	basicLandRe       = regexp.MustCompile(`(?i)basic land`)
+	tapClauseAddRe    = regexp.MustCompile(`(?i)\{t\}, tap[^.\n"\r]*:\s*add`)
+	quotedSpanRe      = regexp.MustCompile(`"([^"]*)"`)
 	appRestSelfPronRe = regexp.MustCompile(`(?i)\b(it|this creature|this permanent)\b.*\b(h|gains|has)\b`)
-	payLifeRe       = regexp.MustCompile(`(?i)you may pay \d+ life`)
-	scryRe          = regexp.MustCompile(`(?i)\bscry\s+([1-9]\d*)\b`)
+	payLifeRe         = regexp.MustCompile(`(?i)you may pay \d+ life`)
+	scryRe            = regexp.MustCompile(`(?i)\bscry\s+([1-9]\d*)\b`)
 )
 
 // basicLandColors maps each basic land type to the color it taps for.
@@ -82,7 +83,11 @@ func classify(entries []ClassifyEntry) ManabaseDeck {
 	deck.IsSingleton = true
 
 	var mvSum float64
+	var mvSumWithLands float64
 	var nonlandCount int
+	var totalCount int
+	var nonlandMVs []float64
+	var allMVs []float64
 
 	for _, card := range facts {
 		deck.TotalCards += card.Quantity
@@ -92,6 +97,11 @@ func classify(entries []ClassifyEntry) ManabaseDeck {
 
 		if isLandType(card.TypeLine) {
 			addLandCopies(&deck, card, deckColorCount, fetchTypeColors, fetchBasicColors)
+			// Lands count as 0 toward the all-cards stats.
+			for i := 0; i < card.Quantity; i++ {
+				allMVs = append(allMVs, 0)
+			}
+			totalCount += card.Quantity
 			continue
 		}
 
@@ -115,19 +125,54 @@ func classify(entries []ClassifyEntry) ManabaseDeck {
 		}
 
 		addPartialSources(&deck, card)
+
+		// Non-land cards feed both stats series: the curve series (non-land only) and
+		// the all-cards series (lands weighted as 0). Commanders stay out of both —
+		// they never enter the library and skew the curve.
+		if !card.IsCommander {
+			mvSumWithLands += card.ManaValue * float64(card.Quantity)
+			for i := 0; i < card.Quantity; i++ {
+				nonlandMVs = append(nonlandMVs, card.ManaValue)
+				allMVs = append(allMVs, card.ManaValue)
+			}
+			totalCount += card.Quantity
+		}
 	}
 
 	if nonlandCount > 0 {
 		deck.AverageManaValue = round2(mvSum / float64(nonlandCount))
 	}
+	if totalCount > 0 {
+		deck.AverageManaValueNoLands = round2(mvSumWithLands / float64(totalCount))
+	}
+	if len(nonlandMVs) > 0 {
+		deck.MedianManaValue = round2(median(nonlandMVs))
+	}
+	if len(allMVs) > 0 {
+		deck.MedianManaValueNoLands = round2(median(allMVs))
+	}
+	deck.TotalManaValue = int(mvSumWithLands)
 	return deck
+}
+
+// median returns the middle value of an ascending-sorted copy of the slice. Even
+// counts average the two middle values, matching the standard definition.
+func median(values []float64) float64 {
+	sorted := make([]float64, len(values))
+	copy(sorted, values)
+	sort.Float64s(sorted)
+	n := len(sorted)
+	if n%2 == 1 {
+		return sorted[n/2]
+	}
+	return (sorted[n/2-1] + sorted[n/2]) / 2
 }
 
 // ClassifyEntry pairs a resolved Scryfall card with its quantity and command-zone
 // status. It is the Go mirror of DeckFlow.Core.Manabase.DeckCardEntry.
 type ClassifyEntry struct {
-	Card       cardcatalog.Card
-	Quantity   int
+	Card        cardcatalog.Card
+	Quantity    int
 	IsCommander bool
 }
 
@@ -383,9 +428,26 @@ func addSpellRequirement(deck *ManabaseDeck, card CardFact, cost ParsedManaCost)
 		Pips:         cost.Pips,
 		IsGold:       distinctColors(cost.Pips) >= 2,
 		IsManaSource: isRockOrDork(card),
+		IsPermanent:  isPermanent(card),
 		IsCommander:  card.IsCommander,
 		Quantity:     card.Quantity,
 	})
+}
+
+// isPermanent reports whether a card stays on the battlefield once cast: creature,
+// artifact, enchantment, planeswalker, battle (and any type line containing those).
+// Instants and sorceries are the non-permanent types. Lands never reach here — the
+// classifier routes land type lines to sources before spells are built.
+func isPermanent(card CardFact) bool {
+	line := strings.ToLower(card.TypeLine)
+	if strings.Contains(line, "instant") || strings.Contains(line, "sorcery") {
+		return false
+	}
+	return isType(card.TypeLine, "Creature") ||
+		isType(card.TypeLine, "Artifact") ||
+		isType(card.TypeLine, "Enchantment") ||
+		isType(card.TypeLine, "Planeswalker") ||
+		isType(card.TypeLine, "Battle")
 }
 
 func distinctColors(pips map[ManaColor]int) int {
