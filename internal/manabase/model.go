@@ -55,6 +55,14 @@ type SpellRequirement struct {
 
 	// Quantity is copies of this spell in the deck (used by the mana curve).
 	Quantity int
+
+	// TrueColorlessPips is the number of {C} symbols in this spell's cost (used by
+	// the colorless-mana row of the mana production readout).
+	TrueColorlessPips int
+
+	// SnowPips is the number of {S} symbols in this spell's cost — snow mana is
+	// colorless in practice, so it shares the colorless bucket.
+	SnowPips int
 }
 
 // ManabaseDeck is a fully classified deck ready for mana-base analysis: its lands,
@@ -175,6 +183,12 @@ type Report struct {
 	// the "symbols on lands" half of the Moxfield-style mana production readout.
 	// A multicolored land counts once per color it can tap for, weighted by copies.
 	LandColorPips map[string]int `json:"land_color_pips,omitempty"`
+
+	// ColorlessPips is the number of {C}/{S} symbols in the deck's non-land spell
+	// costs — colorless mana demand. It backs the gray "Colorless Mana Production"
+	// row in the mana production readout. Colorless lands (Wastes, utility lands)
+	// are production, not demand, and are intentionally not included here.
+	ColorlessPips int `json:"colorless_pips,omitempty"`
 
 	// ColorFindings is per-color source findings. Stage 1 keeps deck order; no
 	// composite tail-risk ordering is applied.

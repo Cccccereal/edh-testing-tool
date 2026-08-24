@@ -423,14 +423,16 @@ func addSpellRequirement(deck *ManabaseDeck, card CardFact, cost ParsedManaCost)
 		mv = 0
 	}
 	deck.Spells = append(deck.Spells, SpellRequirement{
-		Name:         card.Name,
-		ManaValue:    mv,
-		Pips:         cost.Pips,
-		IsGold:       distinctColors(cost.Pips) >= 2,
-		IsManaSource: isRockOrDork(card),
-		IsPermanent:  isPermanent(card),
-		IsCommander:  card.IsCommander,
-		Quantity:     card.Quantity,
+		Name:              card.Name,
+		ManaValue:         mv,
+		Pips:              cost.Pips,
+		IsGold:            distinctColors(cost.Pips) >= 2,
+		IsManaSource:      isRockOrDork(card),
+		IsPermanent:       isPermanent(card),
+		IsCommander:       card.IsCommander,
+		Quantity:          card.Quantity,
+		TrueColorlessPips: cost.TrueColorlessPips,
+		SnowPips:          cost.SnowPips,
 	})
 }
 

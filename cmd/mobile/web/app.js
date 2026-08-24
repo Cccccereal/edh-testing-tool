@@ -1321,10 +1321,12 @@ function renderManabase(manabase) {
   // 同源于后端 color_pips / land_color_pips；全部符号的基数 = 非地符号 + 地牌符号。
   const colorPips = (manabase.color_pips || {});
   const landColorPips = (manabase.land_color_pips || {});
+  const colorlessPips = Number(manabase.colorless_pips || 0);
   const symbolCount = (color) => Number(colorPips[color] || 0) + Number(landColorPips[color] || 0);
   let composition = '';
-  if (Object.keys(colorPips).length) {
-    const allSymbols = MANA_COLORS.reduce((sum, c) => sum + symbolCount(c), 0);
+  if (Object.keys(colorPips).length || colorlessPips > 0) {
+    // 无色符号也是「全部符号」的一部分，必须计入分母，否则无色行的占比会超过 100%。
+    const allSymbols = MANA_COLORS.reduce((sum, c) => sum + symbolCount(c), 0) + colorlessPips;
     const landSymbols = MANA_COLORS.reduce((sum, c) => sum + Number(landColorPips[c] || 0), 0);
     const pctOfAll = (n) => (allSymbols > 0 ? Math.round((n / allSymbols) * 100) : 0);
     const pctOfLands = (n) => (landSymbols > 0 ? Math.round((n / landSymbols) * 100) : 0);
@@ -1349,9 +1351,23 @@ function renderManabase(manabase) {
           </div>
         </div>`;
     }).join('');
+    // 无色行：地牌产出的无色法力不算「彩色符号」，这行只有占全部符号的比例有意义，
+    // 第二格固定 0%；灰色沿用 Moxfield 的无色配色。
+    const colorlessRow = colorlessPips > 0 ? `
+        <div class="manabase-pip-row is-colorless">
+          <span class="mana-symbol colorless">{C}</span>
+          <div class="manabase-pip-tracks">
+            <div class="manabase-pip-track"><i data-pct="${pctOfAll(colorlessPips)}" title="全部符号 ${colorlessPips}"></i></div>
+            <div class="manabase-pip-track is-land"><i data-pct="0" title="地牌符号 0"></i></div>
+          </div>
+          <div class="manabase-pip-metrics">
+            <div class="manabase-pip-metric"><strong>${pctOfAll(colorlessPips)}%</strong><span>of all symbols</span></div>
+            <div class="manabase-pip-metric"><strong>0%</strong><span>of symbols on lands</span></div>
+          </div>
+        </div>` : '';
     composition = `
       <div class="manabase-table-heading"><span>法术力生产</span><small>符号占比 · 全部 vs 地牌</small></div>
-      <div class="manabase-pips">${pipRows}</div>`;
+      <div class="manabase-pips">${pipRows}${colorlessRow}</div>`;
   }
 
   const curveHTML = costCounts.length ? (() => {

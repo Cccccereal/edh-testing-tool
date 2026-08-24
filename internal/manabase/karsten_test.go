@@ -73,6 +73,37 @@ func TestParseManaCost(t *testing.T) {
 	}
 }
 
+func TestColorlessPipCounts(t *testing.T) {
+	// {C} and {S} both land in the colorless bucket and are weighted by quantity;
+	// generic costs ({2}) and colorless *lands* are production, not demand, so they
+	// must not show up here.
+	entries := []ClassifyEntry{
+		Entry(cardcatalog.Card{Name: "Wastes", TypeLine: "Basic Land", ProducedMana: []string{"C"}}, 10, false),
+		Entry(cardcatalog.Card{Name: "Matter Reshaper", ManaCost: "{2}{C}", TypeLine: "Creature — Eldrazi", Cmc: 3}, 2, false),
+		Entry(cardcatalog.Card{Name: "Thought-Knot Seer", ManaCost: "{3}{C}", TypeLine: "Creature — Eldrazi", Cmc: 4}, 1, false),
+		Entry(cardcatalog.Card{Name: "Rime Tender", ManaCost: "{1}{S}", TypeLine: "Snow Creature", Cmc: 2}, 1, false),
+		Entry(cardcatalog.Card{Name: "Counterspell", ManaCost: "{U}{U}", TypeLine: "Instant", Cmc: 2}, 1, false),
+	}
+
+	report := Analyze(entries)
+
+	// 2×{C} + 1×{C} + 1×{S} = 4; the 10 Wastes contribute nothing.
+	if report.ColorlessPips != 4 {
+		t.Fatalf("ColorlessPips = %d, want 4", report.ColorlessPips)
+	}
+	// The colored composition stays colorless-free.
+	if got := report.ColorPips["C"]; got != 0 {
+		t.Errorf("ColorPips[C] = %d, want 0 (colorless is its own field)", got)
+	}
+	if got := report.ColorPips["U"]; got != 2 {
+		t.Errorf("ColorPips[U] = %d, want 2", got)
+	}
+	// Colorless lands never enter the land symbol row either.
+	if got := report.LandColorPips["C"]; got != 0 {
+		t.Errorf("LandColorPips[C] = %d, want 0", got)
+	}
+}
+
 func TestAnalyzeEndToEnd(t *testing.T) {
 	// A minimal mono-blue-ish deck built from Scryfall-shaped fixtures. We don't run
 	// a real commander identity check; the point is the classify+analyze pipeline is

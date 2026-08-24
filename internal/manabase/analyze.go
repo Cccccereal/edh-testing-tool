@@ -44,6 +44,7 @@ func Analyze(entries []ClassifyEntry) Report {
 		CostCounts:              buildCostCounts(deck),
 		ColorPips:               buildColorPipCounts(deck),
 		LandColorPips:           buildLandColorPipCounts(deck),
+		ColorlessPips:           buildColorlessPipCounts(deck),
 		ColorFindings:           buildColorFindings(deck, deckSize),
 	}
 	return report
@@ -127,6 +128,20 @@ func buildLandColorPipCounts(deck ManabaseDeck) map[string]int {
 		}
 	}
 	return counts
+}
+
+// buildColorlessPipCounts tallies the {C} and {S} symbols in the deck's non-land
+// spell costs, weighted by quantity — the "Colorless Mana Production" demand row of
+// the mana production readout. It stays separate from buildColorPipCounts (which
+// deliberately excludes colorless) so the gray bar can be shown alongside the colors
+// without changing their semantics. Lands never appear in deck.Spells, so colorless
+// lands are inherently excluded.
+func buildColorlessPipCounts(deck ManabaseDeck) int {
+	total := 0
+	for _, spell := range deck.Spells {
+		total += (spell.TrueColorlessPips + spell.SnowPips) * spell.Quantity
+	}
+	return total
 }
 
 // buildColorFindings computes a per-color source requirement for each color that the
