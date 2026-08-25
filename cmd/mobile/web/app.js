@@ -1159,6 +1159,15 @@ document.addEventListener('click', (event) => {
   document.querySelectorAll('.manabase-curve-row').forEach((r) => {
     r.classList.toggle('is-selected', Number(r.dataset.manaValue) === curveSelectedMv);
   });
+  // Pin the name-list hover to the selected bar so it stays readable while the
+  // pointer is elsewhere; clicking another bar re-pins, clicking the same bar
+  // again (clearing the filter) dismisses it.
+  const selected = document.querySelector('.manabase-curve-row.is-selected');
+  if (selected) {
+    showMvNameList(selected.dataset.manaValue, selected);
+  } else {
+    hideListPreview();
+  }
   // Re-render from the current editor state so the filter applies to live edits too.
   renderDeckCards(editorCards.length ? editorCards : currentDeckCards);
   const list = document.querySelector('#deck-card-list');
@@ -2192,6 +2201,73 @@ function positionCardPreview(trigger) {
   preview.style.left = `${left}px`;
   preview.style.top = `${top}px`;
 }
+
+// Curve-bar name-list hover: clicking a mana-curve bar filters the deck list (which
+// now lives in the right drawer), but the curve itself should still answer "which
+// cards have this mana value" on hover. A separate fixed layer shows just the names,
+// keeping the card-art preview (#card-preview) strictly for real card hovers.
+let listPreviewEl = null;
+function ensureListPreview() {
+  if (listPreviewEl) return listPreviewEl;
+  listPreviewEl = document.createElement('div');
+  listPreviewEl.className = 'card-name-list-preview';
+  listPreviewEl.hidden = true;
+  document.body.appendChild(listPreviewEl);
+  return listPreviewEl;
+}
+function hideListPreview() {
+  if (listPreviewEl) listPreviewEl.hidden = true;
+}
+function positionListPreview(anchor) {
+  const el = ensureListPreview();
+  const gap = 10;
+  const a = anchor.getBoundingClientRect();
+  const box = el.getBoundingClientRect();
+  let left = a.right + gap;
+  if (left + box.width > window.innerWidth - gap) left = a.left - box.width - gap;
+  left = Math.max(gap, Math.min(left, window.innerWidth - box.width - gap));
+  const top = Math.max(gap, Math.min(a.top, window.innerHeight - box.height - gap));
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+}
+// Render the names of every deck card with the given mana value, grouped by card.
+// The list stays visible while the pointer is over the curve bar, and dismisses when
+// the pointer leaves the bar (or the bar is clicked, which filters the deck list).
+function showMvNameList(mv, anchor) {
+  const el = ensureListPreview();
+  const source = editorCards.length ? editorCards : currentDeckCards;
+  const counts = new Map();
+  for (const item of source) {
+    if (Number(item.card?.cmc) !== Number(mv)) continue;
+    const name = String(item.card?.name || '');
+    if (!name) continue;
+    counts.set(name, (counts.get(name) || 0) + (item.quantity || 1));
+  }
+  if (!counts.size) {
+    hideListPreview();
+    return;
+  }
+  el.innerHTML = `<strong>法术力值 ${mv}</strong><ul>${[...counts.entries()].map(([name, n]) => `<li>${escapeHTML(name)}${n > 1 ? ` ×${n}` : ''}</li>`).join('')}</ul>`;
+  el.hidden = false;
+  positionListPreview(anchor);
+}
+// Curve-bar pointer tracking (over/out) toggles the name-list hover. Clicking the
+// bar still filters the deck list in the drawer; hovering just previews the names.
+document.addEventListener('pointerover', (event) => {
+  const row = event.target.closest('.manabase-curve-row');
+  if (!row || row.contains(event.relatedTarget)) return;
+  const mv = row.dataset.manaValue;
+  if (mv === undefined || mv === '') return;
+  showMvNameList(mv, row);
+});
+document.addEventListener('pointerout', (event) => {
+  const row = event.target.closest('.manabase-curve-row');
+  if (!row || row.contains(event.relatedTarget)) return;
+  // A pinned (clicked) bar keeps its name-list hover until another bar is picked
+  // or the filter is cleared; only unpinned hover dismisses on pointer-out.
+  if (row.classList.contains('is-selected')) return;
+  hideListPreview();
+});
 
 function hideCardPreview() {
   activePreviewCard = null;
