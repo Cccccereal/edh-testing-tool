@@ -1176,8 +1176,16 @@ themeToggle.addEventListener('click', () => {
   localStorage.setItem('theme', isLight ? 'light' : 'dark');
 });
 
+// Load saved theme preference
+if (localStorage.getItem('theme') === 'light') {
+  document.documentElement.classList.add('light-mode');
+  themeToggle.textContent = '亮色';
+}
+
 // 打开右侧牌表编辑抽屉：把录入/删改牌表的操作区随时拉出来。列表内容在
 // renderDeckCards 里已经渲染，这里只负责显隐与滚动锁定。
+// 滚动锁定只发生在展开态（面板占据右侧、遮罩透明不挡内容）；收起成窄条后
+// 立即解除锁定，页面恢复上下滚动。
 function openDeckDrawer() {
   if (!deckDrawer) return;
   deckDrawer.hidden = false;
@@ -1192,6 +1200,8 @@ function closeDeckDrawer() {
   deckDrawer.hidden = true;
   document.body.style.overflow = '';
 }
+// 收起/展开：展开时锁滚动（面板盖住交互区），收起成窄条时解除锁定，
+// 让用户能正常滚动页面看分析结果。
 document.addEventListener('click', (event) => {
   if (event.target.closest('[data-deck-drawer-open]')) {
     openDeckDrawer();
@@ -1201,12 +1211,15 @@ document.addEventListener('click', (event) => {
     closeDeckDrawer();
     return;
   }
-  // 侧边箭头：只在"收起成窄条"与"展开"之间切换。点箭头或收起后的窄条
-  // 都回到这里，不再关掉整个抽屉。
   const tab = event.target.closest('.deck-drawer-tab');
   if (tab) {
     const panel = document.querySelector('.deck-drawer-panel');
     panel?.classList.toggle('is-collapsed');
+    if (panel?.classList.contains('is-collapsed')) {
+      document.body.style.overflow = '';
+    } else {
+      document.body.style.overflow = 'hidden';
+    }
     return;
   }
 });
@@ -1214,26 +1227,9 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && deckDrawer && !deckDrawer.hidden) closeDeckDrawer();
 });
 
-// Load saved theme preference
-if (localStorage.getItem('theme') === 'light') {
-  document.documentElement.classList.add('light-mode');
-  themeToggle.textContent = '亮色';
-}
-
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   await analyze();
-});
-
-retryButton.addEventListener('click', () => {
-  results.hidden = true;
-  input.focus();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-});
-
-clearDecklistButton?.addEventListener('click', () => {
-  decklistInput.value = '';
-  decklistInput.focus();
 });
 
 async function analyze() {
