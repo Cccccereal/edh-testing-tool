@@ -18,7 +18,7 @@
       <a href="#construction-section" class="sticky-nav-link">构筑分析</a>
       <a href="#combo-section" class="sticky-nav-link">Combo</a>
       <a href="#recommendation-section" class="sticky-nav-link">推荐</a>
-      <a href="#decklist-section" class="sticky-nav-link">完整牌表</a>
+      <button type="button" class="sticky-nav-link" data-deck-drawer-open>牌表编辑</button>
     </div>
   </nav>
   <main class="shell">
@@ -213,35 +213,41 @@
         <div class="section-heading toggleable" data-section-toggle data-section="recommendation-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">CONSTRUCTION RECOMMENDATIONS</p><h2>构筑缺口推荐</h2><p id="recommendation-keywords" class="section-note"></p></div><button type="button" class="section-heading-toggle">收起</button></div>
         <div id="recommendation-list" class="recommendation-grid"></div>
       </section>
-      <section id="decklist-section" class="catalog-section" hidden>
-        <div class="section-heading toggleable" data-section-toggle data-section="decklist-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">FULL DECK</p><h2>完整牌表</h2></div><div class="deck-actions" data-section-actions><button id="copy-decklist" class="ghost-button" type="button">复制牌表</button><button type="button" class="section-heading-toggle">收起</button></div></div>
-        <div id="editor-toolbar" class="editor-toolbar">
-          <div class="editor-add-row">
-            <div class="editor-add-field">
-              <input id="editor-add-card" type="text" placeholder="添加卡牌（输入名称）" autocomplete="off" spellcheck="false">
-              <ul id="editor-add-suggestions" class="editor-add-suggestions" hidden></ul>
-            </div>
-            <button id="editor-add-submit" class="ghost-button" type="button">添加</button>
-          </div>
-          <div class="editor-actions">
-            <button id="editor-undo" class="ghost-button" type="button" disabled>撤销</button>
-            <button id="editor-redo" class="ghost-button" type="button" disabled>重做</button>
-            <button id="editor-save-version" class="ghost-button" type="button">保存版本</button>
-            <button id="editor-export" class="ghost-button" type="button">导出牌表</button>
-            <button id="editor-versions-toggle" class="ghost-button" type="button">版本</button>
-          </div>
-        </div>
-        <p id="editor-dirty-note" class="editor-dirty-note" hidden>当前牌表有未重新分析的本地修改；构筑指标与评分仍基于上次分析。</p>
-        <div id="editor-versions-panel" class="editor-versions-panel" hidden>
-          <div class="editor-versions-heading"><strong>已保存版本</strong><button id="editor-versions-close" class="ghost-button" type="button">关闭</button></div>
-          <div id="editor-versions-list" class="editor-versions-list"></div>
-        </div>
-        <div id="deck-card-list" class="deck-card-list collapsed" aria-live="polite"></div>
-        <p id="decklist-filter-note" class="decklist-filter-note" hidden></p>
-      </section>
       <p class="disclaimer">两个网站使用不同评分模型，结果应分别理解，不计算平均值。卡牌数据由 Scryfall 提供，组合数据由 Commander Spellbook 提供。</p>
     </section>
   </main>
+  <div id="deck-drawer" class="deck-drawer" hidden>
+    <button type="button" class="deck-drawer-tab" aria-label="收起/展开牌表面板"><span aria-hidden="true">›</span></button>
+    <aside class="deck-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="deck-drawer-title">
+      <div class="deck-drawer-head">
+        <div><p class="eyebrow">DECK EDITOR</p><h2 id="deck-drawer-title">牌表编辑</h2></div>
+        <button id="deck-drawer-close" class="ghost-button" type="button" aria-label="关闭牌表面板">关闭</button>
+      </div>
+      <div id="editor-toolbar" class="editor-toolbar">
+        <div class="editor-add-row">
+          <div class="editor-add-field">
+            <input id="editor-add-card" type="text" placeholder="添加卡牌（输入名称）" autocomplete="off" spellcheck="false">
+            <ul id="editor-add-suggestions" class="editor-add-suggestions" hidden></ul>
+          </div>
+          <button id="editor-add-submit" class="ghost-button" type="button">添加</button>
+        </div>
+        <div class="editor-actions">
+          <button id="editor-undo" class="ghost-button" type="button" disabled>撤销</button>
+          <button id="editor-redo" class="ghost-button" type="button" disabled>重做</button>
+          <button id="editor-save-version" class="ghost-button" type="button">保存版本</button>
+          <button id="editor-export" class="ghost-button" type="button">导出牌表</button>
+          <button id="editor-versions-toggle" class="ghost-button" type="button">版本</button>
+        </div>
+      </div>
+      <p id="editor-dirty-note" class="editor-dirty-note" hidden>当前牌表有未重新分析的本地修改；构筑指标与评分仍基于上次分析。</p>
+      <div id="editor-versions-panel" class="editor-versions-panel" hidden>
+        <div class="editor-versions-heading"><strong>已保存版本</strong><button id="editor-versions-close" class="ghost-button" type="button">关闭</button></div>
+        <div id="editor-versions-list" class="editor-versions-list"></div>
+      </div>
+      <div id="deck-card-list" class="deck-card-list collapsed" aria-live="polite"></div>
+      <p id="decklist-filter-note" class="decklist-filter-note" hidden></p>
+    </aside>
+  </div>
   <div id="swap-modal" class="swap-modal" hidden>
     <div class="swap-backdrop" data-swap-close></div>
     <section class="swap-panel" role="dialog" aria-modal="true" aria-labelledby="swap-title">
@@ -269,5 +275,6 @@
   </div>
   <script src="/app.js" defer></script>
   <script>document.querySelector('#editor-versions-close').addEventListener('click', () => { document.querySelector('#editor-versions-panel').hidden = true; });</script>
+  <script>document.querySelector('#deck-drawer-close').addEventListener('click', () => { document.querySelector('#deck-drawer').hidden = true; document.body.style.overflow = ''; });</script>
 </body>
 </html>

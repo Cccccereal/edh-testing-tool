@@ -4,11 +4,47 @@ import (
 	"powerlevel/internal/providers/cardcatalog"
 )
 
-// gameChangerNames is the Commander format's official Game Changers list (the 53 cards
-// that push a deck toward Bracket 3+). Names come from the `is:gamechanger` tag in
-// Scryfall, which mirrors the Wizards of the Coast Commander Brackets announcement.
-// Names are normalized via normalizeCardName so a split/multiface card matches its
-// front face too.
+// isGameChanger reports whether a card is on the Commander Game Changers list.
+//
+// The source of truth is Scryfall's official `game_changer` field, which Wizards
+// maintains alongside the Commander Brackets list (it changes every few months).
+// Two paths feed it:
+//
+//   - The cardcatalog provider records `game_changer: true` on every Scryfall card
+//     that carries the flag, and Lookup-based flows (analysis, swap, builder pools)
+//     read it straight off the catalog card. That is the primary path and never
+//     needs a snapshot.
+//   - The in-process EDH Power Level score uses getcards' own `gamechanger` flag.
+//
+// The hardcoded name list below is retained only as a last-resort fallback for
+// cards that predate Scryfall's field or that arrive through a provider which does
+// not expose it — it is intentionally a snapshot and can go stale, which is why it
+// is never consulted before the live field.
+func isGameChanger(card cardcatalog.Card) bool {
+	if card.GameChanger {
+		return true
+	}
+	for _, face := range card.Faces {
+		if face.GameChanger {
+			return true
+		}
+	}
+	if _, ok := gameChangerNames[normalizeCardName(card.Name)]; ok {
+		return true
+	}
+	for _, face := range card.Faces {
+		if _, ok := gameChangerNames[normalizeCardName(face.Name)]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// gameChangerNames is the Commander format's official Game Changers list snapshot
+// (the 53 cards from the initial Brackets announcement). It is a fallback only:
+// cards flagged `game_changer` by Scryfall take precedence, and the list here may
+// lag newer additions. Names are normalized via normalizeCardName so a split or
+// multi-face card matches its front face too.
 var gameChangerNames = func() map[string]struct{} {
 	names := []string{
 		"Ad Nauseam",
@@ -71,18 +107,3 @@ var gameChangerNames = func() map[string]struct{} {
 	}
 	return set
 }()
-
-// isGameChanger reports whether a card is on the Commander Game Changers list. It
-// matches by normalized name against both the card name and any faces (so a split or
-// double-faced Game Changer such as Tergrid still matches on its front face).
-func isGameChanger(card cardcatalog.Card) bool {
-	if _, ok := gameChangerNames[normalizeCardName(card.Name)]; ok {
-		return true
-	}
-	for _, face := range card.Faces {
-		if _, ok := gameChangerNames[normalizeCardName(face.Name)]; ok {
-			return true
-		}
-	}
-	return false
-}

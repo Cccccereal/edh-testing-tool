@@ -62,7 +62,7 @@ func TestClassifyReturnsAllMatches(t *testing.T) {
 func TestClassifyUsesBackFaceAndIgnoresEmptyCard(t *testing.T) {
 	card := cardcatalog.Card{Faces: []cardcatalog.CardFace{{Name: "Front"}, {Name: "Back", OracleText: "Destroy all creatures."}}}
 	matches := Classify(card)
-	if len(matches) != 1 || matches[0].ID != "mass_interaction" {
+	if len(matches) != 2 || matches[0].ID != "mass_interaction" || matches[1].ID != "board_wipe" {
 		t.Fatalf("unexpected back-face matches: %+v", matches)
 	}
 	if matches := Classify(cardcatalog.Card{}); len(matches) != 0 {

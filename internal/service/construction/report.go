@@ -1,6 +1,7 @@
 package construction
 
 import (
+	"strconv"
 	"strings"
 
 	"powerlevel/internal/providers/cardcatalog"
@@ -57,6 +58,12 @@ var targets = []struct {
 	{"draw_discard", "牌差件", 12},
 	{"ramp", "加速", 10},
 	{"tutors", "检索", 5},
+	// 角色类指标：直接点出胜负手/终结者/穿透/清场，替代原来含糊的 "计划相关"
+	// 兜底分类，让报告告诉玩家"牌组靠什么赢"。
+	{"wincon", "胜负手", 4},
+	{"finisher", "终结者", 5},
+	{"evasive", "穿透", 6},
+	{"board_wipe", "清场", 4},
 }
 
 func Build(cards []InputCard) Report {
@@ -106,7 +113,7 @@ func ClassifyWithContext(card cardcatalog.Card, ctx ClassifyContext) []Match {
 	for _, target := range targets {
 		var matched bool
 		var reason string
-		
+
 		if target.id == "plan" && ctx.CommanderTheme != nil {
 			// Use theme-aware plan matching
 			matched, reason = ctx.CommanderTheme.MatchesPlan(card, ctx.CardSynergy)
@@ -114,7 +121,7 @@ func ClassifyWithContext(card cardcatalog.Card, ctx ClassifyContext) []Match {
 			// Use default classification
 			matched, reason = classify(target.id, card)
 		}
-		
+
 		if matched {
 			matches = append(matches, Match{ID: target.id, Label: target.label, Reason: reason})
 		}
@@ -199,6 +206,32 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 		if strings.Contains(text, "search") && strings.Contains(text, "land") && strings.Contains(text, "battlefield") {
 			return true, "Tutors lands onto battlefield"
 		}
+	case "wincon":
+		// 胜负手：直接结束对局的文字，或与"恰好 N 张"关联的致胜异能。
+		if strings.Contains(text, "you win the game") || strings.Contains(text, "each opponent loses the game") || strings.Contains(text, "each other player loses the game") {
+			return true, "Win condition in card text"
+		}
+		if strings.Contains(text, "you may choose a new commander") {
+			return true, "Replaces commander (can set up a loop)"
+		}
+	case "finisher":
+		// 终结者：高威胁生物（5 攻以上且带穿透）或生物群体增幅（haymaker）。
+		if isEvasiveCreature(card, text, typeLine) && cardPower(card) >= 5 {
+			return true, "Big evasive threat"
+		}
+		if strings.Contains(text, "creatures you control get") || strings.Contains(text, "creatures you control gain") {
+			return true, "Haymaker buff for all your creatures"
+		}
+	case "evasive":
+		// 穿透：关键字或"不能被阻挡"（trample 只算穿透，不算终结者的"大威胁"）。
+		if isEvasiveCreature(card, text, typeLine) {
+			return true, "Has evasion keywords or can't be blocked"
+		}
+	case "board_wipe":
+		// 清场：破坏/放逐全部生物、对每个生物造成伤害、或让所有生物变弱。
+		if strings.Contains(text, "destroy all") || strings.Contains(text, "exile all") || strings.Contains(text, "all creatures get -") || strings.Contains(text, "deals") && strings.Contains(text, "damage to each creature") {
+			return true, "Clears the board"
+		}
 	case "plan":
 		if strings.Contains(text, "token") || strings.Contains(text, "proliferate") || strings.Contains(text, "infect") || strings.Contains(text, "poison") || strings.Contains(text, "whenever") {
 			return true, "Heuristic plan/synergy card"
@@ -209,6 +242,57 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 
 func hasCatalogData(card cardcatalog.Card) bool {
 	return card.Name != "" || card.TypeLine != "" || card.OracleText != "" || len(card.Faces) > 0
+}
+
+// cardPower parses the card's printed power; returns 0 when it is not a creature
+// or the power is unparseable. Double-faced cards use their front face's power
+// (a meld/transform card's top-level "1+" is just a placeholder).
+func cardPower(card cardcatalog.Card) int {
+	raw := strings.TrimSpace(card.Power)
+	if len(card.Faces) > 0 {
+		raw = strings.TrimSpace(card.Faces[0].Power)
+	}
+	if raw == "" || raw == "*" || strings.HasPrefix(raw, "1+") {
+		return 0
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0
+	}
+	return value
+}
+
+// evasionKeywords are the keywords that let a creature get damage through.
+var evasionKeywords = []string{"flying", "menace", "trample", "shadow", "fear", "intimidate", "skulk"}
+
+// isEvasiveCreature reports whether a card is a creature with an evasion keyword
+// or an explicit "can't be blocked" ability, scanning all faces. Trample counts as
+// evasion (it pushes damage through chump blockers) but does not qualify as
+// finisher "big threat" evasion on its own — handled by the caller via cardPower.
+func isEvasiveCreature(card cardcatalog.Card, text, typeLine string) bool {
+	if !strings.Contains(typeLine, "creature") {
+		return false
+	}
+	for _, keyword := range evasionKeywords {
+		if strings.Contains(text, keyword) {
+			return true
+		}
+	}
+	if strings.Contains(text, "can't be blocked") {
+		return true
+	}
+	for _, face := range card.Faces {
+		faceText := strings.ToLower(face.OracleText)
+		for _, keyword := range evasionKeywords {
+			if strings.Contains(faceText, keyword) {
+				return true
+			}
+		}
+		if strings.Contains(faceText, "can't be blocked") {
+			return true
+		}
+	}
+	return false
 }
 
 func faceText(card cardcatalog.Card) string {

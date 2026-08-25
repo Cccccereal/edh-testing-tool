@@ -43,6 +43,7 @@ const editorVersionsPanel = document.querySelector('#editor-versions-panel');
 const editorVersionsList = document.querySelector('#editor-versions-list');
 const editorDirtyNote = document.querySelector('#editor-dirty-note');
 const decklistFilterNote = document.querySelector('#decklist-filter-note');
+const deckDrawer = document.querySelector('#deck-drawer');
 // Mana-value bucket currently selected on the curve (null = show the whole deck).
 // Clicking the bucket's bar again clears the filter; a re-render resets it.
 let curveSelectedMv = null;
@@ -1111,15 +1112,15 @@ document.addEventListener('click', (event) => {
   }
 });
 
-copyDecklistButton.addEventListener('click', async () => {
+copyDecklistButton?.addEventListener('click', async () => {
   if (!currentDeckText) return;
   try {
     await navigator.clipboard.writeText(currentDeckText);
-    copyDecklistButton.textContent = '已复制';
-    setTimeout(() => { copyDecklistButton.textContent = '复制牌表'; }, 1600);
+    if (copyDecklistButton) copyDecklistButton.textContent = '已复制';
+    setTimeout(() => { if (copyDecklistButton) copyDecklistButton.textContent = '复制牌表'; }, 1600);
   } catch {
-    copyDecklistButton.textContent = '复制失败';
-    setTimeout(() => { copyDecklistButton.textContent = '复制牌表'; }, 1600);
+    if (copyDecklistButton) copyDecklistButton.textContent = '复制失败';
+    setTimeout(() => { if (copyDecklistButton) copyDecklistButton.textContent = '复制牌表'; }, 1600);
   }
 });
 
@@ -1175,6 +1176,44 @@ themeToggle.addEventListener('click', () => {
   localStorage.setItem('theme', isLight ? 'light' : 'dark');
 });
 
+// 打开右侧牌表编辑抽屉：把录入/删改牌表的操作区随时拉出来。列表内容在
+// renderDeckCards 里已经渲染，这里只负责显隐与滚动锁定。
+function openDeckDrawer() {
+  if (!deckDrawer) return;
+  deckDrawer.hidden = false;
+  document.body.style.overflow = 'hidden';
+  const panel = document.querySelector('.deck-drawer-panel');
+  panel?.classList.remove('is-collapsed');
+  const list = document.querySelector('#deck-card-list');
+  list?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function closeDeckDrawer() {
+  if (!deckDrawer) return;
+  deckDrawer.hidden = true;
+  document.body.style.overflow = '';
+}
+document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-deck-drawer-open]')) {
+    openDeckDrawer();
+    return;
+  }
+  if (event.target.closest('[data-deck-drawer-close]')) {
+    closeDeckDrawer();
+    return;
+  }
+  // 侧边箭头：只在"收起成窄条"与"展开"之间切换。点箭头或收起后的窄条
+  // 都回到这里，不再关掉整个抽屉。
+  const tab = event.target.closest('.deck-drawer-tab');
+  if (tab) {
+    const panel = document.querySelector('.deck-drawer-panel');
+    panel?.classList.toggle('is-collapsed');
+    return;
+  }
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && deckDrawer && !deckDrawer.hidden) closeDeckDrawer();
+});
+
 // Load saved theme preference
 if (localStorage.getItem('theme') === 'light') {
   document.documentElement.classList.add('light-mode');
@@ -1192,7 +1231,7 @@ retryButton.addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-clearDecklistButton.addEventListener('click', () => {
+clearDecklistButton?.addEventListener('click', () => {
   decklistInput.value = '';
   decklistInput.focus();
 });
@@ -1518,11 +1557,24 @@ function closeSwap() {
 function renderSwapRemoveList(query) {
   const normalized = query.trim().toLowerCase();
   const cards = currentDeckCards.filter((item) => !item.commander && (!normalized || String(item.card?.name || '').toLowerCase().includes(normalized)));
+  // Group mainboard cards by their construction role so a swap reads like a deck
+  // decision ("cut from ramp", "cut from 穿透"), not a raw Nonlands/Lands split.
+  const roleLabel = (item) => swapRoleLabel(item);
   const groups = [
-    ['Nonlands', cards.filter((item) => !item.land)],
-    ['Lands', cards.filter((item) => item.land)]
+    ['非地牌', cards.filter((item) => !item.land)],
+    ['地牌', cards.filter((item) => item.land)]
   ];
-  document.querySelector('#swap-remove-list').innerHTML = groups.filter(([, items]) => items.length).map(([label, items]) => `<section><h3>${label}</h3>${items.map((item) => `<button type="button" class="swap-remove-option${selectedSwapRemove === item.card.name ? ' selected' : ''}" data-remove-name="${escapeHTML(item.card.name)}"><span>${item.quantity}×</span><strong>${escapeHTML(item.card.name)}</strong></button>`).join('')}</section>`).join('') || '<p>没有匹配的 Mainboard 卡牌。</p>';
+  document.querySelector('#swap-remove-list').innerHTML = groups.filter(([, items]) => items.length).map(([label, items]) => `<section><h3>${label}</h3>${items.map((item) => `<button type="button" class="swap-remove-option${selectedSwapRemove === item.card.name ? ' selected' : ''}" data-remove-name="${escapeHTML(item.card.name)}"><span>${item.quantity}×</span><strong>${escapeHTML(item.card.name)}</strong><small class="swap-remove-role">${escapeHTML(roleLabel(item))}</small></button>`).join('')}</section>`).join('') || '<p>没有匹配的 Mainboard 卡牌。</p>';
+}
+
+// swapRoleLabel derives a card's primary construction role from its classified
+// metrics, falling back to "地牌" / "未分类".
+const SWAP_ROLE_ORDER = ['wincon', 'finisher', 'evasive', 'board_wipe', 'mass_interaction', 'single_interaction', 'draw_discard', 'ramp', 'tutors', 'plan'];
+function swapRoleLabel(item) {
+  if (item.land) return '地牌';
+  const role = (item.roles || []).find((id) => SWAP_ROLE_ORDER.includes(id));
+  if (!role) return '未分类';
+  return ({ wincon: '胜负手', finisher: '终结者', evasive: '穿透', board_wipe: '清场', mass_interaction: '群体干扰', single_interaction: '单体干扰', draw_discard: '牌差件', ramp: '加速', tutors: '检索', plan: '计划相关' })[role];
 }
 
 async function compareSwap() {
@@ -1547,6 +1599,31 @@ async function compareSwap() {
   }
 }
 
+// renderCutReasons explains why the removed card is a good cut: role surplus,
+// weak card quality, or no synergy with the commander. Mirrors the server's
+// SwapCutReason payload. 后端返回的 cut_reasons 是"整副牌的切除建议"；
+// 这里只挑出与当前被移除卡牌相关的条目，避免把整副牌的理由全列出来刷屏。
+// 同一条理由去重后最多显示 3 条。
+function renderCutReasons(reasons) {
+  if (!Array.isArray(reasons) || !reasons.length) return '';
+  const removedName = String(selectedSwapRemove || '').toLowerCase();
+  const removedItem = removedName ? currentDeckCards.find((c) => !c.commander && String(c.card?.name || '').toLowerCase() === removedName) : null;
+  const removedRoles = removedItem ? removedItem.roles || [] : [];
+  const relevant = reasons.filter((reason) => removedRoles.includes(reason.role) || (reason.label || '').toLowerCase().includes(removedName));
+  // 按角色去重：同一角色保留一条最完整的理由
+  const seen = new Set();
+  const deduped = [];
+  for (const reason of relevant) {
+    const key = reason.role || reason.label || '';
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(reason);
+  }
+  const shown = (deduped.length ? deduped : reasons.slice(0, 3)).slice(0, 3);
+  const items = shown.map((reason) => `<li>${escapeHTML(reason.label || '')}${(reason.reasons || []).map((text) => `<span>${escapeHTML(text)}</span>`).join('')}</li>`).join('');
+  return `<div class="swap-cut-reasons"><h4>为什么选它踢掉</h4><ul>${items}</ul></div>`;
+}
+
 function renderSwapResult(payload) {
   const deltas = (payload.deltas || []).map((metric) => {
     const delta = Number(metric.delta || 0);
@@ -1555,6 +1632,7 @@ function renderSwapResult(payload) {
   }).join('');
   const issues = (payload.legality?.issues || []).map((issue) => `<li>${escapeHTML(issue)}</li>`).join('');
   swapResult.innerHTML = `<div class="swap-result-title"><strong>${escapeHTML(payload.removed?.name || '')}</strong><span>→</span><strong>${escapeHTML(payload.added?.name || '')}</strong></div>
+    ${renderCutReasons(payload.cut_reasons)}
     <table><thead><tr><th>指标</th><th>替换前</th><th>替换后</th><th>变化</th></tr></thead><tbody>${deltas}</tbody></table>
     <div class="swap-legality ${payload.legality?.valid ? 'valid' : 'warning'}"><strong>基础合法性：${payload.legality?.valid ? '通过' : '需要注意'}</strong><span>牌张数 ${payload.before?.card_count} → ${payload.after?.card_count} · Commander 色组 ${(payload.legality?.color_identity || []).join('') || '无色'}</span>${issues ? `<ul>${issues}</ul>` : ''}</div>
     <textarea readonly aria-label="更新后的牌表">${escapeHTML(payload.updated_decklist || '')}</textarea>
@@ -1623,9 +1701,9 @@ function renderRecommendations(recommendations, keywords) {
 }
 
 function renderDeckCards(cards) {
-  const section = document.querySelector('#decklist-section');
   const container = document.querySelector('#deck-card-list');
-  section.hidden = !cards.length;
+  // 完整牌表整个住在右侧抽屉里；页面底部不再保留独立区块。空牌组时连抽屉一起隐藏。
+  if (deckDrawer) deckDrawer.hidden = !cards.length;
   let visible = cards;
   if (curveSelectedMv !== null) {
     visible = cards.filter((item) => Number(item.card?.cmc) === curveSelectedMv);
@@ -1641,7 +1719,7 @@ function renderDeckCards(cards) {
     ['Lands', visible.filter((item) => !item.commander && item.land)]
   ];
   container.innerHTML = groups.filter(([, items]) => items.length).map(([title, items]) => `
-    <section class="deck-group"><h3>${title} <span>${items.reduce((sum, item) => sum + item.quantity, 0)}</span></h3><div class="card-grid">${items.map(renderCard).join('')}</div></section>`).join('') || 
+    <section class="deck-group"><h3>${title} <span>${items.reduce((sum, item) => sum + item.quantity, 0)}</span></h3><div class="card-grid">${items.map(renderCard).join('')}</div></section>`).join('') ||
     '<p class="decklist-filter-empty">该法力值下没有匹配的卡牌。</p>' +
     '<div class="deck-card-list-expand-overlay" data-decklist-expand>点击展开完整牌表 ▾</div>' +
     '<button type="button" class="deck-card-list-collapse-button" data-decklist-collapse>收起牌表 ▴</button>';
@@ -2389,7 +2467,7 @@ function showStickyNav() {
   document.body.classList.add('has-sticky-nav');
   
   // Set up intersection observer for active link highlighting
-  const sections = document.querySelectorAll('#results, #manabase-section, #construction-section, #combo-section, #recommendation-section, #decklist-section');
+  const sections = document.querySelectorAll('#results, #manabase-section, #construction-section, #combo-section, #recommendation-section');
   const navLinks = document.querySelectorAll('.sticky-nav-link');
   
   const observer = new IntersectionObserver((entries) => {
@@ -2414,6 +2492,8 @@ function showStickyNav() {
   
   // Smooth scroll on nav click
   navLinks.forEach((link) => {
+    // 牌表编辑是按钮（无 href），不做平滑滚动，交给 data-deck-drawer-open 的委托处理器。
+    if (link.tagName !== 'A' || !link.getAttribute('href')) return;
     link.addEventListener('click', (e) => {
       e.preventDefault();
       const targetId = link.getAttribute('href').substring(1);

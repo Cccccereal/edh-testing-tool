@@ -226,6 +226,7 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 			}
 			report := construction.Build(inputs)
 			analysis.ConstructionReport = &report
+			analysis.DeckCards = attachRoles(analysis.DeckCards)
 			analysis.Manabase = manabaseReport(target, analysis.DeckCards)
 			catalogCMC = catalogCMCs(target, catalog, nil)
 		}
@@ -555,6 +556,21 @@ func buildDisplayCards(target deck.Deck, catalog map[string]cardcatalog.Card) []
 		appendCard(item, false)
 	}
 	return result
+}
+
+// attachRoles stamps each display card with the construction role IDs it was
+// classified into, so the frontend can group and explain cards by role (swap
+// candidates, deck list badges) without re-deriving classification client-side.
+func attachRoles(cards []DisplayCard) []DisplayCard {
+	for i := range cards {
+		matches := construction.Classify(cards[i].Card)
+		roles := make([]string, 0, len(matches))
+		for _, match := range matches {
+			roles = append(roles, match.ID)
+		}
+		cards[i].Roles = roles
+	}
+	return cards
 }
 
 func summarize(target deck.Deck) DeckSummary {

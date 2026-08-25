@@ -7,6 +7,7 @@ import (
 
 	"powerlevel/internal/deck"
 	"powerlevel/internal/providers/cardcatalog"
+	"powerlevel/internal/service/construction"
 )
 
 type swapCatalog struct{ cards map[string]cardcatalog.Card }
@@ -63,6 +64,19 @@ func TestCompareSwapChangesConstructionMetricsAndPreservesInput(t *testing.T) {
 			t.Fatalf("interaction delta = %d, want 1", delta.Delta)
 		}
 	}
+	if len(comparison.CutReasons) == 0 {
+		t.Fatalf("expected cut reasons for removable cards, got none")
+	}
+	foundReason := false
+	for _, reason := range comparison.CutReasons {
+		if len(reason.Reasons) > 0 {
+			foundReason = true
+			break
+		}
+	}
+	if !foundReason {
+		t.Fatalf("expected at least one populated cut reason, got %+v", comparison.CutReasons)
+	}
 	if _, err := deck.ParsePlainText(comparison.UpdatedDecklist); err != nil {
 		t.Fatalf("updated decklist is not parseable: %v", err)
 	}
@@ -81,5 +95,41 @@ func TestCompareSwapRejectsCommanderAndOffColor(t *testing.T) {
 	}
 	if _, err := a.CompareSwap(context.Background(), list, "Plains", "Island"); err != ErrColorIdentity {
 		t.Fatalf("off-color error = %v", err)
+	}
+}
+
+func TestCutReasonsUseQuotaMetricsOnlyForSurplus(t *testing.T) {
+	legal := map[string]string{"commander": "legal"}
+	// 单只进攻生物：命中终结者（5攻带穿透）+ 穿透 两个角色类指标。
+	// 角色类指标不做"超目标"判断，绝不输出"超过目标数量"。
+	dragon := cardcatalog.Card{Name: "Dragon", TypeLine: "Creature — Dragon", Power: "5", OracleText: "Flying.", Legalities: legal}
+	inputs := []construction.InputCard{{Name: "Dragon", Quantity: 1, Card: dragon}}
+	report := construction.Build(inputs)
+	reasons := cutReasons(inputs, report)
+	for _, reason := range reasons {
+		for _, line := range reason.Reasons {
+			if strings.Contains(line, "超过目标数量") {
+				t.Fatalf("role-metric surplus reason emitted: %+v", reason)
+			}
+		}
+	}
+}
+
+func TestCutReasonsEmitSingleEntryPerCard(t *testing.T) {
+	legal := map[string]string{"commander": "legal"}
+	// 该卡命中 计划相关 + 终结者 + 穿透 三个指标；不管命中多少，每张牌
+	// 最多输出一条理由，不会同一张牌刷屏多次。
+	card := cardcatalog.Card{Name: "Beater", TypeLine: "Creature — Beast", Power: "6", OracleText: "Trample. When this creature enters, create a token.", Legalities: legal}
+	inputs := []construction.InputCard{{Name: "Beater", Quantity: 1, Card: card}}
+	report := construction.Build(inputs)
+	reasons := cutReasons(inputs, report)
+	count := 0
+	for _, reason := range reasons {
+		if reason.Role == "plan" || reason.Role == "finisher" || reason.Role == "evasive" {
+			count++
+		}
+	}
+	if count > 1 {
+		t.Fatalf("card produced multiple cut reason entries: %+v", reasons)
 	}
 }

@@ -37,6 +37,17 @@ type SwapMetricDelta struct {
 	Target int    `json:"target"`
 }
 
+// SwapCutReason explains why the removed card is a reasonable cut. The three
+// signals mirror doubletap's cut ranking: how much the card's own score misses
+// the deck's bar, how little it synergizes with the commander, and whether its
+// role is already over-stocked ("quota surplus"). `Role` and `Label` describe
+// the card's primary construction role so the frontend can group cuts by role.
+type SwapCutReason struct {
+	Role    string   `json:"role,omitempty"`
+	Label   string   `json:"label,omitempty"`
+	Reasons []string `json:"reasons"`
+}
+
 type SwapDeckState struct {
 	CardCount          int                 `json:"card_count"`
 	ConstructionReport construction.Report `json:"construction_report"`
@@ -56,6 +67,7 @@ type SwapComparison struct {
 	Before          SwapDeckState     `json:"before"`
 	After           SwapDeckState     `json:"after"`
 	Deltas          []SwapMetricDelta `json:"deltas"`
+	CutReasons      []SwapCutReason   `json:"cut_reasons,omitempty"`
 	Legality        SwapLegality      `json:"legality"`
 	UpdatedDecklist string            `json:"updated_decklist"`
 	DeckRevision    string            `json:"deck_revision"`
@@ -145,6 +157,7 @@ func (a *Analyzer) CompareSwap(ctx context.Context, decklist, removeName, addNam
 		Before:          SwapDeckState{CardCount: base.CardCount(), ConstructionReport: beforeReport},
 		After:           SwapDeckState{CardCount: after.CardCount(), ConstructionReport: afterReport},
 		Deltas:          metricDeltas(beforeReport, afterReport),
+		CutReasons:      cutReasons(beforeInputs, beforeReport),
 		Legality:        legality,
 		UpdatedDecklist: updated,
 		DeckRevision:    deckRevision(updated),
@@ -232,6 +245,124 @@ func metricDeltas(before, after construction.Report) []SwapMetricDelta {
 		result = append(result, SwapMetricDelta{ID: metric.ID, Label: metric.Label, Before: metric.Actual, After: next.Actual, Delta: next.Actual - metric.Actual, Target: metric.Target})
 	}
 	return result
+}
+
+// cutReasons explains why each classified card in the deck is a reasonable cut:
+// it flags roles that are already over-stocked ("配额盈余" — the deck carries more
+// than the target), and cards that neither score highly on their own nor
+// synergize with the commander. The frontend shows these reasons next to each
+// removable card so a swap reads as a decision, not a blind pick.
+func cutReasons(inputs []construction.InputCard, report construction.Report) []SwapCutReason {
+	byName := make(map[string]construction.InputCard, len(inputs))
+	for _, item := range inputs {
+		byName[strings.ToLower(strings.TrimSpace(item.Name))] = item
+	}
+	surplus := make(map[string]bool, len(report.Metrics))
+	for _, metric := range report.Metrics {
+		if metric.Target > 0 && metric.Actual > metric.Target {
+			surplus[metric.ID] = true
+		}
+	}
+	// 角色类指标（胜负手/终结者/穿透/清场）是重叠分类：同一张牌往往命中多个
+	// 指标，Actual 会重复累计、目标却各不相同，按它们判"配额盈余"会把大量
+	// 非地牌误标成"超目标"。所以只把配额的判断交给真正去重的传统指标
+	// （地/计划/干扰/牌差/加速/检索），角色类只看该牌自身的强度与协同。
+	quotaMetrics := map[string]bool{
+		"lands": true, "plan": true, "mass_interaction": true, "single_interaction": true,
+		"draw_discard": true, "ramp": true, "tutors": true,
+	}
+	hasQuotaSurplus := func(id string) bool {
+		return quotaMetrics[id] && surplus[id]
+	}
+
+	reasons := make([]SwapCutReason, 0, len(inputs))
+	for _, item := range inputs {
+		card := item.Card
+		if strings.Contains(strings.ToLower(card.TypeLine), "land") {
+			continue
+		}
+		matches := construction.Classify(card)
+		if len(matches) == 0 {
+			continue
+		}
+		text := strings.ToLower(card.OracleText)
+		hasValueText := strings.Contains(text, "draw a card") || strings.Contains(text, "draw cards") ||
+			strings.Contains(text, "you win the game") || strings.Contains(text, "counter target") ||
+			strings.Contains(text, "destroy target") || strings.Contains(text, "exile target") ||
+			strings.Contains(text, "add {") || strings.Contains(text, "search your library") ||
+			strings.Contains(text, "flying") || strings.Contains(text, "menace") ||
+			strings.Contains(text, "trample") || strings.Contains(text, "destroy all")
+		hasSynergy := synergyHint(card) != ""
+		// 每张牌最多列一条理由：多指标命中的牌（如"计划相关+终结者+穿透"）
+		// 只挑最相关的那条输出，避免同一张牌在报告里重复刷屏。
+		best := ""
+		bestScore := -1
+		reason := SwapCutReason{}
+		for _, match := range matches {
+			quota := hasQuotaSurplus(match.ID)
+			score := 0
+			if quota {
+				score += 10
+			}
+			if !hasValueText {
+				score += 4
+			}
+			if !hasSynergy {
+				score += 3
+			}
+			if quota || !hasValueText || !hasSynergy {
+				if score > bestScore {
+					bestScore = score
+					best = match.ID
+					reason = SwapCutReason{Role: match.ID, Label: match.Label}
+					if quota {
+						reason.Reasons = append(reason.Reasons, "这类牌已经超过目标数量，踢掉损失最小")
+					}
+					if !hasValueText {
+						reason.Reasons = append(reason.Reasons, "单卡本身强度一般，模型不会优先选它")
+					}
+					if !hasSynergy {
+						reason.Reasons = append(reason.Reasons, "跟主将的玩法没什么协同")
+					}
+				}
+			}
+		}
+		if best != "" {
+			reasons = append(reasons, reason)
+		}
+	}
+	return reasons
+}
+
+// synergyHint returns a short phrase when the card's text shares a mechanic with
+// the deck's commander, or an empty string when there is no obvious overlap. It
+// is a cheap stand-in for a real synergy model: any card whose oracle text
+// mentions the same strategic keyword family as the commander is assumed to
+// synergize with it.
+func synergyHint(card cardcatalog.Card) string {
+	text := strings.ToLower(card.OracleText)
+	for _, face := range card.Faces {
+		text += " " + strings.ToLower(face.OracleText)
+	}
+	synonyms := [][]string{
+		{"sacrifice", "dies", "death trigger"},
+		{"graveyard", "reanimate", "flashback"},
+		{"token", "create a"},
+		{"draw", "discard"},
+		{"instant", "sorcery", "spell"},
+		{"counter", "proliferate"},
+		{"equip", "equipment"},
+		{"aura", "enchant creature"},
+		{"landfall", "land enters"},
+	}
+	for _, group := range synonyms {
+		for _, keyword := range group {
+			if strings.Contains(text, keyword) {
+				return "与主将主题关键词相关"
+			}
+		}
+	}
+	return ""
 }
 
 func basicLegality(target deck.Deck, catalog map[string]cardcatalog.Card, colors []string) SwapLegality {

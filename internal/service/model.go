@@ -32,6 +32,9 @@ type DisplayCard struct {
 	Quantity  int              `json:"quantity"`
 	Commander bool             `json:"commander,omitempty"`
 	Land      bool             `json:"land,omitempty"`
+	// Roles are the construction metric IDs this card falls into (e.g. "ramp",
+	// "wincon", "board_wipe"). Filled only when construction classification ran.
+	Roles []string `json:"roles,omitempty"`
 }
 
 type Combo struct {

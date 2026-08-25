@@ -28,6 +28,11 @@ type CardFace struct {
 	OracleText  string `json:"oracle_text,omitempty"`
 	ImageNormal string `json:"image_normal,omitempty"`
 	ImageSmall  string `json:"image_small,omitempty"`
+	// GameChanger mirrors Scryfall's per-face `game_changer` flag (some entries are
+	// flagged on an individual face of a multi-face card).
+	GameChanger bool `json:"game_changer,omitempty"`
+	// Power is the face's printed power ("1", "2+", "*", or "" for non-creatures).
+	Power string `json:"power,omitempty"`
 }
 
 type Card struct {
@@ -47,6 +52,11 @@ type Card struct {
 	Cmc           float64           `json:"cmc,omitempty"`
 	ProducedMana  []string          `json:"produced_mana,omitempty"`
 	Power         string            `json:"power,omitempty"`
+	// GameChanger mirrors Scryfall's official `game_changer` field (the Commander
+	// Game Changers list). It is the live source of truth for bracket counting —
+	// the list changes every few months and a hardcoded snapshot has already gone
+	// stale once, so consumers must prefer this field over any name list.
+	GameChanger bool `json:"game_changer,omitempty"`
 	// Localized (Simplified Chinese) payloads, populated when Scryfall serves a "zhs"
 	// variant. Empty when no translation exists for the card.
 	ChineseName       string `json:"chinese_name,omitempty"`
@@ -181,6 +191,7 @@ type scryfallCard struct {
 	Cmc           float64           `json:"cmc"`
 	ProducedMana  []string          `json:"produced_mana"`
 	Power         string            `json:"power"`
+	GameChanger   bool              `json:"game_changer"`
 	CardFaces     []struct {
 		Name        string            `json:"name"`
 		PrintedName string            `json:"printed_name"`
@@ -188,13 +199,15 @@ type scryfallCard struct {
 		TypeLine    string            `json:"type_line"`
 		OracleText  string            `json:"oracle_text"`
 		ImageURIs   map[string]string `json:"image_uris"`
+		GameChanger bool              `json:"game_changer"`
+		Power       string            `json:"power"`
 	} `json:"card_faces"`
 	// Localized fields (Scryfall returns these only for non-English lang requests).
-	ChineseName      string `json:"-"`
-	ChineseTypeLine  string `json:"-"`
-	ChineseOracle    string `json:"-"`
-	PrintedTypeLine  string `json:"printed_type_line,omitempty"`
-	PrintedOracle    string `json:"printed_oracle_text,omitempty"`
+	ChineseName     string `json:"-"`
+	ChineseTypeLine string `json:"-"`
+	ChineseOracle   string `json:"-"`
+	PrintedTypeLine string `json:"printed_type_line,omitempty"`
+	PrintedOracle   string `json:"printed_oracle_text,omitempty"`
 }
 
 // Autocomplete returns a list of canonical card names whose beginnings match the
@@ -374,7 +387,7 @@ func normalizeCard(raw scryfallCard) Card {
 	images := raw.ImageURIs
 	faces := make([]CardFace, 0, len(raw.CardFaces))
 	for _, face := range raw.CardFaces {
-		faces = append(faces, CardFace{Name: face.Name, PrintedName: face.PrintedName, ManaCost: face.ManaCost, TypeLine: face.TypeLine, OracleText: face.OracleText, ImageNormal: face.ImageURIs["normal"], ImageSmall: face.ImageURIs["small"]})
+		faces = append(faces, CardFace{Name: face.Name, PrintedName: face.PrintedName, ManaCost: face.ManaCost, TypeLine: face.TypeLine, OracleText: face.OracleText, ImageNormal: face.ImageURIs["normal"], ImageSmall: face.ImageURIs["small"], GameChanger: face.GameChanger, Power: face.Power})
 	}
 	if len(raw.CardFaces) > 0 {
 		face := raw.CardFaces[0]
@@ -400,7 +413,7 @@ func normalizeCard(raw scryfallCard) Card {
 		ManaCost: manaCost, TypeLine: typeLine, OracleText: oracleText,
 		ColorIdentity: raw.ColorIdentity, Keywords: raw.Keywords, Legalities: raw.Legalities,
 		ImageNormal: images["normal"], ImageSmall: images["small"], Layout: raw.Layout, Faces: faces,
-		Cmc: raw.Cmc, ProducedMana: raw.ProducedMana, Power: raw.Power,
+		Cmc: raw.Cmc, ProducedMana: raw.ProducedMana, Power: raw.Power, GameChanger: raw.GameChanger,
 		ChineseName: raw.ChineseName, ChineseTypeLine: raw.ChineseTypeLine, ChineseOracleText: raw.ChineseOracle,
 	}
 }

@@ -76,6 +76,33 @@ func TestFilterRecommendationGroupsRejectsIncompleteReport(t *testing.T) {
 	}
 }
 
+func TestAttachRolesStampsConstructionRoleIDs(t *testing.T) {
+	cards := []DisplayCard{
+		{Card: cardcatalog.Card{Name: "Wrath of God", TypeLine: "Sorcery", OracleText: "Destroy all creatures."}},
+		{Card: cardcatalog.Card{Name: "Birds", TypeLine: "Creature — Bird", OracleText: "Flying", Power: "2"}},
+		{Card: cardcatalog.Card{Name: "Plains", TypeLine: "Basic Land — Plains", OracleText: "{T}: Add {W}."}},
+	}
+	got := attachRoles(cards)
+	if !containsString(got[0].Roles, "board_wipe") || !containsString(got[0].Roles, "mass_interaction") {
+		t.Fatalf("wrath roles = %v, want board_wipe + mass_interaction", got[0].Roles)
+	}
+	if !containsString(got[1].Roles, "evasive") {
+		t.Fatalf("birds roles = %v, want evasive", got[1].Roles)
+	}
+	if !containsString(got[2].Roles, "lands") || len(got[2].Roles) != 1 {
+		t.Fatalf("plains roles = %v, want only lands", got[2].Roles)
+	}
+}
+
+func containsString(list []string, want string) bool {
+	for _, item := range list {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestAnalyzeWaiterCanCancelWithoutCancelingSharedWork(t *testing.T) {
 	server := commanderSaltServer(t)
 	defer server.Close()

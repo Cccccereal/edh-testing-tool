@@ -27,6 +27,17 @@
   --blue: #7ab0e0;
 }
 
+/* 浏览器原生表面：文本选区、插入符、滚动条。用户没画的这些细节也会泄露设计，
+   impeccable craft-floor 要求从调色板里主题化，而不是留给默认值。 */
+::selection { background: var(--acid); color: #14150f; }
+:root.light-mode ::selection { background: #b9cc6e; color: #14150f; }
+input, textarea { caret-color: var(--acid); }
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-track { background: transparent; }
+:root.light-mode ::-webkit-scrollbar-thumb { background: #b7bdb4; border: 2px solid transparent; background-clip: content-box; }
+
 * { box-sizing: border-box; }
 html { font-size: 17px; }
 body {
@@ -67,7 +78,7 @@ body::before {
 }
 button, input { font: inherit; }
 button { cursor: pointer; }
-.theme-toggle { position: fixed; top: 80px; right: 24px; z-index: 101; padding: 10px 16px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); font-size: 13px; font-weight: 600; letter-spacing: .05em; transition: all .2s ease; }
+.theme-toggle { position: fixed; top: 80px; left: 24px; z-index: 101; padding: 10px 16px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); font-size: 13px; font-weight: 600; letter-spacing: .05em; transition: all .2s ease; }
 .theme-toggle:hover { background: var(--acid); color: #10110f; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
 :root.light-mode .theme-toggle:hover { box-shadow: 0 4px 12px rgba(0,0,0,.1); }
 .sticky-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: rgba(16, 17, 15, 0.95); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
@@ -76,6 +87,7 @@ button { cursor: pointer; }
 .sticky-nav-link { padding: 16px 20px; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .05em; text-decoration: none; white-space: nowrap; transition: color .15s, background .15s; border-bottom: 2px solid transparent; }
 .sticky-nav-link:hover { color: var(--ink); background: rgba(200, 232, 74, .06); }
 .sticky-nav-link.active { color: var(--acid); border-bottom-color: var(--acid); }
+button.sticky-nav-link { font-family: var(--font-ui); background: transparent; border: 0; border-bottom: 2px solid transparent; cursor: pointer; }
 .shell { max-width: 1400px; width: min(100%, calc(100% - 48px)); margin: 0 auto; padding: 72px 24px 56px; position: relative; }
 body.has-sticky-nav .shell { padding-top: 120px; }
 .hero { max-width: 880px; margin-bottom: 58px; }
@@ -383,6 +395,23 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .swap-panel-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
 .swap-panel-head h2 { margin: 6px 0; }
 .swap-panel-head p { margin: 0; color: var(--muted); font-size: 13px; }
+
+/* 右侧滑出的牌表编辑抽屉：录入/删改牌表的操作区从底部整段挪到这里，方便在
+   看分析结果时随时拉出来实时调牌。抽屉顶部低于静止导航栏，避免头部被盖住。 */
+.deck-drawer[hidden] { display: none; }
+/* 抽屉常驻：不显示遮罩（遮罩已移除），面板右侧滑出，交互区下方内容保持可点。 */
+.deck-drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; pointer-events: none; }
+.deck-drawer-panel { position: absolute; top: 64px; right: 0; bottom: 0; width: min(680px, 92vw); display: flex; flex-direction: column; padding: 22px; border-left: 1px solid var(--line); background: var(--surface); box-shadow: -18px 0 60px rgba(0,0,0,.45); overflow: auto; pointer-events: auto; }
+/* 侧边伸缩箭头：常态贴在面板左缘、垂直居中，即使抽屉收起成窄条也始终可见，
+   点击直接在"收起/展开"间切换，不需要先进入编辑界面。 */
+.deck-drawer-tab { position: fixed; top: 50%; right: 0; transform: translate(0, -50%); width: 26px; height: 56px; margin: 0; padding: 0; border: 1px solid var(--line); border-left: 0; border-radius: 0 10px 10px 0; background: var(--surface); color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; box-shadow: 8px 0 20px rgba(0,0,0,.25); z-index: 50; pointer-events: auto; }
+.deck-drawer-tab:hover { color: var(--ink); background: #23251f; }
+.deck-drawer-panel.is-collapsed { transform: translateX(calc(100% - 24px)); }
+.deck-drawer-panel.is-collapsed .deck-drawer-tab { transform: translate(0, -50%) scaleX(-1); }
+.deck-drawer-panel.is-collapsed > *:not(.deck-drawer-tab) { visibility: hidden; }
+.deck-drawer-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; margin-bottom: 16px; }
+.deck-drawer-head h2 { margin: 6px 0 0; }
+.deck-drawer-head p { margin: 0; color: var(--muted); font-size: 13px; }
 .swap-choice { display: flex; gap: 10px; margin: 22px 0 16px; padding: 12px; border-left: 3px solid var(--acid); background: #1b1d19; font-size: 14px; }
 .swap-choice span { color: var(--muted); }
 .swap-search-label { display: grid; gap: 7px; color: var(--muted); font-size: 13px; }
@@ -393,6 +422,8 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .swap-remove-option + .swap-remove-option { border-top: 0; }
 .swap-remove-option.selected { border-color: var(--acid); color: var(--acid); }
 .swap-remove-option span { color: var(--muted); }
+.swap-remove-role { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; letter-spacing: .04em; }
+.swap-remove-option.selected .swap-remove-role { color: var(--acid); }
 .swap-message { min-height: 20px; color: #ffc0b5; font-size: 13px; }
 .swap-result { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 18px; }
 .swap-result-title { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
@@ -407,6 +438,13 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .swap-legality.valid { border-left: 3px solid var(--acid); }
 .swap-legality.warning { border-left: 3px solid var(--orange); }
 .swap-legality span, .swap-legality li { color: var(--muted); }
+.swap-cut-reasons { margin: 14px 0; padding: 12px 14px; background: #1b1d19; border-left: 3px solid var(--blue); }
+.swap-cut-reasons h4 { margin: 0 0 8px; color: var(--blue); font: 700 12px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+.swap-cut-reasons ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; }
+.swap-cut-reasons li { color: #d4d2ca; font-size: 13px; line-height: 1.5; }
+.swap-cut-reasons li span { display: block; color: var(--muted); }
+:root.light-mode .swap-cut-reasons { background: #e4e6e2; }
+:root.light-mode .swap-cut-reasons li { color: #2d2e28; }
 .swap-result textarea { width: 100%; min-height: 170px; box-sizing: border-box; margin-bottom: 10px; padding: 10px; border: 1px solid var(--line); background: #11130f; color: var(--ink); font: 13px/1.6 var(--font-ui); }
 .combo-list { display: grid; gap: 18px; }
 .combo-card { padding: 22px; border: 1px solid var(--line); background: var(--surface); }
@@ -530,6 +568,10 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
   .builder-sidebar { position: static; }
 }
 .editor-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 14px 16px; border: 1px solid var(--line); background: var(--surface); }
+.deck-drawer-panel .editor-toolbar { border-right: 0; border-left: 0; }
+.deck-drawer-panel .deck-card-list.collapsed { max-height: none; overflow: visible; }
+.deck-drawer-panel .deck-card-list-expand-overlay { display: none; }
+.deck-drawer-panel .deck-card-list-collapse-button { display: none; }
 .editor-add-row { display: flex; gap: 8px; flex: 1 1 260px; }
 .editor-add-field { position: relative; flex: 1; }
 .editor-add-row input { width: 100%; flex: 1; padding: 10px 12px; border: 1px solid #555a50; color: var(--ink); background: #0e100d; font: 14px var(--font-ui); }
@@ -556,6 +598,9 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .card-edit-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; border-top: 1px solid var(--line); background: var(--line); }
 .card-edit-controls button { flex: 1; padding: 8px 0; border: 0; color: var(--ink); background: #20231d; font-size: 15px; font-weight: 800; line-height: 1; }
 .card-edit-controls button:hover { color: #11130d; background: var(--acid); }
+/* 编辑抽屉里 +/− 行与卡面同宽、固定高度：不再随卡名长短上下浮动。 */
+.deck-drawer-panel .card-edit-controls { width: 100%; box-sizing: border-box; height: 36px; grid-template-rows: 36px; align-items: stretch; }
+.deck-drawer-panel .card-edit-controls button { height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; }
 .deck-card-list.collapsed { max-height: 510px; overflow: hidden; position: relative; }
 .deck-card-list-expand-overlay {
   display: none;
@@ -599,8 +644,16 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .deck-group h3 { display: flex; gap: 8px; margin: 24px 0 12px; font-size: 18px; }
 .deck-group h3 span { color: var(--muted); }
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); gap: 10px; }
+/* 编辑抽屉内保持原来的小卡网格；只把卡面与 +/− 控制条变成同一列的一部分，
+   让两半按钮宽度对齐、不再被网格挤得上下错位。 */
+.deck-drawer-panel .card-grid { grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); }
+.deck-drawer-panel .card-edit-controls { grid-template-columns: 1fr 1fr; }
 .mtg-card { min-width: 0; border: 1px solid var(--line); background: #191b17; border-radius: 14px; overflow: hidden; }
 :root.light-mode .mtg-card { background: #e4e6e2; }
+/* 编辑抽屉里的牌：卡面（含名称）与 +/− 条放在同一纵向弹性列，+/− 条
+   margin-top:auto 顶到卡片最底部，任何卡名长度都不会把它顶得上下浮动。 */
+.deck-drawer-panel .mtg-card { display: flex; flex-direction: column; }
+.deck-drawer-panel .card-edit-controls { margin-top: auto; }
 .mtg-card-face { position: relative; }
 .mtg-card-face:focus-visible, .card-faces button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .mtg-card img, .card-placeholder { display: block; width: 100%; aspect-ratio: 488 / 680; object-fit: cover; background: #14150f; border-radius: 14px; }
@@ -670,6 +723,7 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 :root.light-mode .swap-remove-option { background: #e4e6e2; }
 :root.light-mode .swap-legality { background: #e4e6e2; }
 :root.light-mode .swap-result textarea { background: #f9faf8; border-color: #a8ada2; }
+:root.light-mode .deck-drawer-panel { background: #f2f3f1; box-shadow: -18px 0 60px rgba(0,0,0,.18); }
 :root.light-mode .rules-links-panel ul { background: #f5f6f4; box-shadow: 0 12px 32px rgba(0,0,0,.15); }
 :root.light-mode .builder-commander-row input { background: #f9faf8; border-color: #a8ada2; }
 :root.light-mode .builder-commander-preview { background: #e4e6e2; }
