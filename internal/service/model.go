@@ -7,6 +7,7 @@ import (
 	"powerlevel/internal/manabase"
 	"powerlevel/internal/providers/cardcatalog"
 	"powerlevel/internal/service/construction"
+	"powerlevel/internal/service/health"
 )
 
 type ProviderResult struct {
@@ -80,6 +81,7 @@ type Analysis struct {
 	RecommendationKeywords []string                  `json:"recommendation_keywords,omitempty"`
 	ConstructionReport     *construction.Report      `json:"construction_report,omitempty"`
 	Manabase               *manabase.Report          `json:"manabase,omitempty"`
+	Health                 *health.Result            `json:"health,omitempty"`
 	CanonicalDecklist      string                    `json:"canonical_decklist"`
 	DeckRevision           string                    `json:"deck_revision"`
 	Warnings               []string                  `json:"warnings,omitempty"`

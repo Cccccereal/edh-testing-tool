@@ -22,6 +22,7 @@ import (
 	"powerlevel/internal/providers/edhrec"
 	"powerlevel/internal/providers/spellbook"
 	"powerlevel/internal/service/construction"
+	"powerlevel/internal/service/health"
 )
 
 type EDHAnalyzer interface {
@@ -212,6 +213,12 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 	analysis.CanonicalDecklist = target.ExportPlainText()
 	analysis.DeckRevision = deckRevision(analysis.CanonicalDecklist)
 	var catalogCMC map[string]int
+	// Spellbook combos are fetched after the construction report so the combo
+	// data can enrich the 胜负手 metric. winconComboCount is the count of combos
+	// that end the game (win / opponent loses); it is finalized after the
+	// Spellbook fetch below, and the health score is derived from the final
+	// combo-adjusted report at the end of analyze().
+	winconComboCount := 0
 	if a.cards != nil {
 		cardCtx, cancelCards := context.WithTimeout(ctx, a.providerTimeout)
 		catalog, cardErr := a.cards.Lookup(cardCtx, deckNames(target))
@@ -251,6 +258,8 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 		}
 	}
 
+	// Spellbook combos are fetched after the construction report so the combo
+	// data can enrich the 胜负手 metric.
 	var combos []spellbook.Combo
 	if a.spellbook != nil {
 		comboCtx, cancelCombos := context.WithTimeout(ctx, a.providerTimeout)
@@ -260,8 +269,22 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 			analysis.Warnings = append(analysis.Warnings, "Commander Spellbook 组合暂时无法加载。")
 		} else {
 			combos = found
+			winconComboCount = countWinconCombos(found)
 			analysis.Combos, analysis.RelatedCards = buildCombos(found, analysis.DeckCards)
 		}
+	}
+	// The health score must see the combo-adjusted 胜负手 count, so it is
+	// derived after the Spellbook fetch, from the final report.
+	if analysis.ConstructionReport != nil {
+		analysis.ConstructionReport.ApplyWinconCombos(winconComboCount)
+		var commanderCards []cardcatalog.Card
+		for _, item := range analysis.DeckCards {
+			if item.Commander {
+				commanderCards = append(commanderCards, item.Card)
+			}
+		}
+		healthResult := health.Compute(analysis.ConstructionReport, analysis.Manabase, commanderNames(target), construction.ExtractTheme(commanderCards))
+		analysis.Health = &healthResult
 	}
 
 	edhCtx, cancelEDH := context.WithTimeout(ctx, a.providerTimeout)
@@ -464,6 +487,26 @@ func colorsAllowed(colors []string, allowed map[string]struct{}) bool {
 	return true
 }
 
+// countWinconCombos counts the Spellbook combos that end the game. The combo
+// payload carries the produced features as a comma-separated string of names
+// ("Infinite colored mana, Win the game"); any combo producing a win is a
+// win-con. Combos that merely produce infinite mana or infinite combat phases
+// are not win-cons by themselves — they need a payoff, and the payoff card
+// usually carries the win-con text or is a big-enough finisher already.
+func countWinconCombos(found []spellbook.Combo) int {
+	count := 0
+	for _, combo := range found {
+		for _, feature := range strings.Split(combo.Result, ", ") {
+			feature = strings.ToLower(strings.TrimSpace(feature))
+			if feature == "win the game" || feature == "opponents lose the game" {
+				count++
+				break
+			}
+		}
+	}
+	return count
+}
+
 func buildCombos(found []spellbook.Combo, deckCards []DisplayCard) ([]Combo, []DisplayCard) {
 	cardsByName := make(map[string]DisplayCard, len(deckCards))
 	for _, item := range deckCards {
@@ -497,6 +540,16 @@ func deckNames(target deck.Deck) []string {
 		names = append(names, card.Name)
 	}
 	for _, card := range target.Mainboard {
+		names = append(names, card.Name)
+	}
+	return names
+}
+
+// commanderNames returns the commander card names as written in the deck text
+// (the authoritative identity; the health component uses them for alignment).
+func commanderNames(target deck.Deck) []string {
+	names := make([]string, 0, len(target.Commanders))
+	for _, card := range target.Commanders {
 		names = append(names, card.Name)
 	}
 	return names

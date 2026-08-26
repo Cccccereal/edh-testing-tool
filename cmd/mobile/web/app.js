@@ -1316,6 +1316,7 @@ function render(payload) {
   renderDeckCards(payload.deck_cards || []);
   currentDeckCards = payload.deck_cards || [];
   currentDeckText = payload.canonical_decklist || buildDeckText(currentDeckCards);
+  renderHealth(payload.health);
   curveSelectedMv = null; // a fresh analysis starts with the unfiltered deck list
   beginEditing(payload.deck?.id || '', currentDeckCards);
   results.hidden = false;
@@ -1326,6 +1327,35 @@ function render(payload) {
   
   // Initialize scroll-triggered animations after content is rendered
   setTimeout(() => initScrollAnimations(), 100);
+}
+
+// Deck-health grade badge. The badge renders next to the deck name with the
+// top deduction reasons on hover. Hidden when the analysis carries no health
+// data (partial catalogs, mid-draft builder decks).
+function renderHealth(health) {
+  const badge = document.querySelector('#deck-health-badge');
+  if (!badge) return;
+  if (!health || !health.grade || health.grade === '—') {
+    badge.hidden = true;
+    return;
+  }
+  const reasons = Array.isArray(health.reasons) ? health.reasons : [];
+  const gradeClass = `health-grade-${String(health.grade).toLowerCase()}`;
+  const tip = reasons.length
+    ? `<span class="health-badge-tip" role="tooltip">
+         <span class="health-tip-title">扣分原因</span>
+         ${reasons.map((reason) => `
+           <span class="health-tip-reason">
+             <span class="health-tip-label">${escapeHTML(reason.label || '')}</span>
+             <span class="health-tip-detail">${escapeHTML(reason.detail || '')}</span>
+           </span>`).join('')}
+       </span>`
+    : '';
+  badge.hidden = false;
+  badge.innerHTML = `<span class="health-badge-wrap" tabindex="0" title="牌组健康评分">
+    <span class="health-badge ${gradeClass}">${escapeHTML(health.grade)}<small>${Number(health.score) || 0}</small></span>
+    ${tip}
+  </span>`;
 }
 
 function renderManabase(manabase) {
@@ -1515,8 +1545,17 @@ function renderConstructionReport(report) {
   container.innerHTML = metrics.map((metric) => {
     const percent = Math.min(100, Math.round((Number(metric.actual) / Math.max(1, Number(metric.target))) * 100));
     const cards = (metric.cards || []).map((card) => `<li><strong>${card.quantity}× ${escapeHTML(card.name)}</strong><span>${escapeHTML(card.reason)}</span></li>`).join('');
+    // The lands metric ("正向法力") counts lands + 0-cost fast mana by design.
+    // Sum the per-card counts to show the real-land vs fast-mana split so a
+    // "38 正向法力" number does not read as "38 lands".
+    let split = '';
+    if (metric.id === 'lands') {
+      const lands = (metric.cards || []).reduce((sum, card) => sum + (card.counts?.land || 0), 0);
+      const fast = (metric.cards || []).reduce((sum, card) => sum + (card.counts?.fast_mana || 0), 0);
+      split = ` <small class="construction-split">其中 ${lands} 地 + ${fast} 加速</small>`;
+    }
     return `<details class="construction-metric ${metric.status}">
-      <summary><div><span>${escapeHTML(metric.label)}</span><strong>${metric.actual} / ${metric.target}</strong></div><div class="construction-bar"><i data-pct="${percent}"></i></div><small>${metric.gap > 0 ? `缺少 ${metric.gap}` : '已充分'}</small></summary>
+      <summary><div><span>${escapeHTML(metric.label)}</span><strong>${metric.actual} / ${metric.target}</strong></div><div class="construction-bar"><i data-pct="${percent}"></i></div><small>${metric.gap > 0 ? `缺少 ${metric.gap}${split}` : `已充分${split}`}</small></summary>
       ${cards ? `<ul>${cards}</ul>` : '<p>没有识别到相关卡牌。</p>'}
     </details>`;
   }).join('');

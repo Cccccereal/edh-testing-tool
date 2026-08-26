@@ -7,10 +7,14 @@ import (
 	"powerlevel/internal/providers/cardcatalog"
 )
 
+// ClassifiedCard is one card that matched a construction metric. The optional
+// Counts field carries sub-breakdowns (e.g. the lands metric's true-land vs
+// fast-mana split) so the report can explain its own numbers.
 type ClassifiedCard struct {
-	Name     string `json:"name"`
-	Quantity int    `json:"quantity"`
-	Reason   string `json:"reason"`
+	Name     string         `json:"name"`
+	Quantity int            `json:"quantity"`
+	Reason   string         `json:"reason"`
+	Counts   map[string]int `json:"counts,omitempty"`
 }
 
 type Metric struct {
@@ -27,6 +31,66 @@ type Metric struct {
 
 type Report struct {
 	Metrics []Metric `json:"metrics"`
+	// WinconComboCount is the number of Spellbook combos in the deck that end
+	// the game (win the game / opponent loses). Combo finishers are the
+	// commander format's most common win-con, and their cards usually carry no
+	// "you win the game" text, so text classification alone under-counts the
+	// 胜负手 metric. Filled by the analyzer after the Spellbook fetch.
+	WinconComboCount int `json:"wincon_combo_count,omitempty"`
+}
+
+// ApplyWinconCombos credits the 胜负手 metric with Spellbook combos that end
+// the game. One winning combo already satisfies the win-con target; extra
+// winning combos are redundancy and still count (a deck can have several).
+// Only positive text-verified win-cons (Thassa's Oracle etc.) plus these combos
+// fill the metric — a combo that merely produces infinite mana is not a
+// win-con until a payoff exists.
+func (r *Report) ApplyWinconCombos(count int) {
+	if count <= 0 {
+		return
+	}
+	r.WinconComboCount = count
+	for i := range r.Metrics {
+		if r.Metrics[i].ID != "wincon" {
+			continue
+		}
+		r.Metrics[i].Actual += count
+		if r.Metrics[i].Target > 0 {
+			r.Metrics[i].Coverage = float64(r.Metrics[i].Actual) / float64(r.Metrics[i].Target)
+			if r.Metrics[i].Coverage > 1 {
+				r.Metrics[i].Coverage = 1
+			}
+		}
+		if r.Metrics[i].Actual >= r.Metrics[i].Target {
+			r.Metrics[i].Gap = 0
+			r.Metrics[i].Status = "met"
+		} else {
+			r.Metrics[i].Gap = r.Metrics[i].Target - r.Metrics[i].Actual
+			r.Metrics[i].Status = "short"
+		}
+	}
+}
+
+// LandsSplit summarizes the lands ("正向法力") metric's two sources: real land
+// slots and 0-cost mana artifacts (Sol Ring, Moxen, Lotus Petal). The metric
+// counts both by design — net-positive mana sources — but scoring and the UI
+// must be able to tell "you're short real lands" apart from "you have few
+// net-positive sources", which are fixed targets for different reasons.
+func (r *Report) LandsSplit() (lands, fastMana int) {
+	for _, metric := range r.Metrics {
+		if metric.ID != "lands" {
+			continue
+		}
+		for _, card := range metric.Cards {
+			if _, ok := card.Counts["land"]; ok {
+				lands += card.Counts["land"]
+			}
+			if _, ok := card.Counts["fast_mana"]; ok {
+				fastMana += card.Counts["fast_mana"]
+			}
+		}
+	}
+	return lands, fastMana
 }
 
 type InputCard struct {
@@ -83,7 +147,19 @@ func Build(cards []InputCard) Report {
 				continue
 			}
 			metric.Actual += item.Quantity
-			metric.Cards = append(metric.Cards, ClassifiedCard{Name: item.Name, Quantity: item.Quantity, Reason: reason})
+			// The lands metric's counts split true lands from 0-cost fast mana so
+			// the health score (and the UI) can tell "you're short real lands"
+			// apart from "you have few net-positive sources" — the two are fixed
+			// targets for different reasons.
+			counts := map[string]int{}
+			if target.id == "lands" {
+				if strings.Contains(strings.ToLower(item.Card.TypeLine), "land") {
+					counts["land"] = item.Quantity
+				} else {
+					counts["fast_mana"] = item.Quantity
+				}
+			}
+			metric.Cards = append(metric.Cards, ClassifiedCard{Name: item.Name, Quantity: item.Quantity, Reason: reason, Counts: counts})
 		}
 		if metric.Target > 0 {
 			metric.Coverage = float64(metric.Actual) / float64(metric.Target)
@@ -208,7 +284,7 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 		}
 	case "wincon":
 		// 胜负手：直接结束对局的文字，或与"恰好 N 张"关联的致胜异能。
-		if strings.Contains(text, "you win the game") || strings.Contains(text, "each opponent loses the game") || strings.Contains(text, "each other player loses the game") {
+		if winconTextMatch(text) {
 			return true, "Win condition in card text"
 		}
 		if strings.Contains(text, "you may choose a new commander") {
@@ -242,6 +318,34 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 
 func hasCatalogData(card cardcatalog.Card) bool {
 	return card.Name != "" || card.TypeLine != "" || card.OracleText != "" || len(card.Faces) > 0
+}
+
+// winconTextMatch detects win-condition text on a card: the classic "you win /
+// opponents lose" lines plus the well-known alternate win-cons (milling an
+// opponent out, poison counters, drawing from an empty library). The single
+// clause is a hard "ends the game" phrase rather than a maybe — the goal is to
+// flag actual win-cons, not generic "whenever" triggers.
+func winconTextMatch(text string) bool {
+	for _, phrase := range []string{
+		"you win the game",
+		"each opponent loses the game",
+		"each other player loses the game",
+		"your opponents lose the game",
+		"target opponent loses the game",
+		// Alternate win-cons: the game is over when an opponent has no library
+		// left, or at 10+ poison counters.
+		"if that player would draw a card and their library has no cards in it instead, that player loses the game",
+		"if a player would draw a card and their library has no cards in it instead, that player loses the game",
+		"when a player has 10 or more poison counters, that player loses the game",
+		// Classic poison/mill finishers that end the game as a rules effect.
+		"a player with 10 or more poison counters loses the game",
+		"players with 10 or more poison counters lose the game",
+	} {
+		if strings.Contains(text, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 // cardPower parses the card's printed power; returns 0 when it is not a creature

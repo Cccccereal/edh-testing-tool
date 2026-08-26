@@ -103,6 +103,46 @@ h1 span { color: transparent; -webkit-text-stroke: 1px #7d8177; }
 .step { display: grid; place-items: center; width: 42px; height: 42px; background: var(--acid-bright); color: #11130d; font: 800 14px var(--font-ui); }
 h2 { margin: 0; font-size: 27px; letter-spacing: -.02em; }
 .panel-heading p, .deck-strip p { margin: 5px 0 0; color: var(--muted); font-size: 14px; }
+/* Deck-health grade badge: sits inline next to the deck name, colored by grade.
+   The score rides inside the badge as a small numeral so the letter is the
+   headline and the 0-100 scale stays visible. */
+.deck-heading-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.deck-heading-row h2 { margin: 0; }
+.deck-health-badge { display: inline-flex; align-items: center; line-height: 1; }
+.deck-health-badge[hidden] { display: none; }
+.health-badge-wrap { position: relative; display: inline-flex; align-items: center; cursor: default; }
+.health-badge {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  padding: 7px 12px 7px 14px; border-radius: 999px;
+  border: 1px solid var(--line); font-weight: 800; font-size: 20px; letter-spacing: .02em;
+  color: #0e100d;
+}
+.health-badge small { font-size: 12px; font-weight: 700; opacity: .85; }
+.health-grade-a { background: linear-gradient(135deg, #7ee787, #56d364); border-color: #56d364; }
+.health-grade-b { background: linear-gradient(135deg, #8be9a8, #5bc86f); border-color: #5bc86f; }
+.health-grade-c { background: linear-gradient(135deg, #f7d154, #e8b93a); border-color: #e8b93a; }
+.health-grade-d { background: linear-gradient(135deg, #ffb14d, #f0902a); border-color: #f0902a; }
+.health-grade-f { background: linear-gradient(135deg, #ff6b6b, #e5484d); border-color: #e5484d; }
+.health-badge-tip {
+  position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+  z-index: 60; display: none;
+  min-width: 280px; max-width: min(420px, calc(100vw - 24px));
+  padding: 12px 14px; border-radius: 10px;
+  background: #161913; border: 1px solid var(--line);
+  box-shadow: 0 18px 48px rgba(0,0,0,.5);
+  flex-direction: column; gap: 7px;
+}
+:root.light-mode .health-badge-tip {
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(20,30,10,.18);
+}
+.health-badge-wrap:hover .health-badge-tip,
+.health-badge-wrap:focus-visible .health-badge-tip { display: flex; }
+.health-tip-title { font-size: 11px; font-weight: 800; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+.health-tip-reason { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,.03); }
+:root.light-mode .health-tip-reason { background: rgba(0,0,0,.045); }
+.health-tip-label { font-size: 12px; font-weight: 700; color: var(--ink); }
+.health-tip-detail { font-size: 12px; color: var(--muted); }
 .moxfield-link { display: inline-block; margin-bottom: 10px; color: var(--blue); font-weight: 700; font-size: 14px; text-decoration: none; transition: color .15s; }
 .moxfield-link:hover { color: var(--ink); text-decoration: underline; }
 .input-row { display: grid; grid-template-columns: 1fr auto; border: 1px solid #555a50; background: #0e100d; }
@@ -365,6 +405,9 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .construction-metric summary strong { font-size: 19px; }
 .construction-metric summary small { display: block; margin-top: 8px; color: var(--orange); font-size: 12px; }
 .construction-metric.met summary small { color: var(--acid); }
+/* 正向法力 split line: "其中 37 地 + 1 加速" — muted so the actual/target
+   number stays the summary's focus. */
+.construction-split { color: var(--muted); font-weight: 400; margin-left: 4px; }
 .construction-bar { height: 5px; margin-top: 12px; background: #30342d; overflow: hidden; }
 :root.light-mode .construction-bar { background: #c8cdc4; }
 .construction-bar i { display: block; height: 100%; background: var(--orange); }

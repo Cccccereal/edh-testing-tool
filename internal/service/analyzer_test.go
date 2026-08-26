@@ -14,8 +14,66 @@ import (
 	"powerlevel/internal/providers/cardcatalog"
 	"powerlevel/internal/providers/commandersalt"
 	"powerlevel/internal/providers/edhrec"
+	"powerlevel/internal/providers/spellbook"
 	"powerlevel/internal/service/construction"
 )
+
+// TestCountWinconCombosOnlyCountsGameEndingCombos distinguishes the two combo
+// families the Spellbook API returns: combos that literally end the game (win
+// the game / opponents lose the game) count toward 胜负手, while infinite-mana
+// or infinite-combat combos do not — they need a separate payoff.
+func TestCountWinconCombosOnlyCountsGameEndingCombos(t *testing.T) {
+	combos := []spellbook.Combo{
+		{Result: "Infinite colored mana, Infinite creature tokens"},
+		{Result: "Infinite combat phases, Infinite Treasure tokens"},
+		{Result: "Infinite mana creatures you control can produce, Win the game"},
+		{Result: "Opponents lose the game, Infinite death triggers"},
+		{Result: "Infinite +1/+1 counters on a creature"},
+	}
+	if got := countWinconCombos(combos); got != 2 {
+		t.Fatalf("expected 2 game-ending combos, got %d", got)
+	}
+}
+
+// TestApplyWinconCombosCreditsTheWinconMetric ensures the Spellbook credit
+// lands on the 胜负手 metric and recomputes gap/status/coverage.
+func TestApplyWinconCombosCreditsTheWinconMetric(t *testing.T) {
+	report := construction.Build([]construction.InputCard{
+		{Name: "Plains", Quantity: 1, Card: cardcatalog.Card{TypeLine: "Basic Land — Plains", OracleText: "{T}: Add {W}."}},
+	})
+	var wincon *construction.Metric
+	for i := range report.Metrics {
+		if report.Metrics[i].ID == "wincon" {
+			wincon = &report.Metrics[i]
+		}
+	}
+	if wincon == nil {
+		t.Fatal("wincon metric not present")
+	}
+	before := wincon.Actual
+	report.ApplyWinconCombos(2)
+	wincon = nil
+	for i := range report.Metrics {
+		if report.Metrics[i].ID == "wincon" {
+			wincon = &report.Metrics[i]
+		}
+	}
+	if wincon.Actual != before+2 {
+		t.Fatalf("wincon actual = %d, want %d", wincon.Actual, before+2)
+	}
+	if wincon.Gap != 2 || wincon.Status != "short" {
+		t.Fatalf("wincon should still be short (2 of 4) after combo credit: %+v", wincon)
+	}
+	report.ApplyWinconCombos(2)
+	for i := range report.Metrics {
+		if report.Metrics[i].ID == "wincon" {
+			wincon = &report.Metrics[i]
+		}
+	}
+	if wincon.Status != "met" || wincon.Gap != 0 {
+		t.Fatalf("wincon should be met once credits reach the target: %+v", wincon)
+	}
+}
 
 type blockingEDH struct {
 	calls   atomic.Int32

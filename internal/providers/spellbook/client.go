@@ -3,14 +3,20 @@ package spellbook
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 const maxResponseSize = 6 << 20
+
+// pageSize matches the API's own pagination (the "limit" query param is
+// capped at 12 by the backend regardless of what we request).
+const pageSize = 12
 
 type Combo struct {
 	ID              string
@@ -39,6 +45,26 @@ type Component struct {
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
+	// cache retains each card-name query's payload for a short TTL. Spellbook is
+	// the one provider in the analysis pipeline that is called once per deck card
+	// name (up to ~24 queries per deck), and it rate-limits hard, so even a
+	// minute-long cache collapses repeat lookups across decks and re-analyses.
+	cache map[string]cacheEntry
+	mu    sync.Mutex
+	ttl   time.Duration
+	// minNameDelay spaces out per-name requests. Spellbook throttles request
+	// bursts (a rapid 12-request batch gets 429s and a ~45s window), while
+	// paced serial requests stay at 200 — so pacing is what keeps a cold-cache
+	// deck analysis from blanking every combo.
+	minNameDelay time.Duration
+	// lastFetch timestamps the most recent real name query so Search can pace
+	// uncached lookups across the burst-throttling window.
+	lastFetch time.Time
+}
+
+type cacheEntry struct {
+	combos    []Combo
+	expiresAt time.Time
 }
 
 type response struct {
@@ -75,7 +101,15 @@ type variant struct {
 }
 
 func New(baseURL string, httpClient *http.Client) *Client {
-	return &Client{baseURL: strings.TrimRight(baseURL, "/"), httpClient: httpClient}
+	return &Client{
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		httpClient: httpClient,
+		// Spellbook is per-card-name, so a generous TTL is safe: combo data does
+		// not change minute-to-minute, and it only shrinks the request volume.
+		cache:        make(map[string]cacheEntry),
+		ttl:          10 * time.Minute,
+		minNameDelay: 1500 * time.Millisecond,
+	}
 }
 
 func (c *Client) Search(ctx context.Context, names []string, limit int) ([]Combo, error) {
@@ -85,79 +119,178 @@ func (c *Client) Search(ctx context.Context, names []string, limit int) ([]Combo
 	seen := make(map[string]struct{})
 	var combos []Combo
 	for _, name := range prioritizeNames(names) {
-		endpoint, _ := url.Parse(c.baseURL + "/variants/")
-		query := endpoint.Query()
-		// Query the front face: spellbook's search doesn't recognize "X // Y".
-		query.Set("q", normalizeSpellbookName(name))
-		query.Set("limit", "12")
-		endpoint.RawQuery = query.Encode()
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
-		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", "PowerLevelAggregator/0.2")
-		resp, err := c.httpClient.Do(req)
+		key := normalizeSpellbookName(name)
+		if cached, ok := c.get(key); ok {
+			appendCached(cached, &combos, &seen, limit)
+			continue
+		}
+		// Pace uncached names so a cold deck analysis does not burst the API.
+		// Cached names skip the wait: only real network hits need spacing.
+		delay := c.minNameDelay
+		if last := c.lastFetch; !last.IsZero() {
+			if wait := delay - time.Since(last); wait > 0 {
+				timer := time.NewTimer(wait)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return combos, ctx.Err()
+				case <-timer.C:
+				}
+			}
+		}
+		c.lastFetch = time.Now()
+		fetched, err := c.fetchName(ctx, key, limit)
 		if err != nil {
-			return combos, fmt.Errorf("request Commander Spellbook: %w", err)
+			// A throttled or failed single name is skipped: the batch continues
+			// with the remaining names rather than blanking every combo.
+			continue
 		}
-		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize+1))
-		resp.Body.Close()
-		if readErr != nil {
-			return combos, readErr
-		}
-		if resp.StatusCode != http.StatusOK {
-			return combos, fmt.Errorf("Commander Spellbook returned HTTP %d", resp.StatusCode)
-		}
-		var payload response
-		if err := json.Unmarshal(data, &payload); err != nil {
+		c.set(key, fetched)
+		appendCached(fetched, &combos, &seen, limit)
+	}
+	return combos, nil
+}
+
+// fetchName queries Spellbook for one card name and re-fetches pages until the
+// caller's limit is reached or the API stops returning new 2-card combos.
+func (c *Client) fetchName(ctx context.Context, name string, limit int) ([]Combo, error) {
+	var combos []Combo
+	for offset := 0; ; offset += pageSize {
+		page, more, err := c.fetchPage(ctx, name, limit, offset)
+		if err != nil {
 			return combos, err
 		}
-		for _, item := range payload.Results {
-			if _, ok := seen[item.ID]; ok {
-				continue
-			}
-			if !allComponentsInDeck(item, names) {
-				continue
-			}
-			seen[item.ID] = struct{}{}
-			combo := Combo{ID: item.ID, SourceURL: "https://commanderspellbook.com/combo/" + item.ID, ManaValueNeeded: item.ManaValueNeeded}
-			for _, use := range item.Uses {
-				zone := ""
-				if len(use.ZoneLocations) > 0 {
-					zone = strings.Join(use.ZoneLocations, ",")
-				}
-				combo.Components = append(combo.Components, Component{Name: use.Card.Name, OracleID: use.Card.OracleID, ImageNormal: use.Card.ImageUriFrontNormal, ImageSmall: use.Card.ImageUriFrontSmall, Zone: zone})
-			}
-			for _, req := range item.Requires {
-				combo.RequiresTemplates = append(combo.RequiresTemplates, req.Template.ID)
-			}
-			for _, p := range item.Produces {
-				if p.Feature.ID != 0 {
-					combo.ProducesFeatureIDs = append(combo.ProducesFeatureIDs, p.Feature.ID)
-				}
-			}
-			parts := make([]string, 0, len(combo.Components))
-			for _, part := range combo.Components {
-				parts = append(parts, part.Name)
-			}
-			combo.Name = strings.Join(parts, " + ")
-			produces := make([]string, 0, len(item.Produces))
-			for _, p := range item.Produces {
-				if p.Feature.Name != "" {
-					produces = append(produces, p.Feature.Name)
-				}
-			}
-			combo.Result = strings.Join(produces, ", ")
-			for _, step := range strings.Split(item.Description, "\n") {
-				if step = strings.TrimSpace(step); step != "" {
-					combo.Steps = append(combo.Steps, step)
-				}
-			}
-			combos = append(combos, combo)
-			if len(combos) >= limit {
-				return combos, nil
-			}
+		combos = append(combos, page...)
+		if len(combos) >= limit || !more {
+			break
 		}
 	}
 	return combos, nil
+}
+
+// fetchPage fetches one offset page of variants for a name and returns the
+// 2-card combos found on it (3+ card combos are skipped — see fetchName).
+// more reports whether the page was full, i.e. the API likely has more results
+// worth fetching.
+func (c *Client) fetchPage(ctx context.Context, name string, limit, offset int) ([]Combo, bool, error) {
+	endpoint, _ := url.Parse(c.baseURL + "/variants/")
+	query := endpoint.Query()
+	// Query the front face: spellbook's search doesn't recognize "X // Y".
+	query.Set("q", name)
+	query.Set("limit", "12")
+	if offset > 0 {
+		query.Set("offset", strconv.Itoa(offset))
+	}
+	endpoint.RawQuery = query.Encode()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "PowerLevelAggregator/0.2")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, false, err
+	}
+	data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize+1))
+	resp.Body.Close()
+	if readErr != nil {
+		return nil, false, readErr
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, false, &rateLimitError{status: resp.StatusCode}
+	}
+	var payload response
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, false, err
+	}
+	var combos []Combo
+	for _, item := range payload.Results {
+		if len(combos) >= limit {
+			break
+		}
+		if len(item.Uses) > 2 {
+			continue
+		}
+		combo := Combo{ID: item.ID, SourceURL: "https://commanderspellbook.com/combo/" + item.ID, ManaValueNeeded: item.ManaValueNeeded}
+		for _, use := range item.Uses {
+			zone := ""
+			if len(use.ZoneLocations) > 0 {
+				zone = strings.Join(use.ZoneLocations, ",")
+			}
+			combo.Components = append(combo.Components, Component{Name: use.Card.Name, OracleID: use.Card.OracleID, ImageNormal: use.Card.ImageUriFrontNormal, ImageSmall: use.Card.ImageUriFrontSmall, Zone: zone})
+		}
+		for _, req := range item.Requires {
+			combo.RequiresTemplates = append(combo.RequiresTemplates, req.Template.ID)
+		}
+		for _, p := range item.Produces {
+			if p.Feature.ID != 0 {
+				combo.ProducesFeatureIDs = append(combo.ProducesFeatureIDs, p.Feature.ID)
+			}
+		}
+		parts := make([]string, 0, len(combo.Components))
+		for _, part := range combo.Components {
+			parts = append(parts, part.Name)
+		}
+		combo.Name = strings.Join(parts, " + ")
+		produces := make([]string, 0, len(item.Produces))
+		for _, p := range item.Produces {
+			if p.Feature.Name != "" {
+				produces = append(produces, p.Feature.Name)
+			}
+		}
+		combo.Result = strings.Join(produces, ", ")
+		for _, step := range strings.Split(item.Description, "\n") {
+			if step = strings.TrimSpace(step); step != "" {
+				combo.Steps = append(combo.Steps, step)
+			}
+		}
+		combos = append(combos, combo)
+	}
+	// The page was full (12 results) and the limit is not yet reached: ask for
+	// the next page so 2-card win-cons hidden behind 3-card combo walls surface.
+	more := len(payload.Results) >= 12 && len(combos) < limit
+	return combos, more, nil
+}
+
+// rateLimitError marks a throttled (429) or otherwise failed name query.
+type rateLimitError struct {
+	status int
+}
+
+func (e *rateLimitError) Error() string {
+	return "spellbook request failed"
+}
+
+// appendCached merges a cached or freshly-fetched combo list into the running
+// result, deduplicating by combo ID and stopping at the caller's limit.
+func appendCached(source []Combo, combos *[]Combo, seen *map[string]struct{}, limit int) {
+	if len(*combos) >= limit {
+		return
+	}
+	for _, combo := range source {
+		if _, ok := (*seen)[combo.ID]; ok {
+			continue
+		}
+		(*seen)[combo.ID] = struct{}{}
+		*combos = append(*combos, combo)
+		if len(*combos) >= limit {
+			return
+		}
+	}
+}
+
+func (c *Client) get(key string) ([]Combo, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.cache[key]
+	if !ok || time.Now().After(entry.expiresAt) {
+		return nil, false
+	}
+	return entry.combos, true
+}
+
+func (c *Client) set(key string, combos []Combo) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cache[key] = cacheEntry{combos: combos, expiresAt: time.Now().Add(c.ttl)}
 }
 
 func prioritizeNames(names []string) []string {
