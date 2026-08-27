@@ -1269,6 +1269,7 @@ async function analyze() {
   }
 
   setLoading(true);
+  scrollToSlowly(loading);
   results.hidden = true;
   try {
     const response = await fetch('/api/v1/analyze', {
@@ -1305,6 +1306,23 @@ function setLoading(active) {
   if (skeleton) skeleton.hidden = !active;
   submitButton.disabled = active;
   submitButton.querySelector('.button-label').textContent = active ? '分析中…' : '开始分析';
+}
+
+// 点击开始分析后慢慢滚到加载区：浏览器原生 smooth 的时长不可控、一晃就过，
+// 骨架屏还没看清页面就停了；这里用 rAF 补间走一段 1.1s 的缓动转场。
+function scrollToSlowly(target, duration = 1100) {
+  const start = window.scrollY;
+  const end = target.getBoundingClientRect().top + start;
+  const distance = end - start;
+  if (Math.abs(distance) < 2) return;
+  const t0 = performance.now();
+  const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
+  const step = (now) => {
+    const progress = Math.min((now - t0) / duration, 1);
+    window.scrollTo(0, start + distance * ease(progress));
+    if (progress < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 function render(payload) {
