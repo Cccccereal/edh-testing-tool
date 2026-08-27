@@ -1329,9 +1329,11 @@ function render(payload) {
   setTimeout(() => initScrollAnimations(), 100);
 }
 
-// Deck-health grade badge. The badge renders next to the deck name with the
+// Deck-health score badge. The badge renders next to the deck name with the
 // top deduction reasons on hover. Hidden when the analysis carries no health
-// data (partial catalogs, mid-draft builder decks).
+// data (partial catalogs, mid-draft builder decks). Only the 0-100 score is
+// shown, colored by the grade band — letters are deliberately omitted so the
+// badge cannot be misread as Commander bracket terminology.
 function renderHealth(health) {
   const badge = document.querySelector('#deck-health-badge');
   if (!badge) return;
@@ -1353,7 +1355,7 @@ function renderHealth(health) {
     : '';
   badge.hidden = false;
   badge.innerHTML = `<span class="health-badge-wrap" tabindex="0" title="牌组健康评分">
-    <span class="health-badge ${gradeClass}">${escapeHTML(health.grade)}<small>${Number(health.score) || 0}</small></span>
+    <span class="health-badge ${gradeClass}">${Number(health.score) || 0}</span>
     ${tip}
   </span>`;
 }

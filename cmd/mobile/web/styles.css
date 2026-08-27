@@ -103,21 +103,20 @@ h1 span { color: transparent; -webkit-text-stroke: 1px #7d8177; }
 .step { display: grid; place-items: center; width: 42px; height: 42px; background: var(--acid-bright); color: #11130d; font: 800 14px var(--font-ui); }
 h2 { margin: 0; font-size: 27px; letter-spacing: -.02em; }
 .panel-heading p, .deck-strip p { margin: 5px 0 0; color: var(--muted); font-size: 14px; }
-/* Deck-health grade badge: sits inline next to the deck name, colored by grade.
-   The score rides inside the badge as a small numeral so the letter is the
-   headline and the 0-100 scale stays visible. */
+/* Deck-health score badge: sits inline next to the deck name, colored by the
+   underlying grade band. Only the 0-100 score is shown — letters would read
+   like Commander bracket terminology, so the numeral carries the meaning. */
 .deck-heading-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .deck-heading-row h2 { margin: 0; }
 .deck-health-badge { display: inline-flex; align-items: center; line-height: 1; }
 .deck-health-badge[hidden] { display: none; }
 .health-badge-wrap { position: relative; display: inline-flex; align-items: center; cursor: default; }
 .health-badge {
-  display: inline-flex; align-items: baseline; gap: 4px;
-  padding: 7px 12px 7px 14px; border-radius: 999px;
-  border: 1px solid var(--line); font-weight: 800; font-size: 20px; letter-spacing: .02em;
+  display: inline-flex; align-items: center;
+  padding: 7px 14px; border-radius: 999px;
+  border: 1px solid var(--line); font-weight: 800; font-size: 16px; letter-spacing: .02em;
   color: #0e100d;
 }
-.health-badge small { font-size: 12px; font-weight: 700; opacity: .85; }
 .health-grade-a { background: linear-gradient(135deg, #7ee787, #56d364); border-color: #56d364; }
 .health-grade-b { background: linear-gradient(135deg, #8be9a8, #5bc86f); border-color: #5bc86f; }
 .health-grade-c { background: linear-gradient(135deg, #f7d154, #e8b93a); border-color: #e8b93a; }
