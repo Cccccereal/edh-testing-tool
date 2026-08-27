@@ -1052,6 +1052,18 @@ document.addEventListener('click', (event) => {
   const chip = toggle.querySelector('.section-heading-toggle');
   if (chip) chip.textContent = collapsed ? '展开' : '收起';
 });
+
+// Shared state setter for the big result sections: keeps the collapsed class,
+// aria-expanded, and the 收起/展开 chip in sync no matter who folds a section.
+function setSectionCollapsed(sectionId, collapsed) {
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  section.classList.toggle('is-collapsed', collapsed);
+  const toggle = section.querySelector('[data-section-toggle]');
+  if (toggle) toggle.setAttribute('aria-expanded', String(!collapsed));
+  const chip = section.querySelector('.section-heading-toggle');
+  if (chip) chip.textContent = collapsed ? '展开' : '收起';
+}
 builderExport.addEventListener('click', () => downloadText('decklist.txt', builderToDeckText()));
 builderAnalyze.addEventListener('click', () => {
   decklistInput.value = builderToDeckText();
@@ -1320,6 +1332,9 @@ function render(payload) {
   curveSelectedMv = null; // a fresh analysis starts with the unfiltered deck list
   beginEditing(payload.deck?.id || '', currentDeckCards);
   results.hidden = false;
+  // Fresh analyses start with 关联卡牌与组合 folded: it is the tallest section
+  // and its content matters least while the user reads scores first.
+  setSectionCollapsed('combo-section', true);
   results.scrollIntoView({ behavior: 'smooth', block: 'start' });
   
   // Show sticky navigation
@@ -2512,33 +2527,29 @@ function escapeHTML(value) {
   })[char]);
 }
 
-// Scroll-triggered fade-in animation with hysteresis to prevent flicker
+// Scroll-triggered fade-in. A section reveals as soon as any part of it enters
+// the viewport and only re-hides once it has fully left: thresholding on
+// intersection *ratio* permanently hid very tall sections (one taller than
+// ~4 viewports can never reach a 25% ratio, so 关联卡牌 stayed invisible).
+// The dataset guard keeps repeat analyses from re-hiding sections in view.
 function initScrollAnimations() {
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
-      // Use a larger threshold to create a "dead zone" at boundaries
-      // Only trigger state changes when element crosses 30% visibility
-      const isVisible = entry.isIntersecting && entry.intersectionRatio >= 0.25;
-      
-      if (isVisible) {
-        // Fade in when entering viewport (with sufficient overlap)
+      if (entry.isIntersecting) {
         entry.target.classList.add('fade-in-visible');
         entry.target.classList.remove('fade-out-visible', 'fade-in-hidden');
-      } else if (entry.intersectionRatio < 0.1) {
-        // Only fade out when almost completely out of view
+      } else {
         entry.target.classList.remove('fade-in-visible');
         entry.target.classList.add('fade-out-visible');
       }
-      // Between 10% and 25%: do nothing (hysteresis zone to prevent flicker)
     });
-  }, {
-    threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0],  // Multiple thresholds for smooth detection
-    rootMargin: '50px 0px 50px 0px'  // Extended margin for earlier detection
-  });
+  }, { rootMargin: '50px 0px 50px 0px' });
 
   // Apply animations to major sections, but exclude recommendation section
   // (it contains many dynamic cards, better to keep it stable)
   document.querySelectorAll('.catalog-section:not(#recommendation-section), .result-card').forEach((el) => {
+    if (el.dataset.scrollAnimated) return;
+    el.dataset.scrollAnimated = '1';
     el.classList.add('fade-in-hidden');
     observer.observe(el);
   });
