@@ -125,20 +125,28 @@ func (c *Client) Search(ctx context.Context, names []string, limit int) ([]Combo
 			continue
 		}
 		// Pace uncached names so a cold deck analysis does not burst the API.
-		// Cached names skip the wait: only real network hits need spacing.
-		delay := c.minNameDelay
+		// Cached names skip the wait: only real network hits need spacing. The
+		// send slot is reserved under the mutex before waiting, so concurrent
+		// deck analyses space their requests against each other instead of each
+		// sleeping the same delay and bursting together.
+		c.mu.Lock()
+		wait := time.Duration(0)
 		if last := c.lastFetch; !last.IsZero() {
-			if wait := delay - time.Since(last); wait > 0 {
-				timer := time.NewTimer(wait)
-				select {
-				case <-ctx.Done():
-					timer.Stop()
-					return combos, ctx.Err()
-				case <-timer.C:
-				}
+			if gap := c.minNameDelay - time.Since(last); gap > 0 {
+				wait = gap
 			}
 		}
-		c.lastFetch = time.Now()
+		c.lastFetch = time.Now().Add(wait)
+		c.mu.Unlock()
+		if wait > 0 {
+			timer := time.NewTimer(wait)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return combos, ctx.Err()
+			case <-timer.C:
+			}
+		}
 		fetched, err := c.fetchName(ctx, key, limit)
 		if err != nil {
 			// A throttled or failed single name is skipped: the batch continues

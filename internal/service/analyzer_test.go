@@ -205,3 +205,130 @@ func commanderSaltServer(t *testing.T) *httptest.Server {
 		}`))
 	}))
 }
+
+// Gated fakes for the concurrency test: each provider announces itself on
+// `arrived`, then parks on `release` (or ctx cancellation). A serialized
+// analyze() parks the first provider forever, so only a concurrent
+// implementation can deliver all arrivals before the deadline.
+type gatedCatalog struct {
+	arrived, release chan struct{}
+	gated            sync.Once
+}
+
+// Lookup gates only the first call: analyze() also issues a dependent second
+// lookup for EDHREC candidates, which must not disturb the arrival count.
+func (g *gatedCatalog) Lookup(ctx context.Context, _ []string) (map[string]cardcatalog.Card, error) {
+	g.gated.Do(func() {
+		select {
+		case g.arrived <- struct{}{}:
+		case <-ctx.Done():
+		}
+	})
+	select {
+	case <-g.release:
+		return map[string]cardcatalog.Card{}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (g *gatedCatalog) Search(context.Context, string, int) ([]cardcatalog.Card, error) {
+	return nil, errors.New("unused")
+}
+
+func (g *gatedCatalog) Autocomplete(context.Context, string) ([]string, error) {
+	return nil, errors.New("unused")
+}
+
+type gatedSpellbook struct {
+	arrived, release chan struct{}
+}
+
+func (g *gatedSpellbook) Search(ctx context.Context, _ []string, _ int) ([]spellbook.Combo, error) {
+	select {
+	case g.arrived <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	select {
+	case <-g.release:
+		return nil, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+type gatedEDHREC struct {
+	arrived, release chan struct{}
+}
+
+func (g *gatedEDHREC) Recommend(ctx context.Context, _ string, _ int) ([]edhrec.Group, []string, error) {
+	select {
+	case g.arrived <- struct{}{}:
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+	select {
+	case <-g.release:
+		return nil, nil, nil
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+}
+
+func (g *gatedEDHREC) CommanderRankings(context.Context) ([]edhrec.CommanderRanking, error) {
+	return nil, errors.New("unused")
+}
+
+type instantEDH struct{}
+
+func (instantEDH) Analyze(context.Context, deck.Deck) (map[string]any, error) {
+	return map[string]any{"power_level": 7}, nil
+}
+
+// TestAnalyzeFetchesIndependentProvidersConcurrently pins the concurrency of
+// the independent upstream fetches: the Scryfall catalog, EDHREC, and
+// Spellbook calls must all be in flight at once. Every fake blocks until the
+// others have started, so a serialized implementation cannot satisfy the
+// barrier and misses the arrival deadline.
+func TestAnalyzeFetchesIndependentProvidersConcurrently(t *testing.T) {
+	arrived := make(chan struct{}, 3)
+	release := make(chan struct{})
+	analyzer := NewAnalyzer(
+		nil, nil, instantEDH{}, nil,
+		&gatedCatalog{arrived: arrived, release: release},
+		&gatedSpellbook{arrived: arrived, release: release},
+		&gatedEDHREC{arrived: arrived, release: release},
+		5*time.Second, 15*time.Second, time.Minute, time.Second, 10,
+	)
+
+	target := &deck.Deck{SourceID: "concurrent1", Name: "Concurrent", Commanders: []deck.Card{{Name: "Commander", Quantity: 1, Commander: true}}, Mainboard: []deck.Card{{Name: "Island", Quantity: 99}}}
+	result := make(chan Analysis, 1)
+	errResult := make(chan error, 1)
+	go func() {
+		analysis, err := analyzer.Analyze(context.Background(), "", "concurrent1", target)
+		errResult <- err
+		result <- analysis
+	}()
+
+	for i := 0; i < 3; i++ {
+		select {
+		case <-arrived:
+		case <-time.After(2 * time.Second):
+			// Unblock the parked goroutines before failing so the test exits clean.
+			close(release)
+			t.Fatalf("only %d of 3 independent providers started within 2s; the fetches are serialized", i)
+		}
+	}
+	close(release)
+	if err := <-errResult; err != nil {
+		t.Fatalf("analyze: %v", err)
+	}
+	analysis := <-result
+	if analysis.Status != "success" {
+		t.Fatalf("status = %s, want success; warnings: %v", analysis.Status, analysis.Warnings)
+	}
+	if len(analysis.Warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", analysis.Warnings)
+	}
+}

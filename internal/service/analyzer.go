@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 
 	"powerlevel/internal/deck"
@@ -188,10 +189,82 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 		target = loaded
 	}
 	analysis := Analysis{Status: "success", Results: make(map[string]ProviderResult)}
-	if sourceURL != "" && supplied == nil && a.commanderSalt != nil {
-		commanderCtx, cancelCommander := context.WithTimeout(ctx, a.providerTimeout)
-		commanderResult, commanderErr := a.commanderSalt.Analyze(commanderCtx, sourceURL, sourceID)
-		cancelCommander()
+
+	// CommanderSalt, the Scryfall catalog, EDHREC, and Spellbook are mutually
+	// independent upstream fetches, so they run concurrently: cold-cache latency
+	// becomes the slowest provider instead of the sum of all of them. Each
+	// goroutine writes only its own result variables, and all handling runs on
+	// this goroutine after the wait, so warnings and partial-status logic keep
+	// their deterministic serial order. Provider failures are soft — they
+	// downgrade the analysis to "partial" in the handling below — so the
+	// goroutines never return errors.
+	var (
+		commanderResult commandersalt.Result
+		commanderErr    error
+		runCommander    = sourceURL != "" && supplied == nil && a.commanderSalt != nil
+
+		catalog  map[string]cardcatalog.Card
+		cardErr  error
+		runCards = a.cards != nil
+
+		recGroups        []edhrec.Group
+		recKeywords      []string
+		candidateCatalog map[string]cardcatalog.Card
+		recErr           error
+		candidateErr     error
+		runEDHREC        = a.edhrec != nil && a.cards != nil && len(target.Commanders) > 0
+
+		foundCombos []spellbook.Combo
+		comboErr    error
+		runCombos   = a.spellbook != nil
+	)
+	var group errgroup.Group
+	if runCommander {
+		group.Go(func() error {
+			commanderCtx, cancelCommander := context.WithTimeout(ctx, a.providerTimeout)
+			defer cancelCommander()
+			commanderResult, commanderErr = a.commanderSalt.Analyze(commanderCtx, sourceURL, sourceID)
+			return nil
+		})
+	}
+	if runCards {
+		group.Go(func() error {
+			cardCtx, cancelCards := context.WithTimeout(ctx, a.providerTimeout)
+			defer cancelCards()
+			catalog, cardErr = a.cards.Lookup(cardCtx, deckNames(target))
+			return nil
+		})
+	}
+	if runEDHREC {
+		group.Go(func() error {
+			recCtx, cancelRec := context.WithTimeout(ctx, a.providerTimeout)
+			groups, keywords, err := a.edhrec.Recommend(recCtx, slugify(target.Commanders[0].Name), 20)
+			cancelRec()
+			if err != nil {
+				recErr = err
+				return nil
+			}
+			recGroups, recKeywords = groups, keywords
+			// The candidate lookup is a dependent second catalog call that only
+			// feeds recommendation filtering below, so it stays in this goroutine
+			// instead of blocking the other providers.
+			candidateCtx, cancelCandidates := context.WithTimeout(ctx, a.providerTimeout)
+			defer cancelCandidates()
+			candidateCatalog, candidateErr = a.cards.Lookup(candidateCtx, recommendationNames(groups))
+			return nil
+		})
+	}
+	if runCombos {
+		group.Go(func() error {
+			comboCtx, cancelCombos := context.WithTimeout(ctx, a.providerTimeout)
+			defer cancelCombos()
+			foundCombos, comboErr = a.spellbook.Search(comboCtx, deckNames(target), 12)
+			return nil
+		})
+	}
+	group.Wait()
+
+	if runCommander {
 		if commanderErr != nil {
 			analysis.Status = "partial"
 			analysis.Results["commandersalt"] = failure(commanderErr)
@@ -213,16 +286,12 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 	analysis.CanonicalDecklist = target.ExportPlainText()
 	analysis.DeckRevision = deckRevision(analysis.CanonicalDecklist)
 	var catalogCMC map[string]int
-	// Spellbook combos are fetched after the construction report so the combo
-	// data can enrich the 胜负手 metric. winconComboCount is the count of combos
-	// that end the game (win / opponent loses); it is finalized after the
-	// Spellbook fetch below, and the health score is derived from the final
-	// combo-adjusted report at the end of analyze().
+	// winconComboCount is the count of combos that end the game (win /
+	// opponent loses); it is folded into the 胜负手 metric below, and the health
+	// score is derived from the final combo-adjusted report at the end of
+	// analyze().
 	winconComboCount := 0
-	if a.cards != nil {
-		cardCtx, cancelCards := context.WithTimeout(ctx, a.providerTimeout)
-		catalog, cardErr := a.cards.Lookup(cardCtx, deckNames(target))
-		cancelCards()
+	if runCards {
 		if cardErr != nil {
 			analysis.Warnings = append(analysis.Warnings, "卡牌图片与详情暂时无法加载。")
 		} else {
@@ -239,42 +308,33 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 		}
 	}
 
-	if a.edhrec != nil && a.cards != nil && len(target.Commanders) > 0 {
-		recCtx, cancelRec := context.WithTimeout(ctx, a.providerTimeout)
-		groups, keywords, recErr := a.edhrec.Recommend(recCtx, slugify(target.Commanders[0].Name), 20)
-		cancelRec()
+	if runEDHREC {
 		if recErr != nil {
 			analysis.Warnings = append(analysis.Warnings, "EDHREC 主将推荐暂时无法加载。")
 		} else {
-			analysis.RecommendationKeywords = keywords
-			candidateNames := recommendationNames(groups)
-			candidateCtx, cancelCandidates := context.WithTimeout(ctx, a.providerTimeout)
-			catalog, catalogErr := a.cards.Lookup(candidateCtx, candidateNames)
-			cancelCandidates()
-			if catalogErr == nil && analysis.ConstructionReport != nil {
-				analysis.Recommendations = filterRecommendationGroups(groups, catalog, analysis.DeckCards, keywords, analysis.ConstructionReport, 8)
+			analysis.RecommendationKeywords = recKeywords
+			// A failed candidate lookup only drops the recommendations; the
+			// keywords stay, mirroring the pre-concurrency behavior.
+			if candidateErr == nil && analysis.ConstructionReport != nil {
+				analysis.Recommendations = filterRecommendationGroups(recGroups, candidateCatalog, analysis.DeckCards, recKeywords, analysis.ConstructionReport, 8)
 			}
-
 		}
 	}
 
-	// Spellbook combos are fetched after the construction report so the combo
-	// data can enrich the 胜负手 metric.
+	// The combo list enriches the 胜负手 metric of the construction report, so
+	// it is folded in before the health score is derived.
 	var combos []spellbook.Combo
-	if a.spellbook != nil {
-		comboCtx, cancelCombos := context.WithTimeout(ctx, a.providerTimeout)
-		found, comboErr := a.spellbook.Search(comboCtx, deckNames(target), 12)
-		cancelCombos()
+	if runCombos {
 		if comboErr != nil {
 			analysis.Warnings = append(analysis.Warnings, "Commander Spellbook 组合暂时无法加载。")
 		} else {
-			combos = found
-			winconComboCount = countWinconCombos(found)
-			analysis.Combos, analysis.RelatedCards = buildCombos(found, analysis.DeckCards)
+			combos = foundCombos
+			winconComboCount = countWinconCombos(foundCombos)
+			analysis.Combos, analysis.RelatedCards = buildCombos(foundCombos, analysis.DeckCards)
 		}
 	}
 	// The health score must see the combo-adjusted 胜负手 count, so it is
-	// derived after the Spellbook fetch, from the final report.
+	// derived after the Spellbook handling, from the final report.
 	if analysis.ConstructionReport != nil {
 		analysis.ConstructionReport.ApplyWinconCombos(winconComboCount)
 		var commanderCards []cardcatalog.Card
