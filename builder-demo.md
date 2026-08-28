@@ -87,3 +87,118 @@ Deck
 | `internal/service/construction/report.go` | `WinconComboCount` 字段赋值修复 |
 | `cmd/server/main.go` / `cmd/mobile/mobile.go` | `//go:embed web/*` 嵌入前端 |
 | `start.ps1` | 托管服务启停脚本（预编译二进制） |
+
+---
+
+# 2026-08-27 续记
+
+## 今日任务概述
+
+1. **分析流水线 errgroup 并发化** + Spellbook 节流字段的数据竞争修复（`9b5a48b`）
+2. **健康徽章只显示 0-100 分数**，去掉与指挥官分级术语混淆的字母（`56f0658`）
+3. **平面设计风格整理成本地 skill**，前端按「纸片层」思路加厚（skill 本地私有；UI 改动 `acae95b`）
+4. **滚动淡入 bug 修复** + 关联卡牌/组合区块默认收起（`bd082f3`）
+5. **悬停箭头彩蛋两版实现后放弃**（负结果记录，含日后重启方案）
+6. **按钮箭头改朝下 + 点击后慢滚加载区**（`e2d02c7`、`4f62f8d`）
+7. **启用 DEV=1 开发模式**，前端改动免重建（修正昨日「改前端必须 go build」的结论）
+
+以上代码改动均已 push 至 `origin/main`。
+
+## 一、分析流水线四路并发（9b5a48b）
+
+- `analyze()` 中四个**互不依赖**的数据源改为 `errgroup.Group` 并行：CommanderSalt 评分、Scryfall 目录、EDHREC（含依赖它的候选查询）、Spellbook 组合。
+- 卡组加载保持串行；`group.Wait()` 之后**仍按原串行顺序**处理各路结果 → 警告顺序、partial 语义与旧行为完全一致。
+- 顺手修了 `spellbook/client.go` 的 `lastFetch` **无锁读写竞争**：改为锁内预留等待槽位（`lastFetch = now + wait`）、锁外 sleep，等待可被 context 取消。
+- 新增 `TestAnalyzeFetchesIndependentProvidersConcurrently`（barrier 型 fake：所有数据源就绪才放行），对串行实现必红（"only 1 of 3 providers started"），曾 stash 实现验证过测试有效性。
+- E2E 行为等价验证：串行 17.6s → 并行 13.5s，响应 JSON 完全一致（partial、相同 warnings / combos / recommendations）。
+- 环境坑：**本机 `-race` 不可用**（报 0xc0000139，mingw 8.1 过旧、不配 Go 1.26 race runtime，与代码无关）；以 `-count=3` 重复测试 + E2E 对比替代。
+
+## 二、健康徽章去字母（56f0658）
+
+- 徽章只渲染 `0-100` 数字；`grade` 字段保留，仅用于无数据时隐藏与配色 class（`health-grade-x`），不再输出字母，避免与指挥官 bracket（1-5 级）分级用语混淆。
+
+## 三、设计风格 skill 与「纸片层」加厚（本地 + acae95b）
+
+- 学了 zcool 与 mew.design 两篇风格综述，整理成 `resourse/graphic-design-styles/`（SKILL.md 按意图选型 + styles.md 29 风格档案）。`resourse/` 在 gitignore 内，**保持本地私有，不入库**。
+- 第一轮扁平化被否（「显得单薄」），用户提出「按钮底下垫一层」→ 定下**纸片层深度原则**：
+  - **L0** 平面数据区：不加阴影；
+  - **L1** 硬偏移纸片：实色偏移阴影（3–12px、无模糊无渐变）；hover 抬起（位移 -1,-1、阴影变大），active 落座（位移到阴影尺寸、阴影归零）；
+  - **L2** 真浮层（tooltip、吸顶导航）才允许 blur。
+- 落地：ghost-button 3px、submit-button 4px 实色、result-card 7→10px、搜索面板去玻璃改实色 + 12px 阴影、英雄区酸绿圆环（三角按用户要求删除）。
+
+## 四、滚动淡入修复与默认收起（bd082f3）
+
+- 根因：`intersectionRatio >= 0.25` 的触发阈值，对**高度超过约 4 倍视口**的区块（关联卡牌、完整牌表）在数学上不可达 → 永远不淡入。
+- 修复：任意相交即淡入、完全离开视口才淡出，`dataset.scrollAnimated` 防重复初始化。
+- 关联卡牌与组合区块在新分析渲染后**默认收起**（`setSectionCollapsed('combo-section', true)`），不再挤占首屏。
+
+## 五、悬停箭头彩蛋：两版实现后放弃（未提交，已还原）
+
+- v1：CSS motion path（offset-path）让字形飞一圈——与手绘草稿差距大，被否。
+- v2：SVG `pathLength=1` + stroke-dashoffset 描边自绘，`preserveAspectRatio=none` + `non-scaling-stroke` 适配任意面板宽度，HTML 三角笔尖收尾——仍与期望有差距。
+- **放弃根因**：起点要求精确踩在步骤方块上，但方块与按钮分属不同布局行；锚定输入行的 SVG 在 `preserveAspectRatio=none` 下横向拉伸，起点位置随面板宽度漂移，纯比例估算对不准。
+- 若日后再做：SVG 改挂**整个搜索面板**统一坐标系，或 hover 时用 JS 读方块与按钮实际位置现算路径。
+- 处理：4 个前端文件 `git checkout --` 还原到 `bd082f3`；因为从未提交，工作区直接回到干净态。
+
+## 六、按钮箭头朝下 + 慢滚加载区（e2d02c7 + 4f62f8d）
+
+- 「开始分析」「我其实没有牌，想组牌」的 `↗` 改 `↓`，语义指向页面下方的内容；外链的 `↗` 不动。
+- `scrollToSlowly()`：rAF 补间 1.1s easeInOutQuad 滚到 `#loading`。不用原生 `smooth`：时长不可控、一晃而过，骨架屏来不及进入视野。结果渲染后的原有平滑滚动保持不变。
+
+## 七、DEV=1 开发模式（修正昨日流程结论）
+
+- `cmd/server/main.go:89`：`DEV=1` 时用 `os.DirFS("cmd/server/web")` 从磁盘伺服前端 → **改前端只需刷新浏览器，无需 go build / 重启**。昨日「改前端也必须重新 build」只在 embed（生产）模式下成立。
+- 两个注意点：dev 模式只读桌面目录，`cmd/mobile/web` 镜像副本要靠 `diff` 手动保持同步；改 Go 代码仍需重启进程。
+- 当前预览：`DEV=1 APP_ADDRESS=:18792 go run ./cmd/server`（后台运行）。
+
+## 八、今日相关文件
+
+| 文件 | 说明 |
+|---|---|
+| `internal/service/analyzer.go` | 四路 provider errgroup 并发化 |
+| `internal/providers/spellbook/client.go` | `lastFetch` 竞争修复（锁内预留槽位、锁外等待） |
+| `internal/service/analyzer_test.go` | 并发行为测试（barrier fakes，串行必红） |
+| `cmd/*/web/app.js` | 淡入修复、默认收起、renderHealth、scrollToSlowly |
+| `cmd/*/web/styles.css` | 纸片层阴影体系（L1 硬偏移规范） |
+| `cmd/*/web/index.html` | 徽章结构、按钮箭头 ↓ |
+| `resourse/graphic-design-styles/` | 设计风格 skill（本地私有，gitignore） |
+
+---
+
+# 2026-08-28 续记
+
+## 今日任务概述
+
+1. **牌表解析器 Go fuzz 测试**，fuzz 实测挖出并修复 5 个往返 bug（`150ea2e`）
+2. **「差一张」组合缺件建议**：Spellbook 近完成组合独立成区，含分类徽章与排序（`4ae63e2`）
+3. **主将颜色身份过滤**：缺件超出主将身份的建议整条剔除（同 `4ae63e2`）
+
+以上代码改动均已 push 至 `origin/main`。
+
+## 一、解析器 fuzz 测试（150ea2e）
+
+- `FuzzParsePlainText`：断言不 panic、主将/主牌区存在、CardCount≤1000、导出再解析等价；种子语料在普通 `go test` 里随跑，失败样本自动落 `testdata/fuzz/`。
+- fuzz 挖出的 5 个真 bug：后缀剥离不幂等（`/* 2 */` 数量累加）、split 内层斜杠被误当分隔符、主将重复计入主牌、`3x 牌名` 的 x 必须紧贴数字、fold-then-strip 顺序导致的注释残留。
+- 用户要求低内存跑法：`-parallel 2`（默认 20 worker 太占内存）。
+
+## 二、「差一张」缺件建议 + 分类徽章（4ae63e2）
+
+- 学 loopline 的思路：从 Spellbook 每张牌的查询结果里挑「缺 1–2 件」的组合，单独成区「差一张就成组合」，按缺件数升序、制胜类优先排序；完整组合不再重复出现（`buildCombos` 只保留全 owned 的组合）。
+- API 挂 `combo_suggestions`：owned/missing 卡图、成组合后结果、来源链接；前端徽章纯文字（制胜/无限掉血/无限法术力/额外回合/无限磨牌/组合产物），按用户反馈去掉了 emoji。
+- `cmd/mobile/web` 镜像副本需手动 `cp` 三件套同步（这次差点漏掉）。
+
+## 三、主将颜色身份过滤（4ae63e2）
+
+- 问题：Spellbook 会因套牌里的中性牌（Sol Ring 之类）冒出主将永远不能合法使用的异色组合，loopline 自己也不做这个过滤。
+- 方案：over-fetch 24 条 → catalog 批量查缺件色标 → **任一缺件**超出主将身份则整条剔除（组合需要每个部件，缺件查不到数据则放行）→ 截回 12 条；无色主将或主将数据缺失时跳过过滤（fail-open）。
+- 踩坑：`swap.go` 既有同名 `commanderColorIdentity`（签名不同），新写的撞名编译必炸——删掉重复实现复用 swap 的严格版。
+- E2E：Sram 纯白测试组，`Basalt Monolith + Power Artifact`{U} 被正确剔除，存活的 2 条缺件均在身份内。
+
+## 四、今日相关文件
+
+| 文件 | 说明 |
+|---|---|
+| `internal/deck/parse*.go`、`testdata/fuzz/` | fuzz 与 5 个解析修复 |
+| `internal/service/combosuggest.go` + 测试 | 缺件建议核心逻辑、分类、身份过滤 |
+| `internal/service/analyzer.go` / `model.go` | 接线：over-fetch→过滤→截断；`combo_suggestions` 字段 |
+| `cmd/server/web/*` + `cmd/mobile/web/*` | 建议区块渲染、文字徽章、缺件虚线样式 |
