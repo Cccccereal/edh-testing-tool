@@ -15,7 +15,10 @@ const (
 	maxCardQuantity   = 999
 )
 
-var cardLinePattern = regexp.MustCompile(`^\s*(\d{1,3})\s*[xX]?\s+(.+?)\s*$`)
+// The quantity multiplier ("1x Sol Ring") must sit directly against the
+// number. Allowing whitespace before it ("1 X ...") would eat the leading X
+// of a card name and break re-parsing of our own export.
+var cardLinePattern = regexp.MustCompile(`^\s*(\d{1,3})[xX]?\s+(.+?)\s*$`)
 
 func ParsePlainText(input string) (Deck, error) {
 	if len(input) > maxDecklistBytes {
@@ -79,6 +82,9 @@ func ParsePlainText(input string) (Deck, error) {
 		item := target[key]
 		item.Name = name
 		item.Quantity += quantity
+		if item.Quantity > maxCardQuantity {
+			return Deck{}, fmt.Errorf("invalid quantity on line %d", number+1)
+		}
 		item.Commander = commander
 		target[key] = item
 	}
@@ -98,10 +104,11 @@ func ParsePlainText(input string) (Deck, error) {
 	for _, item := range commanders {
 		result.Commanders = append(result.Commanders, item)
 	}
+	// Both sections are kept as pasted: a name may appear in both the
+	// commander and deck sections, and dropping either copy would break the
+	// export round-trip (ExportPlainText must re-parse to the same deck).
 	for _, item := range mainboard {
-		if _, duplicate := commanders[strings.ToLower(item.Name)]; !duplicate {
-			result.Mainboard = append(result.Mainboard, item)
-		}
+		result.Mainboard = append(result.Mainboard, item)
 	}
 	if result.CardCount() > 1000 {
 		return Deck{}, errors.New("decklist card count is too large")
@@ -111,28 +118,44 @@ func ParsePlainText(input string) (Deck, error) {
 
 func cleanImportedName(value string) string {
 	value = strings.TrimSpace(value)
-	if index := strings.LastIndex(value, " ("); index > 0 && strings.HasSuffix(value, ")") {
+	// Fold DFC spellings before stripping printing suffixes: folding can
+	// create a new " (" boundary ("0/()" -> "0 // ()"), and the result must
+	// be a fixed point so re-parsing our own export changes nothing.
+	value = normalizeSplit(value)
+	for {
+		index := strings.LastIndex(value, " (")
+		if index <= 0 || !strings.HasSuffix(value, ")") {
+			break
+		}
 		value = strings.TrimSpace(value[:index])
 	}
-	value = normalizeSplit(value)
 	return value
 }
 
 // normalizeSplit folds single-slash DFC spellings like "X/Y" into the
-// canonical "X // Y" separator Scryfall uses.
+// canonical "X // Y" separator Scryfall uses. Only interior slashes (with a
+// real name character on both sides) fold, and all of them fold in one pass,
+// so the result is idempotent: re-parsing our own export must not fold
+// another layer out of the same name.
 func normalizeSplit(value string) string {
-	for index := 1; index < len(value)-1; index++ {
-		if value[index] != '/' {
-			continue
-		}
-		if value[index-1] == '/' || value[index+1] == '/' {
-			continue
-		}
-		if value[index-1] == ' ' || value[index+1] == ' ' {
-			continue
-		}
-		value = value[:index] + " // " + value[index+1:]
-		break
+	if !strings.Contains(value, "/") {
+		return value
 	}
-	return value
+	var builder strings.Builder
+	builder.Grow(len(value) + 8)
+	for index := 0; index < len(value); index++ {
+		if value[index] != '/' {
+			builder.WriteByte(value[index])
+			continue
+		}
+		interior := index > 0 && index+1 < len(value) &&
+			value[index-1] != '/' && value[index-1] != ' ' &&
+			value[index+1] != '/' && value[index+1] != ' '
+		if !interior {
+			builder.WriteByte('/')
+			continue
+		}
+		builder.WriteString(" // ")
+	}
+	return builder.String()
 }
