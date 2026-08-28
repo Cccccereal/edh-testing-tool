@@ -331,6 +331,23 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 			combos = foundCombos
 			winconComboCount = countWinconCombos(foundCombos)
 			analysis.Combos, analysis.RelatedCards = buildCombos(foundCombos, analysis.DeckCards)
+			// Over-fetch so the color-identity filter can still leave a full
+			// list after dropping off-identity suggestions.
+			analysis.ComboSuggestions = buildComboSuggestions(foundCombos, analysis.DeckCards, 24)
+			if len(analysis.ComboSuggestions) > 0 && len(catalog) > 0 {
+				// A commander the catalog cannot resolve leaves the identity
+				// unknown; filtering is skipped rather than guessed.
+				allowedColors, _, identityErr := commanderColorIdentity(target, catalog)
+				if identityErr == nil && len(allowedColors) > 0 {
+					missingCatalog, missingErr := a.lookupSuggestionCards(ctx, analysis.ComboSuggestions)
+					if missingErr == nil {
+						analysis.ComboSuggestions = filterComboSuggestionsByIdentity(analysis.ComboSuggestions, allowedColors, missingCatalog)
+					}
+				}
+				if len(analysis.ComboSuggestions) > 12 {
+					analysis.ComboSuggestions = analysis.ComboSuggestions[:12]
+				}
+			}
 		}
 	}
 	// The health score must see the combo-adjusted 胜负手 count, so it is
@@ -577,10 +594,12 @@ func buildCombos(found []spellbook.Combo, deckCards []DisplayCard) ([]Combo, []D
 	var related []DisplayCard
 	for _, source := range found {
 		combo := Combo{Name: source.Name, Result: source.Result, Steps: source.Steps, Sources: []string{"commander_spellbook"}, SourceURL: source.SourceURL}
+		complete := true
 		for _, component := range source.Components {
 			item, ok := cardsByName[strings.ToLower(component.Name)]
 			if !ok {
 				item = DisplayCard{Card: cardcatalog.Card{OracleID: component.OracleID, Name: component.Name, ImageNormal: component.ImageNormal, ImageSmall: component.ImageSmall}, Quantity: 1}
+				complete = false
 			}
 			combo.Components = append(combo.Components, item)
 			key := strings.ToLower(component.Name)
@@ -588,6 +607,13 @@ func buildCombos(found []spellbook.Combo, deckCards []DisplayCard) ([]Combo, []D
 				seenRelated[key] = struct{}{}
 				related = append(related, item)
 			}
+		}
+		// Only fully-owned combos render in the combo list: near-misses now
+		// belong to the suggestion list (buildComboSuggestions), and showing
+		// them twice — once with a placeholder card — read as if the combo
+		// was playable. Related cards still cover every found component.
+		if !complete || len(combo.Components) == 0 {
+			continue
 		}
 		combos = append(combos, combo)
 	}

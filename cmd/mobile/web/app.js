@@ -1341,7 +1341,7 @@ function render(payload) {
   warning.textContent = payload.warnings?.join(' ') || '';
   renderManabase(payload.manabase);
   renderConstructionReport(payload.construction_report);
-  renderCombos(payload.combos || []);
+  renderCombos(payload.combos || [], payload.combo_suggestions || []);
   renderRecommendations(payload.recommendations || [], payload.recommendation_keywords || []);
   renderDeckCards(payload.deck_cards || []);
   currentDeckCards = payload.deck_cards || [];
@@ -1727,16 +1727,50 @@ function renderSwapResult(payload) {
   });
 }
 
-function renderCombos(combos) {
+const COMBO_CATEGORIES = {
+  win: { label: '制胜', fallback: ['win the game', 'opponents lose the game', 'target opponent loses the game'] },
+  lifeloss: { label: '无限掉血', fallback: ['lifeloss'] },
+  mana: { label: '无限法术力', fallback: ['mana'] },
+  turns: { label: '额外回合', fallback: ['extra turn', 'infinite turn', 'near-infinite turn', 'additional combat', 'extra combat'] },
+  mill: { label: '无限磨牌', fallback: ['mill'] },
+  other: { label: '组合产物', fallback: [] },
+};
+
+function comboCategory(combo) {
+  if (combo.category && COMBO_CATEGORIES[combo.category]) return combo.category;
+  const result = (combo.result || '').toLowerCase();
+  for (const [key, item] of Object.entries(COMBO_CATEGORIES)) {
+    if (key !== 'other' && item.fallback.some((needle) => result.includes(needle))) return key;
+  }
+  return 'other';
+}
+
+function comboCategoryBadge(combo) {
+  const key = comboCategory(combo);
+  const category = COMBO_CATEGORIES[key];
+  return `<span class="combo-badge combo-badge-${key}" title="${escapeHTML(combo.result || '')}">${category.label}</span>`;
+}
+
+function renderCombos(combos, suggestions) {
   const section = document.querySelector('#combo-section');
   const container = document.querySelector('#combo-list');
-  section.hidden = !combos.length;
+  const suggestionBlock = document.querySelector('#combo-suggestion-block');
+  const suggestionList = document.querySelector('#combo-suggestion-list');
+  section.hidden = !combos.length && !(suggestions || []).length;
   container.innerHTML = combos.map((combo) => `
     <article class="combo-card">
-      <div class="combo-header"><div><span class="source-badge">COMMANDER SPELLBOOK</span><h3>${escapeHTML(combo.name)}</h3></div>${combo.source_url ? `<a href="${escapeHTML(combo.source_url)}" target="_blank" rel="noopener noreferrer">查看来源 ↗</a>` : ''}</div>
+      <div class="combo-header"><div><span class="source-badge">COMMANDER SPELLBOOK</span>${comboCategoryBadge(combo)}<h3>${escapeHTML(combo.name)}</h3></div>${combo.source_url ? `<a href="${escapeHTML(combo.source_url)}" target="_blank" rel="noopener noreferrer">查看来源 ↗</a>` : ''}</div>
       <div class="combo-components">${(combo.components || []).map((item) => renderCard({ ...item, editor: false })).join('')}</div>
       ${combo.result ? `<p class="combo-result"><strong>结果</strong>${escapeHTML(combo.result)}</p>` : ''}
       ${combo.steps?.length ? `<details><summary>执行步骤</summary><ol>${combo.steps.map((step) => `<li>${escapeHTML(step)}</li>`).join('')}</ol></details>` : ''}
+    </article>`).join('');
+  const nearMisses = suggestions || [];
+  suggestionBlock.hidden = !nearMisses.length;
+  suggestionList.innerHTML = nearMisses.map((suggestion) => `
+    <article class="combo-card combo-suggestion-card">
+      <div class="combo-header"><div><span class="source-badge">SPELLBOOK · 组合缺件</span>${comboCategoryBadge(suggestion)}<h3>${escapeHTML(suggestion.name)}</h3></div>${suggestion.source_url ? `<a href="${escapeHTML(suggestion.source_url)}" target="_blank" rel="noopener noreferrer">查看来源 ↗</a>` : ''}</div>
+      <div class="combo-components">${(suggestion.owned || []).map((item) => renderCard({ ...item, editor: false })).join('')}${(suggestion.missing || []).map((item) => `<div class="combo-missing-card">${renderCard({ ...item, editor: false })}<span class="combo-missing-pill">＋缺 ${escapeHTML(String(item.quantity || 1))} 张</span></div>`).join('')}</div>
+      ${suggestion.result ? `<p class="combo-result"><strong>成组合后</strong>${escapeHTML(suggestion.result)}</p>` : ''}
     </article>`).join('');
 }
 

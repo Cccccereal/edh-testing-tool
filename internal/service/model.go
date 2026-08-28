@@ -77,6 +77,7 @@ type Analysis struct {
 	DeckCards              []DisplayCard             `json:"deck_cards,omitempty"`
 	RelatedCards           []DisplayCard             `json:"related_cards,omitempty"`
 	Combos                 []Combo                   `json:"combos,omitempty"`
+	ComboSuggestions       []ComboSuggestion         `json:"combo_suggestions,omitempty"`
 	Recommendations        []RecommendationGroup     `json:"recommendations,omitempty"`
 	RecommendationKeywords []string                  `json:"recommendation_keywords,omitempty"`
 	ConstructionReport     *construction.Report      `json:"construction_report,omitempty"`

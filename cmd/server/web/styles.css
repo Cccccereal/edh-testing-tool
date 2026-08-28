@@ -547,6 +547,19 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .combo-result strong { color: var(--ink); }
 .combo-card details:not(.mtg-card) { color: var(--muted); font-size: 14px; }
 .combo-card li { margin: 8px 0; line-height: 1.5; font-size: 14px; }
+.combo-badge { display: inline-block; margin-left: 10px; padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; font: 700 11px var(--font-ui); letter-spacing: .06em; vertical-align: 2px; white-space: nowrap; }
+.combo-badge-win { color: var(--acid); border-color: color-mix(in srgb, var(--acid) 45%, transparent); }
+.combo-badge-lifeloss { color: var(--orange); border-color: color-mix(in srgb, var(--orange) 45%, transparent); }
+.combo-badge-mana { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 45%, transparent); }
+.combo-badge-turns { color: var(--acid-soft); border-color: color-mix(in srgb, var(--acid-soft) 45%, transparent); }
+.combo-badge-mill { color: #9fd8ce; border-color: color-mix(in srgb, #9fd8ce 45%, transparent); }
+.combo-badge-other { color: var(--muted); }
+.combo-suggestion-heading { margin: 34px 0 18px; padding-top: 22px; border-top: 1px dashed var(--line); }
+.combo-suggestion-heading h3 { margin: 0 0 6px; font-size: 19px; }
+.combo-suggestion-heading p { margin: 0; color: var(--muted); font-size: 13.5px; }
+.combo-missing-card { position: relative; flex: 0 0 130px; }
+.combo-missing-card .mtg-card { outline: 2px dashed color-mix(in srgb, var(--acid) 65%, transparent); outline-offset: 3px; }
+.combo-missing-pill { position: absolute; top: -9px; right: 6px; z-index: 1; padding: 2px 8px; background: var(--surface); border: 1px solid color-mix(in srgb, var(--acid) 70%, transparent); color: var(--acid); font: 700 11px var(--font-ui); letter-spacing: .04em; box-shadow: 2px 2px 0 color-mix(in srgb, var(--acid) 30%, transparent); }
 .build-entry { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); display: flex; align-items: flex-start; gap: 12px; justify-content: space-between; }
 .build-entry .ghost-button { border-style: dashed; }
 .rules-links-panel { flex: 0 0 auto; }
