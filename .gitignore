@@ -31,3 +31,8 @@ android/local.properties
 # Android release keystore (never commit signing keys)
 android/release.keystore
 android/*.jks
+
+# Python (API black-box tests)
+__pycache__/
+*.py[cod]
+.pytest_cache/

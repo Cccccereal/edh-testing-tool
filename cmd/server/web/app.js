@@ -1136,6 +1136,17 @@ copyDecklistButton?.addEventListener('click', async () => {
   }
 });
 
+retryButton?.addEventListener('click', () => {
+  results.hidden = true;
+  input.focus();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+clearDecklistButton?.addEventListener('click', () => {
+  decklistInput.value = '';
+  decklistInput.focus();
+});
+
 // Delegate decklist expand/collapse to the container
 document.addEventListener('click', (event) => {
   const expandTrigger = event.target.closest('[data-decklist-expand]');

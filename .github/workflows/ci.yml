@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # 含前端镜像一致性检查（cmd/mobile/web 必须严格跟随 cmd/server/web）
+      - name: Go tests (unit + fuzz seeds + web mirror)
+        run: go test ./...
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pytest
+        run: pip install pytest requests
+
+      - name: API black-box tests (offline)
+        run: pytest -q

@@ -174,7 +174,7 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .decklist-input-panel summary { cursor: pointer; color: var(--blue); font-weight: 700; font-size: 15px; }
 .decklist-input-panel label { display: block; margin: 14px 0 7px; color: var(--muted); font-size: 13px; }
 .decklist-label-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-.clear-decklist { margin-top: 14px; padding: 0.625rem 1rem; min-height: 44px; font-size: 13px; border: 1px solid #555a50; background: transparent; color: var(--ink); transition: border-color .15s, color .15s; }
+.clear-decklist { margin-top: 14px; margin-bottom: 20px; padding: 0.625rem 1rem; min-height: 44px; font-size: 13px; border: 1px solid #555a50; background: transparent; color: var(--ink); transition: border-color .15s, color .15s; }
 .clear-decklist:hover { border-color: var(--acid); color: var(--acid); }
 .clear-decklist:focus-visible { outline: 2px solid var(--acid); outline-offset: 2px; }
 .decklist-input-panel textarea { width: 100%; resize: vertical; min-height: 150px; padding: 13px; border: 1px solid #555a50; color: var(--ink); background: #0e100d; font: 14px/1.6 var(--font-ui); }
