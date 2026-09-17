@@ -206,3 +206,37 @@ def test_capture_fixtures(request, api, spec, spec_validator):
     for stale in out_dir.glob("*.json"):
         if stale.name not in captured_names:
             stale.unlink()
+
+
+# ---------------------------------------------------------------------------
+# /img 图片缓存代理（非契约路由，属传输层基础设施，见 internal/api/images.go）
+# ---------------------------------------------------------------------------
+
+SCRYFALL_IMAGE_HOST = "https://cards.scryfall.io"
+
+
+def test_image_proxy_rejects_invalid_paths(api):
+    """非法路径（空路径、未知扩展名）必须 400 + 标准错误信封。"""
+    for bad in ["/img/", "/img/large/file.txt", "/img/large/front/a1/no-extension"]:
+        resp = api.get(bad, timeout=15)
+        assert resp.status_code == 400, f"{bad}: {resp.status_code} {resp.text[:200]}"
+        assert error_code(resp) == "INVALID_IMAGE_PATH"
+
+
+def test_image_proxy_serves_real_card_image(api):
+    """经 /img 取真实卡图：200、图片类型、immutable 缓存头，且二次命中仍成功。
+
+    图片 URL 取自 /api/v1/card 的真实响应，与前端 proxiedImage 的重写方式
+    （去掉 https://cards.scryfall.io 前缀、加 /img）保持一致。
+    """
+    card = api.get("/api/v1/card", params={"name": "Sol Ring"}, timeout=60).json()
+    image = card.get("image_small") or card.get("image_normal")
+    assert image and image.startswith(SCRYFALL_IMAGE_HOST), f"卡图 URL 异常: {image!r}"
+    proxied = "/img" + image[len(SCRYFALL_IMAGE_HOST):]
+
+    for _ in range(2):  # 第一次回源，第二次应命中磁盘缓存
+        resp = api.get(proxied, timeout=30)
+        assert resp.status_code == 200, f"{proxied}: {resp.status_code} {resp.text[:200]}"
+        assert resp.headers.get("Content-Type", "").startswith("image/"), resp.headers.get("Content-Type")
+        assert resp.headers.get("Cache-Control") == "public, max-age=31536000, immutable"
+        assert resp.content, "图片内容为空"

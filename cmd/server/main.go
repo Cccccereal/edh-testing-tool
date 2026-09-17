@@ -34,7 +34,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			Proxy:       http.ProxyFromEnvironment,
+			Proxy:       cfg.ProxyFunc(),
 			DialContext: (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
 			// Disable HTTP/2 to avoid TLS renegotiation issues with some CDNs (e.g., CloudFront/EDHREC)
 			ForceAttemptHTTP2:     false,
@@ -51,7 +51,7 @@ func main() {
 	// Create a separate client for Moxfield that blocks redirects
 	moxfieldHTTPClient := &http.Client{
 		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
+			Proxy:                 cfg.ProxyFunc(),
 			DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
 			ForceAttemptHTTP2:     false,
 			MaxIdleConns:          20,
@@ -68,7 +68,7 @@ func main() {
 	}
 	commanderSaltClient := commandersalt.New(cfg.CommanderSaltAPIURL, httpClient)
 	moxfieldClient := moxfield.New(cfg.MoxfieldAPIURL, moxfieldHTTPClient)
-	cardCatalogClient := cardcatalog.New(cfg.ScryfallAPIURL, httpClient, cfg.CardCatalogTTL)
+	cardCatalogClient := cardcatalog.New(cfg.ScryfallAPIURL, httpClient, cfg.CardCatalogTTL, cfg.CacheDir)
 	spellbookClient := spellbook.New(cfg.SpellbookAPIURL, httpClient)
 	edhrecClient := edhrec.New(cfg.EDHRECJSONURL, httpClient)
 	analyzer := service.NewAnalyzer(
@@ -101,7 +101,7 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              cfg.Address,
-		Handler:           api.NewHandler(analyzer, logger, cfg.RequestTimeout, http.FileServer(http.FS(webRoot))),
+		Handler:           api.NewHandler(analyzer, logger, cfg.RequestTimeout, http.FileServer(http.FS(webRoot)), api.NewImageProxy(cfg.ScryfallImageURL, httpClient, cfg.CacheDir)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      cfg.RequestTimeout + 5*time.Second,

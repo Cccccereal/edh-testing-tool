@@ -18,6 +18,7 @@ import (
 const (
 	maxBatchSize    = 75
 	maxResponseSize = 8 << 20
+	userAgent       = "PowerLevelAggregator/0.2"
 )
 
 type CardFace struct {
@@ -110,6 +111,7 @@ func (c *Client) Search(ctx context.Context, query string, limit int) ([]Card, e
 			c.mu.Lock()
 			c.cache[key] = cacheEntry{card: card, expiresAt: time.Now().Add(c.ttl)}
 			c.mu.Unlock()
+			c.disk.put(key, card, time.Now())
 			cards = append(cards, card)
 			if len(cards) >= limit {
 				return cards, nil
@@ -126,17 +128,13 @@ func (c *Client) Search(ctx context.Context, query string, limit int) ([]Card, e
 // fetchSearchPage fetches one page of Scryfall /cards/search results and reports
 // whether another page follows.
 func (c *Client) fetchSearchPage(ctx context.Context, endpoint string) ([]scryfallCard, bool, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, false, err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "PowerLevelAggregator/0.2")
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doWithRetry(ctx, func() (*http.Request, error) {
+		return http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	})
 	if err != nil {
 		return nil, false, fmt.Errorf("request Scryfall search: %w", err)
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize+1))
 	if err != nil {
 		return nil, false, err
@@ -162,8 +160,14 @@ type Client struct {
 	baseURL    string
 	httpClient *http.Client
 	ttl        time.Duration
-	mu         sync.RWMutex
-	cache      map[string]cacheEntry
+	// disk is the persistent tier behind the in-memory cache (nil when disabled):
+	// it makes restarts warm and lets lookups ride out upstream outages with
+	// stale entries instead of blank payloads.
+	disk *diskCache
+	mu   sync.RWMutex
+	// cache maps normalized lookup keys to cards; entries are also mirrored to
+	// disk on write.
+	cache map[string]cacheEntry
 }
 
 type cacheEntry struct {
@@ -224,17 +228,19 @@ func (c *Client) Autocomplete(ctx context.Context, query string) ([]string, erro
 	values := url.Values{}
 	values.Set("q", query)
 	endpoint := c.baseURL + "/cards/autocomplete?" + values.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "PowerLevelAggregator/0.2")
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doWithRetry(ctx, func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", userAgent)
+		return req, nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("request Scryfall autocomplete: %w", err)
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize+1))
 	if err != nil {
 		return nil, err
@@ -268,13 +274,23 @@ func (c *Client) Autocomplete(ctx context.Context, query string) ([]string, erro
 	return result, nil
 }
 
-func New(baseURL string, httpClient *http.Client, ttl time.Duration) *Client {
-	return &Client{baseURL: strings.TrimRight(baseURL, "/"), httpClient: httpClient, ttl: ttl, cache: make(map[string]cacheEntry)}
+// New builds a Scryfall catalog client. diskDir enables the persistent tier
+// (empty string disables it — unit tests, hermetic environments); when enabled,
+// entries live under <diskDir>/cards as one JSON file per lookup key.
+func New(baseURL string, httpClient *http.Client, ttl time.Duration, diskDir string) *Client {
+	return &Client{
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		httpClient: httpClient,
+		ttl:        ttl,
+		disk:       newDiskCache(diskDir),
+		cache:      make(map[string]cacheEntry),
+	}
 }
 
 func (c *Client) Lookup(ctx context.Context, names []string) (map[string]Card, error) {
 	result := make(map[string]Card, len(names))
 	missing := make([]string, 0, len(names))
+	stale := make(map[string]Card)
 	now := time.Now()
 	for _, name := range uniqueNames(names) {
 		key := normalizeName(name)
@@ -285,13 +301,37 @@ func (c *Client) Lookup(ctx context.Context, names []string) (map[string]Card, e
 			result[key] = entry.card
 			continue
 		}
+		// Disk tier: a fresh file serves directly (and warms the memory cache);
+		// an expired one is held back as outage insurance for this call.
+		served := false
+		for _, candidate := range diskKeys(key) {
+			card, fetchedAt, found := c.disk.get(candidate)
+			if !found {
+				continue
+			}
+			if now.Before(fetchedAt.Add(c.ttl)) {
+				result[key] = card
+				c.mu.Lock()
+				c.cache[key] = cacheEntry{card: card, expiresAt: fetchedAt.Add(c.ttl)}
+				c.mu.Unlock()
+				served = true
+			} else if _, kept := stale[key]; !kept {
+				stale[key] = card
+			}
+			break
+		}
+		if served {
+			continue
+		}
 		missing = append(missing, name)
 	}
+	var fetchErr error
 	for start := 0; start < len(missing); start += maxBatchSize {
 		end := min(start+maxBatchSize, len(missing))
 		cards, err := c.fetchBatch(ctx, missing[start:end])
 		if err != nil {
-			return result, err
+			fetchErr = err
+			break
 		}
 		for _, card := range cards {
 			for _, key := range cardLookupKeys(card) {
@@ -299,8 +339,23 @@ func (c *Client) Lookup(ctx context.Context, names []string) (map[string]Card, e
 				c.mu.Lock()
 				c.cache[key] = cacheEntry{card: card, expiresAt: time.Now().Add(c.ttl)}
 				c.mu.Unlock()
+				c.disk.put(key, card, time.Now())
 			}
 		}
+	}
+	if fetchErr != nil {
+		// Upstream unavailable: serve stale disk entries instead of failing the
+		// whole lookup. The error only surfaces when at least one requested name
+		// has no fallback at all, so callers keep their "incomplete data" path.
+		for key, card := range stale {
+			result[key] = card
+		}
+		for _, name := range uniqueNames(names) {
+			if _, ok := result[normalizeName(name)]; !ok {
+				return result, fetchErr
+			}
+		}
+		return result, nil
 	}
 	for _, name := range uniqueNames(names) {
 		key := normalizeName(name)
@@ -335,18 +390,22 @@ func (c *Client) fetchBatch(ctx context.Context, names []string) ([]Card, error)
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/cards/collection", bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "PowerLevelAggregator/0.2")
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doWithRetry(ctx, func() (*http.Request, error) {
+		// The body reader is rebuilt per attempt: a retried POST cannot reuse a
+		// reader the previous attempt already consumed.
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/cards/collection", bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", userAgent)
+		return req, nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("request Scryfall: %w", err)
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize+1))
 	if err != nil {
 		return nil, err

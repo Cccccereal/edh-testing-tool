@@ -262,3 +262,51 @@ Deck
 | `tests/test_contract.py` + `fixtures/` + conftest/helpers | pytest 契约层 |
 | `package.json` + `cmd/{server,mobile}/web/api-types.d.ts` | 类型生成与镜像同步 |
 | `tests/README.md` / `docs/api-architecture.md` | 契约工作流文档与二期状态 |
+
+---
+
+# 2026-09-17 续记（二）：内置缓存代理层
+
+起因：产品不只我们自用——客户下载客户端后走同样的 Scryfall/EDHREC 网络路径，
+卡图和卡牌资料经常出问题。讨论后确认正向代理无解（代理走的还是同一条坏路），
+有价值的形态是"取数带韧性层"。全部 Go 原生标准库实现：
+
+## 一、卡牌磁盘持久缓存（cardcatalog/diskcache.go）
+
+- 内存缓存（24h TTL）之下再落磁盘：`CACHE_DIR`（默认 OS 用户缓存目录，安卓走
+  TMPDIR 回退），每键一个 JSON 文件，SHA-256 文件名（规避 unicode 和 `Fire // Ice` 的斜杠），
+  临时文件 + 原子改名写入（Windows 需先删目标）。
+- 语义：新鲜磁盘条目直接服务并回填内存；过期条目在本轮调用里留作"断网保险"——
+  上游故障时回填结果而不是报错（stale-on-error）。分析器的 DeckCards 依赖
+  Lookup 不报错，所以断网时已缓存的牌表依然能出完整分析。
+- 只有"一个名字连旧数据都没有"时错误才上浮，部分成功部分失败照旧 warnings 语义。
+
+## 二、上游重试退避（httpretry.go）
+
+- `doWithRetry`：3 次尝试、500ms/1s 退避、遵守 `Retry-After`（封顶 5s）、ctx 限总时长。
+- POST 体逐次重建（reader 不能复用）；429/5xx 才重试，404 是答案不是故障。
+- collection 批查 / search 分页 / autocomplete 三处调用点统一收口，UA 提为常量。
+
+## 三、卡图代理路由（internal/api/images.go，GET /img/...）
+
+- 前端 `proxiedImage()` 把 `cards.scryfall.io` 统一重写到本服务（中央两个 helper
+  + renderCard + 双面切换共五处收口），三端共用同一前端，相对路径天然可用。
+- 服务端：磁盘缓存（`CACHE_DIR/images`）+ 一次重试 + 断网回退旧图；
+  `Cache-Control: immutable` 吃满浏览器缓存。
+- 两个坑：CDN 的 `?<version>` 参数必须参与缓存键（否则换图被旧图永久挡住）；
+  `filepath.Ext` 会把 `.jpg?123` 整个当扩展名，Windows 文件名禁 `?`，写入静默失败
+  ——单测当场抓住。路径白名单校验（段字符集 + 扩展名），非法路径 400 标准信封。
+
+## 四、配置与接线
+
+- `CACHE_DIR` / `UPSTREAM_PROXY` / `SCRYFALL_IMAGE_URL` 三个新配置；
+  `ProxyFunc()` 让客户端一键把全部上游流量指向本地加速器，不必改 shell 环境变量。
+- /img 不进契约路由表（传输层基础设施），spec 头部注记 7 说明。
+
+## 五、验证与单测
+
+- Go 单测（httptest 假上游）：跨重启磁盘持久、过期条目断网降级、部分失败错误上浮、
+  重试计数（两次 503 后第三次成功 / 耗尽报错）、retryDelay 纯函数表；
+  /img 取缓存回源、缓存命中不回源、版本参数重取、404 不重试、路径校验白名单。
+- pytest 联网补充：/img 非法路径 400 信封、经真实 /api/v1/card 的卡图 URL 走 /img 双次 200。
+- Playwright 实测：分析一副牌后 6 个图片请求全部走 /img，0 个直连 scryfall，0 JS 报错。

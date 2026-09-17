@@ -778,16 +778,26 @@ function applyBuildCandidates(candidates) {
   }).join('') || '<p class="editor-empty">暂时没有更多建议，可快速加基本地或直接完成。</p>';
 }
 
+// Route card art through the server's /img cache proxy instead of hitting
+// cards.scryfall.io directly: the proxy persists images on disk, retries
+// transient failures, and serves stale copies when the CDN is unreachable —
+// the same resilience the card JSON already gets. Non-Scryfall URLs and
+// empty values pass through untouched.
+function proxiedImage(url) {
+  if (typeof url !== 'string' || !url.startsWith('https://cards.scryfall.io/')) return url;
+  return '/img/' + url.slice('https://cards.scryfall.io/'.length);
+}
+
 function cardImage(card) {
   const cardObj = card || {};
-  return cardObj.image_small || cardObj.image_normal || (cardObj.faces || []).find((face) => face.image_small || face.image_normal)?.image_small || (cardObj.faces || []).find((face) => face.image_small || face.image_normal)?.image_normal || '';
+  return proxiedImage(cardObj.image_small || cardObj.image_normal || (cardObj.faces || []).find((face) => face.image_small || face.image_normal)?.image_small || (cardObj.faces || []).find((face) => face.image_small || face.image_normal)?.image_normal || '');
 }
 
 // Prefer the larger face image for hover previews; falls back to the small grid
 // image when the card has no normal-size art.
 function cardPreviewImage(card) {
   const cardObj = card || {};
-  return cardObj.image_normal || cardObj.image_small || (cardObj.faces || []).find((face) => face.image_normal || face.image_small)?.image_normal || (cardObj.faces || []).find((face) => face.image_normal || face.image_small)?.image_small || '';
+  return proxiedImage(cardObj.image_normal || cardObj.image_small || (cardObj.faces || []).find((face) => face.image_normal || face.image_small)?.image_normal || (cardObj.faces || []).find((face) => face.image_normal || face.image_small)?.image_small || '');
 }
 
 function buildMetricLabel(id) {
@@ -2099,8 +2109,8 @@ editorVersionsButton.addEventListener('click', () => {
 function renderCard(item) {
   const card = item.card || {};
   const picturedFaces = Array.isArray(card.faces) ? card.faces.filter((face) => face.image_small || face.image_normal) : [];
-  const image = card.image_small || card.image_normal || picturedFaces[0]?.image_small || picturedFaces[0]?.image_normal;
-  const previewImage = card.image_normal || card.image_small || picturedFaces[0]?.image_normal || picturedFaces[0]?.image_small;
+  const image = proxiedImage(card.image_small || card.image_normal || picturedFaces[0]?.image_small || picturedFaces[0]?.image_normal);
+  const previewImage = proxiedImage(card.image_normal || card.image_small || picturedFaces[0]?.image_normal || picturedFaces[0]?.image_small);
   const faceSwitch = picturedFaces.length > 1 ? `<div class="card-faces">${picturedFaces.map((face, index) => `<button type="button" data-face="${index}" class="${index === 0 ? 'active' : ''}" aria-pressed="${index === 0}">${index === 0 ? '正面' : '反面'}</button>`).join('')}</div>` : '';
   const faceData = picturedFaces.length > 1 ? ` data-faces="${escapeHTML(JSON.stringify(picturedFaces))}"` : '';
   const editorControls = item.editor === false ? '' : `<div class="card-edit-controls">
@@ -2180,9 +2190,9 @@ document.addEventListener('click', (event) => {
   const face = faces[Number(button.dataset.face)];
   if (!face) return;
   const imageElement = cardElement.querySelector('img');
-  imageElement?.setAttribute('src', face.image_small || face.image_normal || '');
+  imageElement?.setAttribute('src', proxiedImage(face.image_small || face.image_normal || ''));
   imageElement?.setAttribute('alt', face.name || '');
-  cardElement.dataset.previewSrc = face.image_normal || face.image_small || '';
+  cardElement.dataset.previewSrc = proxiedImage(face.image_normal || face.image_small || '');
   cardElement.dataset.previewName = face.name || '';
   cardElement.querySelector('.mtg-card-face strong').textContent = face.name || '';
   cardElement.dataset.cardText = previewTextForCard({ name: face.name, mana_cost: face.mana_cost, type_line: face.type_line, oracle_text: face.oracle_text });

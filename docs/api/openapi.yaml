@@ -30,6 +30,9 @@
 #      需同步把对应属性改回可选。
 #   5. 请求体大小上限：analyze / compare-swap 为 256 KiB，build 工具类为 64 KiB，超限按 400 处理。
 #   6. GET / 与静态资源由同一服务伺服但不属于本契约（Tauri/安卓壳依赖它加载前端）。
+#   7. GET /img/<scryfall 路径> 是卡图缓存代理（internal/api/images.go），同属传输层
+#      基础设施而非契约路由：磁盘持久化 + 上游重试 + 断网时回退旧图。前端把
+#      cards.scryfall.io 的图片 URL 统一重写到该路由（app.js proxiedImage）。
 
 openapi: 3.1.0
 info:

@@ -49,6 +49,31 @@
 > `DisallowUnknownFields`。实测发现 sanitize 反射编码忽略 `omitempty`（响应字段
 > 恒出现：空切片为 `[]`、指针为 `null`），spec 按实际行为描述并记入其头部「已知偏差」。
 
+### 插期：内置缓存代理层（客户可靠性）✅ 已落地（2026-09-17）
+
+动机：产品不只是我们自己用——客户下载客户端后同样要从 Scryfall/EDHREC 拉数据，
+网络路径差时卡图和卡牌资料经常出问题。正向代理解决不了路径本身的问题
+（代理走的还是同一条坏路），真正有价值的是把"取数"变成带韧性层的本地服务：
+
+- **卡牌磁盘持久缓存**（`internal/providers/cardcatalog/diskcache.go`）：内存缓存之下再落一层
+  磁盘（`CACHE_DIR`，默认 OS 用户缓存目录），SHA-256 文件名 + 临时文件原子改名写入。
+  重启后温启动；上游故障时降级用过期条目（stale-on-error）而不是白屏——分析器的
+  卡牌数据不再因断网整块缺失。
+- **上游重试退避**（`httpretry.go`）：所有 Scryfall 调用（collection 批查 / search 分页 /
+  autocomplete）统一走 `doWithRetry`，3 次尝试、500ms/1s 退避、遵守 `Retry-After`
+  （封顶 5s），请求体逐次重建，handler 级 ctx 限定总时长。
+- **卡图代理路由**（`internal/api/images.go`，`GET /img/<scryfall 路径>`）：前端
+  `proxiedImage()` 把 `cards.scryfall.io` 的图片 URL 统一重写到本服务；服务端磁盘
+  缓存 + 重试 + 断网回退旧图。CDN 的 `?<version>` 参数参与缓存键，换图不会被旧图
+  挡住。路径白名单校验（段字符集 + 图片扩展名），非法路径 400。属传输层基础设施，
+  不进契约路由表（spec 头部注记 7）。
+- **`UPSTREAM_PROXY`**：客户端/服务器可一键把所有上游流量指向本地加速器或公司代理，
+  不必改 shell 环境变量；空值保持标准 `HTTP(S)_PROXY` 行为。
+
+三端（浏览器 / Tauri / 安卓 WebView）都从同一个 Go 服务加载前端，相对路径 `/img`
+天然可用；Go 单测用 httptest 假上游覆盖跨重启持久、断网降级、重试计数与 /img 校验。
+
+
 ### 第 3 期：分析任务化（行为变化，动 `/analyze`）
 
 - `POST /api/v1/analyses` → `202 {job_id}`；`GET /api/v1/analyses/{job_id}` → `{status, stage, result?}`。

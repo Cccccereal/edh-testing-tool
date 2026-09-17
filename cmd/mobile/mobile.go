@@ -44,7 +44,7 @@ func Start(port int) string {
 
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
+			Proxy:                 cfg.ProxyFunc(),
 			DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
 			ForceAttemptHTTP2:     true,
 			MaxIdleConns:          20,
@@ -62,7 +62,7 @@ func Start(port int) string {
 
 	commanderSaltClient := commandersalt.New(cfg.CommanderSaltAPIURL, httpClient)
 	moxfieldClient := moxfield.New(cfg.MoxfieldAPIURL, httpClient)
-	cardCatalogClient := cardcatalog.New(cfg.ScryfallAPIURL, httpClient, cfg.CardCatalogTTL)
+	cardCatalogClient := cardcatalog.New(cfg.ScryfallAPIURL, httpClient, cfg.CardCatalogTTL, cfg.CacheDir)
 	spellbookClient := spellbook.New(cfg.SpellbookAPIURL, httpClient)
 	edhrecClient := edhrec.New(cfg.EDHRECJSONURL, httpClient)
 	analyzer := service.NewAnalyzer(
@@ -100,7 +100,7 @@ func Start(port int) string {
 	realPort := listener.Addr().(*net.TCPAddr).Port
 
 	server := &http.Server{
-		Handler:           api.NewHandler(analyzer, logger, cfg.RequestTimeout, http.FileServer(http.FS(webRoot))),
+		Handler:           api.NewHandler(analyzer, logger, cfg.RequestTimeout, http.FileServer(http.FS(webRoot)), api.NewImageProxy(cfg.ScryfallImageURL, httpClient, cfg.CacheDir)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      cfg.RequestTimeout + 5*time.Second,

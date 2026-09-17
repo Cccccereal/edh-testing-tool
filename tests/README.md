@@ -55,6 +55,6 @@ pytest -m network --update-fixtures
 | `test_compare_swap.py` | `/api/v1/compare-swap` 的本地校验分支 |
 | `test_build_tools.py` | 组牌辅助接口的必填项与类别校验 |
 | `test_contract.py` | 接口契约：fixtures 对 spec 逐字段校验、端点覆盖检查、错误信封活校验 |
-| `test_network_endpoints.py` | 依赖第三方站点的联调用例 + 实时成功响应对契约校验 + fixtures 录制（默认跳过） |
+| `test_network_endpoints.py` | 依赖第三方站点的联调用例 + 实时成功响应对契约校验 + fixtures 录制 + /img 卡图代理（默认跳过） |
 | `fixtures/` | 联网录制的各端点 200 响应快照（提交入库，供离线契约测试与 CI 使用） |
 

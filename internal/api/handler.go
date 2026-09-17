@@ -37,7 +37,7 @@ var routes = []struct{ method, path string }{
 	{"POST", "/api/v1/resolve-commanders"},
 }
 
-func NewHandler(analyzer *service.Analyzer, logger *slog.Logger, requestTimeout time.Duration, static http.Handler) http.Handler {
+func NewHandler(analyzer *service.Analyzer, logger *slog.Logger, requestTimeout time.Duration, static http.Handler, images http.Handler) http.Handler {
 	handler := &Handler{analyzer: analyzer, logger: logger, requestTimeout: requestTimeout}
 	mux := http.NewServeMux()
 	handlers := map[string]http.HandlerFunc{
@@ -57,6 +57,9 @@ func NewHandler(analyzer *service.Analyzer, logger *slog.Logger, requestTimeout 
 		key := route.method + " " + route.path
 		mux.HandleFunc(key, handlers[key])
 	}
+	// Image cache proxy — transport infrastructure, not a contract route (see
+	// images.go); registered ahead of the static catch-all for clarity.
+	mux.Handle("GET /img/", images)
 	mux.Handle("GET /", static)
 	return securityHeaders(recoverPanics(requestLogger(logger, mux)))
 }
