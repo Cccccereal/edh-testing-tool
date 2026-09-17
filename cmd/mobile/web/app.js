@@ -1,3 +1,14 @@
+// --- API 契约类型（编辑器提示用，不参与运行时） ---------------------------------
+// docs/api/openapi.yaml 是接口契约的单一事实源；api-types.d.ts 由 `npm run gen:api`
+// 从 spec 生成。改接口时先改 spec、重新生成类型，下面这些 JSDoc 标注会自动跟随，
+// 编辑器（TS language server）会即时标出字段名/类型对不上的地方。
+/** @typedef {import('./api-types').components['schemas']['Analysis']} Analysis */
+/** @typedef {import('./api-types').components['schemas']['DisplayCard']} DisplayCard */
+/** @typedef {import('./api-types').components['schemas']['HealthResult']} HealthResult */
+/** @typedef {import('./api-types').components['schemas']['ManabaseReport']} ManabaseReport */
+/** @typedef {import('./api-types').components['schemas']['ConstructionReport']} ConstructionReport */
+/** @typedef {import('./api-types').components['schemas']['ResolvedCommander']} ResolvedCommander */
+
 const form = document.querySelector('#analyze-form');
 const input = document.querySelector('#deck-url');
 const decklistInput = document.querySelector('#decklist-input');
@@ -12,6 +23,7 @@ const copyDecklistButton = document.querySelector('#copy-decklist');
 const clearDecklistButton = document.querySelector('#clear-decklist');
 const themeToggle = document.querySelector('#theme-toggle');
 let currentDeckText = '';
+/** @type {DisplayCard[]} */
 let currentDeckCards = [];
 let pendingSwapAdd = '';
 let selectedSwapRemove = '';
@@ -133,6 +145,7 @@ function noteBuildReject(message) {
 
 // Render the resolved-commander thumbnail + name into the preview strip under the
 // commander input. Shows the primary plus (for a partner pair) the partner name.
+/** @param {ResolvedCommander[]} commanders */
 function renderCommanderPreview(commanders) {
   if (!Array.isArray(commanders) || commanders.length === 0) {
     builderCommanderPreview.hidden = true;
@@ -157,10 +170,11 @@ function renderCommanderPreview(commanders) {
   builderCommanderPreview.hidden = false;
 }
 
+/** @returns {Promise<{error?: string, commanders?: ResolvedCommander[], color_identity?: ResolvedCommander['color_identity']}>} */
 async function resolveCommanderPreview(names) {
   if (!names.length) {
     renderCommanderPreview([]);
-    return null;
+    return {};
   }
   try {
     const response = await fetch('/api/v1/resolve-commanders', {
@@ -1336,6 +1350,7 @@ function scrollToSlowly(target, duration = 1100) {
   requestAnimationFrame(step);
 }
 
+/** @param {Analysis} payload */
 function render(payload) {
   const skeleton = document.querySelector('#skeleton');
   if (skeleton) skeleton.hidden = true;
@@ -1378,6 +1393,7 @@ function render(payload) {
 // data (partial catalogs, mid-draft builder decks). Only the 0-100 score is
 // shown, colored by the grade band — letters are deliberately omitted so the
 // badge cannot be misread as Commander bracket terminology.
+/** @param {HealthResult} health */
 function renderHealth(health) {
   const badge = document.querySelector('#deck-health-badge');
   if (!badge) return;
@@ -1404,6 +1420,7 @@ function renderHealth(health) {
   </span>`;
 }
 
+/** @param {ManabaseReport} manabase */
 function renderManabase(manabase) {
   const section = document.querySelector('#manabase-section');
   const container = document.querySelector('#manabase-content');
@@ -1583,6 +1600,7 @@ function renderColorFinding(finding) {
     </div>`;
 }
 
+/** @param {ConstructionReport} report */
 function renderConstructionReport(report) {
   const section = document.querySelector('#construction-section');
   const container = document.querySelector('#construction-metrics');

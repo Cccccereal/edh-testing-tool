@@ -36,3 +36,6 @@ android/*.jks
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# 前端开发工具（契约类型生成）
+node_modules/

@@ -1,0 +1,11 @@
+{
+  "name": "powerlevel",
+  "private": true,
+  "description": "Commander Power Check — 仅用于开发期工具（契约类型生成），运行时零依赖",
+  "scripts": {
+    "gen:api": "openapi-typescript docs/api/openapi.yaml -o cmd/server/web/api-types.d.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.5.0"
+  }
+}

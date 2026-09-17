@@ -202,3 +202,63 @@ Deck
 | `internal/service/combosuggest.go` + 测试 | 缺件建议核心逻辑、分类、身份过滤 |
 | `internal/service/analyzer.go` / `model.go` | 接线：over-fetch→过滤→截断；`combo_suggestions` 字段 |
 | `cmd/server/web/*` + `cmd/mobile/web/*` | 建议区块渲染、文字徽章、缺件虚线样式 |
+---
+
+# 2026-09-17 续记
+
+## 今日任务概述
+
+1. **接口契约化（二期）落地**：OpenAPI spec 单一事实源 + 三道机器校验 + 前端类型生成
+2. 顺带修掉：`sanitizeValue` 反射编码忽略 `omitempty` 的认知偏差（spec 按实际行为描述）
+
+## 一、契约 spec（docs/api/openapi.yaml）
+
+- OpenAPI 3.1.0 手写，11 端点 + 43 个 schema；每个端点 description 全量枚举错误 code；
+  请求体 `additionalProperties: false` 对齐 Go 端 `DisallowUnknownFields`。
+- 严格度分级（一期约定）：请求体严格 / 错误信封严格 / 200 响应列全字段但暂不禁额外字段。
+- 头部「已知偏差」6 条：ENCODING_FAILED 走 text/plain、card 复用 swap 错误映射、
+  sanitize NaN→0 与颜色枚举序列化、sanitize 忽略 omitempty、请求体大小限制、静态资源不在契约内。
+
+## 二、三道机器校验
+
+| 校验 | 手段 | 防什么 |
+|---|---|---|
+| Go `contract_test.go` | yaml.v3 解析 spec，路由表↔paths 双向比对 | 文档漂移 |
+| pytest `test_contract.py` | fixtures 录制快照对 spec 逐字段校验 + 错误信封活校验（全离线，CI 可跑） | 实现漂移 |
+| CI `npm run gen:api` + `git diff --exit-code` | openapi-typescript 再生成无 diff | 手改生成文件 |
+
+- fixtures：`pytest -m network --update-fixtures` 联网录制 11 端点 200 响应到
+  `tests/fixtures/`，录制时即时校验；CI 用快照离线复验。成功响应必须真打第三方源，
+  CI 拿不到，所以走「本地录制 + 离线复验」两段式。
+
+## 三、关键发现：sanitize 忽略 omitempty
+
+- 首次联网校验当场抓住：`results.edhpowerlevel.error` 是 `null` 而非缺省——
+  `sanitizeValue` 反射编码输出结构体全部字段，不认 `omitempty`。
+- 实测口径：空切片→`[]`、空映射→`{}`、空串→`""`、nil 指针→`null`（全响应仅
+  `ProviderResult.error` 和 `Analysis` 的 construction_report/manabase/health 四个指针可空）。
+- 决策：spec 按实际行为描述（所有 200 属性 required，指针字段 anyOf 可空），
+  不动运行时行为；日后若让 sanitize 尊重 omitempty 再同步改 spec。
+
+## 四、前端类型
+
+- `npm run gen:api` → `cmd/server/web/api-types.d.ts`（910 行），app.js 顶部 JSDoc
+  `@typedef` 引入，`render` / `renderHealth` / `renderManabase` / `renderCommanderPreview`
+  等处加了示范标注；`tsc --checkJs` 全量扫了一遍，我新引入的联合类型收窄问题当场修掉
+  （`resolveCommanderPreview` 返回改扁平可选字段，空名守卫从 `return null` 改 `return {}`，
+  调用方从抛错进 catch 变优雅降级）。DOM narrowing 的历史噪音不在此期处理。
+
+## 五、CI（.github/workflows/ci.yml）
+
+- pip 加 `pyyaml jsonschema`；新增 setup-node 22 + `npm ci` + 类型再生成 diff 检查。
+- pytest 步骤现在即契约测试步骤（离线含 fixtures 复验与错误信封校验）。
+
+## 六、今日相关文件
+
+| 文件 | 说明 |
+|---|---|
+| `docs/api/openapi.yaml` | 契约单一事实源（含已知偏差与工作流说明） |
+| `internal/api/contract_test.go` | 路由表↔spec 同步测试 |
+| `tests/test_contract.py` + `fixtures/` + conftest/helpers | pytest 契约层 |
+| `package.json` + `cmd/{server,mobile}/web/api-types.d.ts` | 类型生成与镜像同步 |
+| `tests/README.md` / `docs/api-architecture.md` | 契约工作流文档与二期状态 |

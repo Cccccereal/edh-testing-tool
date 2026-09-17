@@ -1,0 +1,842 @@
+# Commander Power Check — HTTP API 契约（单一事实源）
+#
+# 本文件是接口的唯一权威描述。改动接口的流程：
+#   1. 先改本文件（含版本号）；
+#   2. 后端实现 + 前端实现；
+#   3. 三道机器校验守住一致性：
+#      - go test ./internal/api/  → 路由表与本文 paths 双向同步
+#      - pytest tests/test_contract.py → 真实响应 fixtures（tests/fixtures/）逐字段符合本文 schema，
+#        以及在线错误响应符合 ErrorEnvelope
+#      - npx openapi-typescript 再生成类型无 diff（防手改生成文件）
+#
+# 严格度分级（一期约定）：
+#   - 请求体：additionalProperties: false（服务端 json.Decoder.DisallowUnknownFields 本就拒绝未知字段）
+#   - 错误响应：统一 ErrorEnvelope，code 全量枚举在各端点 description
+#   - 200 成功响应：列出已知字段并约束类型，但暂不禁止额外字段（additionalProperties 默认 true），
+#     跑稳一个周期后再收紧
+#
+# 已知偏差（描述现状，非承诺；修正需另开提交并同步本文）：
+#   1. ENCODING_FAILED（响应编码失败）走 http.Error，Content-Type 为 text/plain，不符合 ErrorEnvelope。
+#      仅在服务端内部编码失败时出现，正常不触发。
+#   2. GET /api/v1/card 的错误映射复用了 compare-swap 的映射函数：除 CARD_NAME_REQUIRED 外，
+#      还可能出现 CARD_NOT_FOUND（400）与 CARD_DATA_UNAVAILABLE（502）；兜底分支的 code
+#      理论上是 COMPARISON_FAILED——这是历史遗留，不是语义承诺。
+#   3. 所有 JSON 响应经过 sanitize：NaN/Inf 浮点数归零为 0；法术力颜色枚举序列化为
+#      "W"/"U"/"B"/"R"/"G"/"C" 字符串（Go 端是命名整型）。
+#   4. 响应编码走 sanitize 反射器（internal/api/common.go），会输出结构体的全部字段
+#      （忽略 omitempty）：切片/映射空时为 []/{}，标量为零值，仅 Go 指针字段空时为 null
+#      （ProviderResult.error，Analysis 的 construction_report / manabase / health）。
+#      因此本文 200 schema 的属性全部 required；若日后让 sanitize 尊重 omitempty，
+#      需同步把对应属性改回可选。
+#   5. 请求体大小上限：analyze / compare-swap 为 256 KiB，build 工具类为 64 KiB，超限按 400 处理。
+#   6. GET / 与静态资源由同一服务伺服但不属于本契约（Tauri/安卓壳依赖它加载前端）。
+
+openapi: 3.1.0
+info:
+  title: Commander Power Check API
+  version: 0.1.0
+  description: >
+    Commander 牌组多维度评分服务。三个客户端（桌面浏览器 / Tauri 桌面壳 / 安卓 WebView）
+    消费同一份 API；服务当前仅绑定本机回环地址，无认证、无跨域。
+servers:
+  - url: http://127.0.0.1
+    description: 本机服务（端口由启动参数决定）
+
+tags:
+  - name: analyze
+  - name: swap
+  - name: build
+  - name: cards
+  - name: meta
+
+paths:
+  /healthz:
+    get:
+      tags: [meta]
+      operationId: health
+      summary: 存活探针
+      responses:
+        "200":
+          description: 服务就绪
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ok }
+
+  /api/v1/analyze:
+    post:
+      tags: [analyze]
+      operationId: analyzeDeck
+      summary: 分析牌组（同步，约 10–17s）
+      description: |
+        按 url（Moxfield 公开牌组）与 decklist（粘贴文本）的优先级取牌表：
+        两者都填时文本优先，两者都缺报 MISSING_DECK_SOURCE。
+        可能的错误 code：
+        - 400：INVALID_JSON / INVALID_MOXFIELD_URL / INVALID_DECKLIST / MISSING_DECK_SOURCE /
+          DECK_NO_COMMANDER / DECK_EMPTY
+        - 429：RATE_LIMITED（Moxfield 上游限流）
+        - 502：UPSTREAM_CHALLENGE / PRIVATE_OR_FORBIDDEN / NOT_FOUND / DECK_SOURCE_FAILED /
+          DECK_SOURCE_INVALID / ANALYSIS_FAILED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnalyzeRequest" }
+      responses:
+        "200":
+          description: 完整分析结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Analysis" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /api/v1/compare-swap:
+    post:
+      tags: [swap]
+      operationId: compareSwap
+      summary: 比较换掉一张牌前后的构筑指标
+      description: |
+        可能的错误 code：
+        - 400：INVALID_JSON / INVALID_SWAP / REMOVE_CARD_NOT_FOUND / COMMANDER_SWAP_NOT_SUPPORTED /
+          CARD_NOT_FOUND / ILLEGAL_ADDED_CARD / COLOR_IDENTITY_MISMATCH / SINGLETON_VIOLATION /
+          INVALID_DECKLIST
+        - 502：CARD_DATA_UNAVAILABLE / COMPARISON_FAILED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompareSwapRequest" }
+      responses:
+        "200":
+          description: 前后状态对比
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SwapComparison" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /api/v1/card:
+    get:
+      tags: [cards]
+      operationId: lookupCard
+      summary: 按名称查单卡资料
+      description: |
+        可能的错误 code（错误映射复用 swap 语义，见「已知偏差」2）：
+        - 400：CARD_NAME_REQUIRED / CARD_NOT_FOUND / INVALID_DECKLIST
+        - 502：CARD_DATA_UNAVAILABLE / COMPARISON_FAILED
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: 卡牌资料
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [card]
+                properties:
+                  card: { $ref: "#/components/schemas/Card" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /api/v1/build-suggest:
+    post:
+      tags: [build]
+      operationId: buildSuggest
+      summary: 组牌模式的补充卡建议（排除已选/已见）
+      description: |
+        可能的错误 code：
+        - 400：INVALID_JSON / COMMANDER_REQUIRED / COMMANDER_NOT_LEGAL
+        - 404：COMMANDER_NOT_FOUND
+        - 502：CARD_DATA_UNAVAILABLE / BUILD_POOL_EXHAUSTED / BUILD_SUGGEST_FAILED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BuildSuggestRequest" }
+      responses:
+        "200":
+          description: 候选卡列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BuildSuggestResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /api/v1/build-lands:
+    post:
+      tags: [build]
+      operationId: buildLands
+      summary: 按类别推荐地牌
+      description: |
+        可能的错误 code：
+        - 400：INVALID_JSON / LAND_CATEGORY_REQUIRED
+        - 502：LANDS_FAILED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BuildLandsRequest" }
+      responses:
+        "200":
+          description: 地牌推荐列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LandCategoryResult" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /api/v1/build-staples:
+    post:
+      tags: [build]
+      operationId: buildStaples
+      summary: 按类别推荐常用单卡
+      description: |
+        可能的错误 code：
+        - 400：INVALID_JSON / STAPLE_CATEGORY_REQUIRED / CARD_NOT_FOUND
+        - 502：STAPLES_FAILED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BuildStaplesRequest" }
+      responses:
+        "200":
+          description: 单卡推荐列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StapleCategoryResult" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /api/v1/commander-autocomplete:
+    get:
+      tags: [cards]
+      operationId: commanderAutocomplete
+      summary: 主将名称自动补全
+      description: |
+        可能的错误 code：
+        - 400：QUERY_REQUIRED / COMMANDER_NOT_LEGAL
+        - 404：COMMANDER_NOT_FOUND
+        - 502：CARD_DATA_UNAVAILABLE / BUILD_POOL_EXHAUSTED / BUILD_SUGGEST_FAILED
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: 候选名称列表（最多 12 个）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AutocompleteResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /api/v1/card-autocomplete:
+    get:
+      tags: [cards]
+      operationId: cardAutocomplete
+      summary: 卡牌名称自动补全
+      description: 错误 code 同 commander-autocomplete。
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: 候选名称列表（最多 12 个）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AutocompleteResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /api/v1/random-commander:
+    post:
+      tags: [cards]
+      operationId: randomCommander
+      summary: 随机返回一位主将
+      description: |
+        无请求体。可能的错误 code：
+        - 400：COMMANDER_NOT_LEGAL / COMMANDER_PAIR_INVALID
+        - 404：COMMANDER_NOT_FOUND
+        - 502：RANDOM_COMMANDER_UNAVAILABLE / CARD_DATA_UNAVAILABLE / COMMANDERS_FAILED
+      responses:
+        "200":
+          description: 一位主将
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResolvedCommander" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /api/v1/resolve-commanders:
+    post:
+      tags: [cards]
+      operationId: resolveCommanders
+      summary: 把主将名称解析为完整资料并合并色组
+      description: |
+        可能的错误 code：
+        - 400：INVALID_JSON / COMMANDER_REQUIRED / COMMANDER_NOT_LEGAL / COMMANDER_PAIR_INVALID
+        - 404：COMMANDER_NOT_FOUND
+        - 502：RANDOM_COMMANDER_UNAVAILABLE / CARD_DATA_UNAVAILABLE / COMMANDERS_FAILED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResolveCommandersRequest" }
+      responses:
+        "200":
+          description: 解析结果与合并色组
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResolveCommandersResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+components:
+  responses:
+    BadRequest:
+      description: 请求不合法；code 见各端点 description
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    NotFound:
+      description: 资源不存在（如主将名拼写无匹配）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    RateLimited:
+      description: 上游服务限流
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    BadGateway:
+      description: 上游数据源不可用或返回异常
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  schemas:
+    # 200 成功响应的通用规则：sanitize 反射编码会输出结构体全部字段，
+    # 因此下面所有 schema 的属性一律 required；仅 Go 指针字段以 anyOf 标注可空。
+    # ---- 信封 ----
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          additionalProperties: false
+          properties:
+            code: { type: string }
+            message: { type: string }
+
+    # ---- 请求体 ----
+    AnalyzeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        url: { type: string, description: Moxfield 公开牌组地址 }
+        decklist: { type: string, description: 粘贴的牌表文本；与 url 同时提供时优先生效 }
+    CompareSwapRequest:
+      type: object
+      additionalProperties: false
+      required: [decklist, remove_name, add_name]
+      properties:
+        decklist: { type: string }
+        remove_name: { type: string }
+        add_name: { type: string }
+    BuildSuggestRequest:
+      type: object
+      additionalProperties: false
+      required: [commander]
+      properties:
+        commander: { type: string }
+        chosen: { type: array, items: { type: string }, description: 草稿里已加入的卡名 }
+        seen: { type: array, items: { type: string }, description: 最近两次刷新展示过但未选的卡名 }
+        count: { type: integer, description: 期望候选数 }
+    BuildLandsRequest:
+      type: object
+      additionalProperties: false
+      required: [category]
+      properties:
+        commander: { type: string }
+        category: { type: string }
+        color_identity: { type: array, items: { $ref: "#/components/schemas/ManaColor" } }
+    BuildStaplesRequest:
+      type: object
+      additionalProperties: false
+      required: [category]
+      properties:
+        commander: { type: string }
+        category: { type: string }
+        color_identity: { type: array, items: { $ref: "#/components/schemas/ManaColor" } }
+    ResolveCommandersRequest:
+      type: object
+      additionalProperties: false
+      required: [commanders]
+      properties:
+        commanders:
+          type: array
+          minItems: 1
+          items: { type: string }
+
+    # ---- 分析主响应 ----
+    Analysis:
+      type: object
+      required:
+        - status
+        - deck
+        - results
+        - deck_cards
+        - related_cards
+        - combos
+        - combo_suggestions
+        - recommendations
+        - recommendation_keywords
+        - construction_report
+        - manabase
+        - health
+        - canonical_decklist
+        - deck_revision
+        - warnings
+      properties:
+        status: { type: string }
+        deck: { $ref: "#/components/schemas/DeckSummary" }
+        results:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/ProviderResult" }
+          description: 以数据源名为键（commandersalt / edh_power_level / …）
+        deck_cards: { type: array, items: { $ref: "#/components/schemas/DisplayCard" } }
+        related_cards: { type: array, items: { $ref: "#/components/schemas/DisplayCard" } }
+        combos: { type: array, items: { $ref: "#/components/schemas/Combo" } }
+        combo_suggestions: { type: array, items: { $ref: "#/components/schemas/ComboSuggestion" } }
+        recommendations: { type: array, items: { $ref: "#/components/schemas/RecommendationGroup" } }
+        recommendation_keywords: { type: array, items: { type: string } }
+        construction_report:
+          anyOf:
+            - $ref: "#/components/schemas/ConstructionReport"
+            - type: "null"
+          description: 构筑分类失败时为 null
+        manabase:
+          anyOf:
+            - $ref: "#/components/schemas/ManabaseReport"
+            - type: "null"
+          description: 法术力基础分析失败时为 null
+        health:
+          anyOf:
+            - $ref: "#/components/schemas/HealthResult"
+            - type: "null"
+          description: 健康度评估失败时为 null
+        canonical_decklist: { type: string }
+        deck_revision: { type: string, description: 牌表内容哈希，可用作幂等/缓存键 }
+        warnings: { type: array, items: { type: string } }
+    DeckSummary:
+      type: object
+      required: [id, name, commanders, card_count]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        commanders: { type: array, items: { type: string } }
+        card_count: { type: integer }
+    ProviderResult:
+      type: object
+      required: [status, metrics, error]
+      properties:
+        status: { type: string, description: 数据源状态（ok / 出错时的描述） }
+        metrics:
+          type: object
+          additionalProperties: true
+          description: 数据源自定义指标，各源结构不同
+        error:
+          anyOf:
+            - $ref: "#/components/schemas/ProviderError"
+            - type: "null"
+    ProviderError:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+
+    # ---- 卡牌与组合 ----
+    Card:
+      type: object
+      required:
+        - oracle_id
+        - name
+        - printed_name
+        - mana_cost
+        - type_line
+        - oracle_text
+        - color_identity
+        - keywords
+        - legalities
+        - image_normal
+        - image_small
+        - layout
+        - faces
+        - cmc
+        - produced_mana
+        - power
+        - game_changer
+        - chinese_name
+        - chinese_type_line
+        - chinese_oracle_text
+      properties:
+        oracle_id: { type: string }
+        name: { type: string }
+        printed_name: { type: string }
+        mana_cost: { type: string }
+        type_line: { type: string }
+        oracle_text: { type: string }
+        color_identity: { type: array, items: { $ref: "#/components/schemas/ManaColor" } }
+        keywords: { type: array, items: { type: string } }
+        legalities: { type: object, additionalProperties: { type: string } }
+        image_normal: { type: string, format: uri }
+        image_small: { type: string, format: uri }
+        layout: { type: string }
+        faces: { type: array, items: { $ref: "#/components/schemas/CardFace" } }
+        cmc: { type: number }
+        produced_mana: { type: array, items: { $ref: "#/components/schemas/ManaColor" } }
+        power: { type: string }
+        game_changer:
+          type: boolean
+          description: 是否在 Commander Game Changers 名单（以 Scryfall 实时字段为准）
+        chinese_name: { type: string }
+        chinese_type_line: { type: string }
+        chinese_oracle_text: { type: string }
+    CardFace:
+      type: object
+      required: [name, printed_name, mana_cost, type_line, oracle_text, image_normal, image_small, game_changer, power]
+      properties:
+        name: { type: string }
+        printed_name: { type: string }
+        mana_cost: { type: string }
+        type_line: { type: string }
+        oracle_text: { type: string }
+        image_normal: { type: string, format: uri }
+        image_small: { type: string, format: uri }
+        game_changer: { type: boolean }
+        power: { type: string }
+    ManaColor:
+      type: string
+      enum: [W, U, B, R, G, C]
+    DisplayCard:
+      type: object
+      required: [card, quantity, commander, land, roles]
+      properties:
+        card: { $ref: "#/components/schemas/Card" }
+        quantity: { type: integer }
+        commander: { type: boolean }
+        land: { type: boolean }
+        roles: { type: array, items: { type: string }, description: 命中的构筑指标 id（ramp/wincon/…） }
+    Combo:
+      type: object
+      required: [name, components, result, steps, sources, source_url]
+      properties:
+        name: { type: string }
+        components: { type: array, items: { $ref: "#/components/schemas/DisplayCard" } }
+        result: { type: string }
+        steps: { type: array, items: { type: string } }
+        sources: { type: array, items: { type: string } }
+        source_url: { type: string, format: uri }
+    ComboSuggestion:
+      type: object
+      required: [name, category, result, owned, missing, source_url]
+      properties:
+        name: { type: string }
+        category:
+          type: string
+          enum: [win, lifeloss, mana, turns, mill, other]
+        result: { type: string, description: 成组合后产生的效果描述 }
+        owned: { type: array, items: { $ref: "#/components/schemas/DisplayCard" } }
+        missing: { type: array, items: { $ref: "#/components/schemas/DisplayCard" } }
+        source_url: { type: string, format: uri }
+
+    # ---- 构筑推荐 ----
+    RecommendationGroup:
+      type: object
+      required: [header, tag, cards]
+      properties:
+        header: { type: string }
+        tag: { type: string }
+        cards: { type: array, items: { $ref: "#/components/schemas/RecommendedCard" } }
+    RecommendedCard:
+      type: object
+      required: [card, synergy, inclusion_rate, reason, source_url, keywords, fills]
+      properties:
+        card: { $ref: "#/components/schemas/Card" }
+        synergy: { type: number }
+        inclusion_rate: { type: number }
+        reason: { type: string }
+        source_url: { type: string, format: uri }
+        keywords: { type: array, items: { type: string } }
+        fills: { type: array, items: { $ref: "#/components/schemas/RecommendationFill" } }
+    RecommendationFill:
+      type: object
+      required: [id, label, gap, reason]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        gap: { type: integer }
+        reason: { type: string }
+
+    # ---- 构筑报告 ----
+    ConstructionReport:
+      type: object
+      required: [metrics, wincon_combo_count]
+      properties:
+        metrics: { type: array, items: { $ref: "#/components/schemas/Metric" } }
+        wincon_combo_count: { type: integer, description: Spellbook 制胜组合数，参与胜负手指标 }
+    Metric:
+      type: object
+      required: [id, label, target, actual, gap, status, coverage, incomplete, cards]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        target: { type: integer }
+        actual: { type: integer }
+        gap: { type: integer }
+        status: { type: string }
+        coverage: { type: number }
+        incomplete: { type: boolean }
+        cards: { type: array, items: { $ref: "#/components/schemas/ClassifiedCard" } }
+    ClassifiedCard:
+      type: object
+      required: [name, quantity, reason, counts]
+      properties:
+        name: { type: string }
+        quantity: { type: integer }
+        reason: { type: string }
+        counts: { type: object, additionalProperties: { type: integer } }
+
+    # ---- 法术力基础 ----
+    ManabaseReport:
+      type: object
+      required:
+        - actual_lands
+        - target_lands
+        - land_delta
+        - average_mana_value
+        - ramp_and_draw_under_three
+        - fast_mana
+        - median_mana_value
+        - average_mana_value_no_lands
+        - median_mana_value_no_lands
+        - total_mana_value
+        - cost_counts
+        - color_pips
+        - land_color_pips
+        - colorless_pips
+        - color_findings
+      properties:
+        actual_lands: { type: integer }
+        target_lands: { type: number }
+        land_delta: { type: number }
+        average_mana_value: { type: number }
+        ramp_and_draw_under_three: { type: integer }
+        fast_mana: { type: integer }
+        median_mana_value: { type: number }
+        average_mana_value_no_lands: { type: number }
+        median_mana_value_no_lands: { type: number }
+        total_mana_value: { type: integer }
+        cost_counts: { type: array, items: { $ref: "#/components/schemas/CostCount" } }
+        color_pips: { type: object, additionalProperties: { type: integer } }
+        land_color_pips: { type: object, additionalProperties: { type: integer } }
+        colorless_pips: { type: integer }
+        color_findings: { type: array, items: { $ref: "#/components/schemas/ColorFinding" } }
+    CostCount:
+      type: object
+      required: [mana_value, label, count, permanent_count]
+      properties:
+        mana_value: { type: integer }
+        label: { type: string }
+        count: { type: integer }
+        permanent_count: { type: integer }
+    ColorFinding:
+      type: object
+      required: [color, actual_sources, required_sources, driving_spell]
+      properties:
+        color: { $ref: "#/components/schemas/ManaColor" }
+        actual_sources: { type: number }
+        required_sources: { type: integer }
+        driving_spell: { type: string }
+
+    # ---- 健康 ----
+    HealthResult:
+      type: object
+      required: [score, grade, reasons]
+      properties:
+        score: { type: integer, minimum: 0, maximum: 100 }
+        grade: { type: string, description: 内部分级；前端只展示 score，不展示字母 }
+        reasons: { type: array, items: { $ref: "#/components/schemas/HealthReason" } }
+    HealthReason:
+      type: object
+      required: [label, detail, score_penalty]
+      properties:
+        label: { type: string }
+        detail: { type: string }
+        score_penalty: { type: number }
+
+    # ---- 换牌比较 ----
+    SwapComparison:
+      type: object
+      required: [removed, added, before, after, deltas, cut_reasons, legality, updated_decklist, deck_revision]
+      properties:
+        removed: { $ref: "#/components/schemas/SwapCard" }
+        added: { $ref: "#/components/schemas/SwapCard" }
+        before: { $ref: "#/components/schemas/SwapDeckState" }
+        after: { $ref: "#/components/schemas/SwapDeckState" }
+        deltas: { type: array, items: { $ref: "#/components/schemas/SwapMetricDelta" } }
+        cut_reasons: { type: array, items: { $ref: "#/components/schemas/SwapCutReason" } }
+        legality: { $ref: "#/components/schemas/SwapLegality" }
+        updated_decklist: { type: string }
+        deck_revision: { type: string }
+    SwapCard:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    SwapDeckState:
+      type: object
+      required: [card_count, construction_report]
+      properties:
+        card_count: { type: integer }
+        construction_report: { $ref: "#/components/schemas/ConstructionReport" }
+    SwapMetricDelta:
+      type: object
+      required: [id, label, before, after, delta, target]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        before: { type: integer }
+        after: { type: integer }
+        delta: { type: integer }
+        target: { type: integer }
+    SwapCutReason:
+      type: object
+      required: [role, label, reasons]
+      properties:
+        role: { type: string }
+        label: { type: string }
+        reasons: { type: array, items: { type: string } }
+    SwapLegality:
+      type: object
+      required: [valid, card_count_valid, commander_count_valid, color_identity, issues]
+      properties:
+        valid: { type: boolean }
+        card_count_valid: { type: boolean }
+        commander_count_valid: { type: boolean }
+        color_identity: { type: array, items: { $ref: "#/components/schemas/ManaColor" } }
+        issues: { type: array, items: { type: string } }
+
+    # ---- 组牌与主将 ----
+    BuildSuggestResponse:
+      type: object
+      required: [commander_name, color_identity, candidates]
+      properties:
+        commander_name: { type: string }
+        color_identity: { type: array, items: { $ref: "#/components/schemas/ManaColor" } }
+        candidates: { type: array, items: { $ref: "#/components/schemas/BuildCandidate" } }
+    BuildCandidate:
+      type: object
+      required: [name, synergy, inclusion_rate, fills, card, source_url, game_changer]
+      properties:
+        name: { type: string }
+        synergy: { type: number }
+        inclusion_rate: { type: number }
+        fills: { type: array, items: { type: string } }
+        card: { $ref: "#/components/schemas/Card" }
+        source_url: { type: string, format: uri }
+        game_changer: { type: boolean }
+    LandCategoryResult:
+      type: object
+      required: [category_id, category_label, lands]
+      properties:
+        category_id: { type: string }
+        category_label: { type: string }
+        lands: { type: array, items: { $ref: "#/components/schemas/LandCategoryEntry" } }
+    LandCategoryEntry:
+      type: object
+      required: [name, card]
+      properties:
+        name: { type: string }
+        card: { $ref: "#/components/schemas/Card" }
+    StapleCategoryResult:
+      type: object
+      required: [category_id, category_label, staples]
+      properties:
+        category_id: { type: string }
+        category_label: { type: string }
+        staples: { type: array, items: { $ref: "#/components/schemas/StapleCategoryEntry" } }
+    StapleCategoryEntry:
+      type: object
+      required: [name, card, game_changer]
+      properties:
+        name: { type: string }
+        card: { $ref: "#/components/schemas/Card" }
+        game_changer: { type: boolean }
+    ResolvedCommander:
+      type: object
+      required: [name, card, color_identity, is_partner]
+      properties:
+        name: { type: string }
+        card: { $ref: "#/components/schemas/Card" }
+        color_identity: { type: array, items: { $ref: "#/components/schemas/ManaColor" } }
+        is_partner: { type: boolean }
+    AutocompleteResponse:
+      type: object
+      required: [suggestions]
+      properties:
+        suggestions: { type: array, items: { type: string } }
+    ResolveCommandersResponse:
+      type: object
+      required: [commanders, color_identity]
+      properties:
+        commanders: { type: array, items: { $ref: "#/components/schemas/ResolvedCommander" } }
+        color_identity: { type: array, items: { $ref: "#/components/schemas/ManaColor" } }

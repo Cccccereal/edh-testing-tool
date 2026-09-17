@@ -1,0 +1,21 @@
+{
+  "path": "/api/v1/commander-autocomplete",
+  "method": "get",
+  "status": 200,
+  "body": {
+    "suggestions": [
+      "Atraxa's Fall",
+      "Atraxi Warden",
+      "Atraxa's Skitterfang",
+      "Atraxa, Grand Unifier",
+      "Atraxa, Praetors' Voice",
+      "Heat Ray",
+      "Cobra Trap",
+      "Hapatra's Mark",
+      "Hydra Trainer",
+      "Kishla Trawlers",
+      "Cloudgoat Ranger",
+      "Peema Trailblazer"
+    ]
+  }
+}

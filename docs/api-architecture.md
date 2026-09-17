@@ -36,12 +36,18 @@
 - 引入轻量中间件链：request log、panic recover、per-route 超时。不引框架，`net/http` + 几个函数足够。
 - 把工作区里已成型的 pytest 黑盒套件（`tests/` + `pytest.ini`，目前未入库）收编进仓库，作为接口行为的回归网。它就是第 2 期的地基。
 
-### 第 2 期：契约化（OpenAPI 作为单一事实源）
+### 第 2 期：契约化（OpenAPI 作为单一事实源）✅ 已落地（2026-09-17）
 
 - 手写 `docs/api/openapi.yaml`（11 个端点规模不大，手写比代码生成更可控），请求/响应/错误码全部落 spec。
 - CI 双向校验：pytest 用 `jsonschema` 断言真实响应符合 spec（防"实现漂移"）；spec 里的路径必须能在路由表里找到（防"文档漂移"）。
 - 前端从 spec 生成类型（`openapi-typescript` → JSDoc `@type` 注解），纯 JS 也能获得编辑器提示，不引入构建链。
 - 改字段的流程从此固定：先改 spec → 双端实现 → 测试守住。
+
+> 落地细节：三道机器校验 = Go 路由同步测试（`internal/api/contract_test.go`）、
+> pytest 契约测试（`tests/fixtures/` 联网录制快照离线复验 + 错误信封活校验）、
+> CI 类型再生成防漂移；请求体 `additionalProperties: false` 对齐 Go 端
+> `DisallowUnknownFields`。实测发现 sanitize 反射编码忽略 `omitempty`（响应字段
+> 恒出现：空切片为 `[]`、指针为 `null`），spec 按实际行为描述并记入其头部「已知偏差」。
 
 ### 第 3 期：分析任务化（行为变化，动 `/analyze`）
 

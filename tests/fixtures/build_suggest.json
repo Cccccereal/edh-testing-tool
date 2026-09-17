@@ -1,0 +1,199 @@
+{
+  "path": "/api/v1/build-suggest",
+  "method": "post",
+  "status": 200,
+  "body": {
+    "candidates": [
+      {
+        "card": {
+          "chinese_name": "",
+          "chinese_oracle_text": "",
+          "chinese_type_line": "",
+          "cmc": 4,
+          "color_identity": [
+            "B",
+            "G"
+          ],
+          "faces": [],
+          "game_changer": false,
+          "image_normal": "https://cards.scryfall.io/normal/front/e/0/e09e9b65-ff0e-4efe-b96a-ede69c96e2ea.jpg?1783926819",
+          "image_small": "https://cards.scryfall.io/small/front/e/0/e09e9b65-ff0e-4efe-b96a-ede69c96e2ea.jpg?1783926819",
+          "keywords": [],
+          "layout": "normal",
+          "legalities": {
+            "alchemy": "not_legal",
+            "brawl": "not_legal",
+            "commander": "legal",
+            "competitivebrawl": "not_legal",
+            "duel": "legal",
+            "future": "not_legal",
+            "gladiator": "not_legal",
+            "historic": "not_legal",
+            "legacy": "legal",
+            "modern": "legal",
+            "oathbreaker": "legal",
+            "oldschool": "not_legal",
+            "pauper": "not_legal",
+            "paupercommander": "not_legal",
+            "penny": "legal",
+            "pioneer": "not_legal",
+            "predh": "not_legal",
+            "premodern": "not_legal",
+            "standard": "not_legal",
+            "standardbrawl": "not_legal",
+            "timeless": "not_legal",
+            "tlr": "not_legal",
+            "vintage": "legal"
+          },
+          "mana_cost": "{2}{B}{G}",
+          "name": "Carth the Lion",
+          "oracle_id": "e0709843-0a91-4a21-9512-d7481707f3c9",
+          "oracle_text": "Whenever Carth enters or a planeswalker you control dies, look at the top seven cards of your library. You may reveal a planeswalker card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.\nPlaneswalkers' loyalty abilities you activate cost an additional [+1] to activate.",
+          "power": "3",
+          "printed_name": "",
+          "produced_mana": [],
+          "type_line": "Legendary Creature — Human Warrior"
+        },
+        "fills": [
+          "plan",
+          "draw_discard"
+        ],
+        "game_changer": false,
+        "inclusion_rate": 0.1419904276116217,
+        "name": "Carth the Lion",
+        "source_url": "https://edhrec.com/cards/carth-the-lion",
+        "synergy": 0.061290880555758584
+      },
+      {
+        "card": {
+          "chinese_name": "",
+          "chinese_oracle_text": "",
+          "chinese_type_line": "",
+          "cmc": 0,
+          "color_identity": [
+            "B",
+            "U"
+          ],
+          "faces": [],
+          "game_changer": false,
+          "image_normal": "https://cards.scryfall.io/normal/front/5/5/5525d6a6-e532-4047-9da4-bfae7927fecc.jpg?1784036860",
+          "image_small": "https://cards.scryfall.io/small/front/5/5/5525d6a6-e532-4047-9da4-bfae7927fecc.jpg?1784036860",
+          "keywords": [],
+          "layout": "normal",
+          "legalities": {
+            "alchemy": "legal",
+            "brawl": "legal",
+            "commander": "legal",
+            "competitivebrawl": "legal",
+            "duel": "legal",
+            "future": "legal",
+            "gladiator": "legal",
+            "historic": "legal",
+            "legacy": "legal",
+            "modern": "legal",
+            "oathbreaker": "legal",
+            "oldschool": "not_legal",
+            "pauper": "not_legal",
+            "paupercommander": "not_legal",
+            "penny": "legal",
+            "pioneer": "legal",
+            "predh": "legal",
+            "premodern": "not_legal",
+            "standard": "legal",
+            "standardbrawl": "legal",
+            "timeless": "legal",
+            "tlr": "legal",
+            "vintage": "legal"
+          },
+          "mana_cost": "",
+          "name": "Watery Grave",
+          "oracle_id": "fc9ec820-4245-4a96-b009-5308a818ca58",
+          "oracle_text": "({T}: Add {U} or {B}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+          "power": "",
+          "printed_name": "",
+          "produced_mana": [
+            "B",
+            "U"
+          ],
+          "type_line": "Land — Island Swamp"
+        },
+        "fills": [
+          "lands"
+        ],
+        "game_changer": false,
+        "inclusion_rate": 0.4578118329101409,
+        "name": "Watery Grave",
+        "source_url": "https://edhrec.com/cards/watery-grave",
+        "synergy": -0.032940557628359346
+      },
+      {
+        "card": {
+          "chinese_name": "",
+          "chinese_oracle_text": "",
+          "chinese_type_line": "",
+          "cmc": 0,
+          "color_identity": [],
+          "faces": [],
+          "game_changer": false,
+          "image_normal": "https://cards.scryfall.io/normal/front/2/2/22017ec2-3552-4865-af76-dba042b141f5.jpg?1783906011",
+          "image_small": "https://cards.scryfall.io/small/front/2/2/22017ec2-3552-4865-af76-dba042b141f5.jpg?1783906011",
+          "keywords": [
+            "Proliferate"
+          ],
+          "layout": "normal",
+          "legalities": {
+            "alchemy": "not_legal",
+            "brawl": "legal",
+            "commander": "legal",
+            "competitivebrawl": "legal",
+            "duel": "legal",
+            "future": "not_legal",
+            "gladiator": "legal",
+            "historic": "legal",
+            "legacy": "legal",
+            "modern": "legal",
+            "oathbreaker": "legal",
+            "oldschool": "not_legal",
+            "pauper": "not_legal",
+            "paupercommander": "not_legal",
+            "penny": "legal",
+            "pioneer": "legal",
+            "predh": "not_legal",
+            "premodern": "not_legal",
+            "standard": "not_legal",
+            "standardbrawl": "not_legal",
+            "timeless": "legal",
+            "tlr": "legal",
+            "vintage": "legal"
+          },
+          "mana_cost": "",
+          "name": "Karn's Bastion",
+          "oracle_id": "9fb8cd81-403a-4988-8f1c-b8eccf8abd9c",
+          "oracle_text": "{T}: Add {C}.\n{4}, {T}: Proliferate. (Choose any number of permanents and/or players, then give each another counter of each kind already there.)",
+          "power": "",
+          "printed_name": "",
+          "produced_mana": [
+            "C"
+          ],
+          "type_line": "Land"
+        },
+        "fills": [
+          "lands",
+          "plan"
+        ],
+        "game_changer": false,
+        "inclusion_rate": 0.5972181650675236,
+        "name": "Karn's Bastion",
+        "source_url": "https://edhrec.com/cards/karns-bastion",
+        "synergy": 0.23795797382444356
+      }
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "U",
+      "W"
+    ],
+    "commander_name": "Atraxa, Praetors' Voice"
+  }
+}

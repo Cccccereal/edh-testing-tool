@@ -19,8 +19,22 @@ jobs:
           cache: true
 
       # 含前端镜像一致性检查（cmd/mobile/web 必须严格跟随 cmd/server/web）
-      - name: Go tests (unit + fuzz seeds + web mirror)
+      # 与接口契约路由同步检查（internal/api 路由表 ↔ docs/api/openapi.yaml paths）
+      - name: Go tests (unit + fuzz seeds + web mirror + route contract)
         run: go test ./...
+
+      # 契约类型再生成防漂移：api-types.d.ts 必须与 docs/api/openapi.yaml 一致
+      # （改接口只改生成文件不改 spec 的话，这里会红）
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Regenerate API types and check for drift
+        run: |
+          npm ci
+          npm run gen:api
+          git diff --exit-code cmd/server/web/api-types.d.ts
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -28,7 +42,8 @@ jobs:
           python-version: "3.12"
 
       - name: Install pytest
-        run: pip install pytest requests
+        run: pip install pytest requests pyyaml jsonschema
 
+      # 离线黑盒测试：含契约测试（录制 fixtures 对 spec 校验 + 错误信封活校验）
       - name: API black-box tests (offline)
         run: pytest -q

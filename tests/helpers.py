@@ -34,3 +34,17 @@ def error_code(resp: requests.Response) -> str:
     assert set(body["error"]) == {"code", "message"}, f"error 字段结构不符: {body['error']}"
     assert body["error"]["message"], "error.message 不应为空"
     return body["error"]["code"]
+
+
+def response_schema(spec: dict, path: str, method: str, status: int) -> dict:
+    """从契约里取出某端点某状态码的响应 schema（小写 method）。"""
+    return spec["paths"][path][method]["responses"][str(status)]["content"]["application/json"]["schema"]
+
+
+def validate_against_contract(validator_factory, schema: dict, body, label: str) -> None:
+    """按契约校验响应体；失败时列出前 10 条路径化差异，便于定位字段。"""
+    errors = list(validator_factory(schema).iter_errors(body))
+    assert not errors, f"{label} 不符合契约:\n" + "\n".join(
+        f"  {'/'.join(str(p) for p in err.absolute_path) or '<root>'}: {err.message}"
+        for err in errors[:10]
+    )

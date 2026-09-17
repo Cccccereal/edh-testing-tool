@@ -1,0 +1,487 @@
+{
+  "path": "/api/v1/compare-swap",
+  "method": "post",
+  "status": 200,
+  "body": {
+    "added": {
+      "name": "Mind Stone"
+    },
+    "after": {
+      "card_count": 25,
+      "construction_report": {
+        "metrics": [
+          {
+            "actual": 20,
+            "cards": [
+              {
+                "counts": {
+                  "land": 20
+                },
+                "name": "Plains",
+                "quantity": 20,
+                "reason": "Net-positive mana source (land)"
+              }
+            ],
+            "coverage": 0.5263157894736842,
+            "gap": 18,
+            "id": "lands",
+            "incomplete": false,
+            "label": "正向法力",
+            "status": "short",
+            "target": 38
+          },
+          {
+            "actual": 2,
+            "cards": [
+              {
+                "counts": {},
+                "name": "Sram, Senior Edificer",
+                "quantity": 1,
+                "reason": "Heuristic plan/synergy card"
+              },
+              {
+                "counts": {},
+                "name": "Heliod, Sun-Crowned",
+                "quantity": 1,
+                "reason": "Heuristic plan/synergy card"
+              }
+            ],
+            "coverage": 0.06666666666666667,
+            "gap": 28,
+            "id": "plan",
+            "incomplete": false,
+            "label": "计划相关",
+            "status": "short",
+            "target": 30
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 6,
+            "id": "mass_interaction",
+            "incomplete": false,
+            "label": "群体干扰",
+            "status": "short",
+            "target": 6
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 12,
+            "id": "single_interaction",
+            "incomplete": false,
+            "label": "单体干扰",
+            "status": "short",
+            "target": 12
+          },
+          {
+            "actual": 2,
+            "cards": [
+              {
+                "counts": {},
+                "name": "Sram, Senior Edificer",
+                "quantity": 1,
+                "reason": "Draws cards or causes discard"
+              },
+              {
+                "counts": {},
+                "name": "Mind Stone",
+                "quantity": 1,
+                "reason": "Draws cards or causes discard"
+              }
+            ],
+            "coverage": 0.16666666666666666,
+            "gap": 10,
+            "id": "draw_discard",
+            "incomplete": false,
+            "label": "牌差件",
+            "status": "short",
+            "target": 12
+          },
+          {
+            "actual": 2,
+            "cards": [
+              {
+                "counts": {},
+                "name": "Basalt Monolith",
+                "quantity": 1,
+                "reason": "Produces mana, finds lands, or reduces cost"
+              },
+              {
+                "counts": {},
+                "name": "Mind Stone",
+                "quantity": 1,
+                "reason": "Produces mana, finds lands, or reduces cost"
+              }
+            ],
+            "coverage": 0.2,
+            "gap": 8,
+            "id": "ramp",
+            "incomplete": false,
+            "label": "加速",
+            "status": "short",
+            "target": 10
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 5,
+            "id": "tutors",
+            "incomplete": false,
+            "label": "检索",
+            "status": "short",
+            "target": 5
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 4,
+            "id": "wincon",
+            "incomplete": false,
+            "label": "胜负手",
+            "status": "short",
+            "target": 4
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 5,
+            "id": "finisher",
+            "incomplete": false,
+            "label": "终结者",
+            "status": "short",
+            "target": 5
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 6,
+            "id": "evasive",
+            "incomplete": false,
+            "label": "穿透",
+            "status": "short",
+            "target": 6
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 4,
+            "id": "board_wipe",
+            "incomplete": false,
+            "label": "清场",
+            "status": "short",
+            "target": 4
+          }
+        ],
+        "wincon_combo_count": 0
+      }
+    },
+    "before": {
+      "card_count": 25,
+      "construction_report": {
+        "metrics": [
+          {
+            "actual": 20,
+            "cards": [
+              {
+                "counts": {
+                  "land": 20
+                },
+                "name": "Plains",
+                "quantity": 20,
+                "reason": "Net-positive mana source (land)"
+              }
+            ],
+            "coverage": 0.5263157894736842,
+            "gap": 18,
+            "id": "lands",
+            "incomplete": false,
+            "label": "正向法力",
+            "status": "short",
+            "target": 38
+          },
+          {
+            "actual": 2,
+            "cards": [
+              {
+                "counts": {},
+                "name": "Sram, Senior Edificer",
+                "quantity": 1,
+                "reason": "Heuristic plan/synergy card"
+              },
+              {
+                "counts": {},
+                "name": "Heliod, Sun-Crowned",
+                "quantity": 1,
+                "reason": "Heuristic plan/synergy card"
+              }
+            ],
+            "coverage": 0.06666666666666667,
+            "gap": 28,
+            "id": "plan",
+            "incomplete": false,
+            "label": "计划相关",
+            "status": "short",
+            "target": 30
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 6,
+            "id": "mass_interaction",
+            "incomplete": false,
+            "label": "群体干扰",
+            "status": "short",
+            "target": 6
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 12,
+            "id": "single_interaction",
+            "incomplete": false,
+            "label": "单体干扰",
+            "status": "short",
+            "target": 12
+          },
+          {
+            "actual": 1,
+            "cards": [
+              {
+                "counts": {},
+                "name": "Sram, Senior Edificer",
+                "quantity": 1,
+                "reason": "Draws cards or causes discard"
+              }
+            ],
+            "coverage": 0.08333333333333333,
+            "gap": 11,
+            "id": "draw_discard",
+            "incomplete": false,
+            "label": "牌差件",
+            "status": "short",
+            "target": 12
+          },
+          {
+            "actual": 2,
+            "cards": [
+              {
+                "counts": {},
+                "name": "Basalt Monolith",
+                "quantity": 1,
+                "reason": "Produces mana, finds lands, or reduces cost"
+              },
+              {
+                "counts": {},
+                "name": "Sol Ring",
+                "quantity": 1,
+                "reason": "Produces mana, finds lands, or reduces cost"
+              }
+            ],
+            "coverage": 0.2,
+            "gap": 8,
+            "id": "ramp",
+            "incomplete": false,
+            "label": "加速",
+            "status": "short",
+            "target": 10
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 5,
+            "id": "tutors",
+            "incomplete": false,
+            "label": "检索",
+            "status": "short",
+            "target": 5
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 4,
+            "id": "wincon",
+            "incomplete": false,
+            "label": "胜负手",
+            "status": "short",
+            "target": 4
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 5,
+            "id": "finisher",
+            "incomplete": false,
+            "label": "终结者",
+            "status": "short",
+            "target": 5
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 6,
+            "id": "evasive",
+            "incomplete": false,
+            "label": "穿透",
+            "status": "short",
+            "target": 6
+          },
+          {
+            "actual": 0,
+            "cards": [],
+            "coverage": 0,
+            "gap": 4,
+            "id": "board_wipe",
+            "incomplete": false,
+            "label": "清场",
+            "status": "short",
+            "target": 4
+          }
+        ],
+        "wincon_combo_count": 0
+      }
+    },
+    "cut_reasons": [
+      {
+        "label": "加速",
+        "reasons": [
+          "跟主将的玩法没什么协同"
+        ],
+        "role": "ramp"
+      },
+      {
+        "label": "计划相关",
+        "reasons": [
+          "单卡本身强度一般，模型不会优先选它"
+        ],
+        "role": "plan"
+      },
+      {
+        "label": "加速",
+        "reasons": [
+          "跟主将的玩法没什么协同"
+        ],
+        "role": "ramp"
+      }
+    ],
+    "deck_revision": "c2081eb5adf6d9e7",
+    "deltas": [
+      {
+        "after": 20,
+        "before": 20,
+        "delta": 0,
+        "id": "lands",
+        "label": "正向法力",
+        "target": 38
+      },
+      {
+        "after": 2,
+        "before": 2,
+        "delta": 0,
+        "id": "plan",
+        "label": "计划相关",
+        "target": 30
+      },
+      {
+        "after": 0,
+        "before": 0,
+        "delta": 0,
+        "id": "mass_interaction",
+        "label": "群体干扰",
+        "target": 6
+      },
+      {
+        "after": 0,
+        "before": 0,
+        "delta": 0,
+        "id": "single_interaction",
+        "label": "单体干扰",
+        "target": 12
+      },
+      {
+        "after": 2,
+        "before": 1,
+        "delta": 1,
+        "id": "draw_discard",
+        "label": "牌差件",
+        "target": 12
+      },
+      {
+        "after": 2,
+        "before": 2,
+        "delta": 0,
+        "id": "ramp",
+        "label": "加速",
+        "target": 10
+      },
+      {
+        "after": 0,
+        "before": 0,
+        "delta": 0,
+        "id": "tutors",
+        "label": "检索",
+        "target": 5
+      },
+      {
+        "after": 0,
+        "before": 0,
+        "delta": 0,
+        "id": "wincon",
+        "label": "胜负手",
+        "target": 4
+      },
+      {
+        "after": 0,
+        "before": 0,
+        "delta": 0,
+        "id": "finisher",
+        "label": "终结者",
+        "target": 5
+      },
+      {
+        "after": 0,
+        "before": 0,
+        "delta": 0,
+        "id": "evasive",
+        "label": "穿透",
+        "target": 6
+      },
+      {
+        "after": 0,
+        "before": 0,
+        "delta": 0,
+        "id": "board_wipe",
+        "label": "清场",
+        "target": 4
+      }
+    ],
+    "legality": {
+      "card_count_valid": false,
+      "color_identity": [
+        "W"
+      ],
+      "commander_count_valid": true,
+      "issues": [
+        "牌组当前为 25 张；标准 Commander 牌组通常为 100 张。"
+      ],
+      "valid": false
+    },
+    "removed": {
+      "name": "Sol Ring"
+    },
+    "updated_decklist": "Commander\n1 Sram, Senior Edificer\n\nDeck\n1 Basalt Monolith\n1 Heliod, Sun-Crowned\n1 Mind Stone\n20 Plains\n1 Walking Ballista"
+  }
+}

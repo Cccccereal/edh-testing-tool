@@ -1,0 +1,11 @@
+{
+  "path": "/api/v1/card-autocomplete",
+  "method": "get",
+  "status": 200,
+  "body": {
+    "suggestions": [
+      "Sol Ring",
+      "Sol Ring"
+    ]
+  }
+}

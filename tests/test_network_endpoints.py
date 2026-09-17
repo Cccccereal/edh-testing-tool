@@ -2,16 +2,80 @@
 
 默认被 pytest.ini 的 addopts（-m "not network"）跳过；联网环境运行：
 
-    pytest -m network
+    pytest -m network            # 联调冒烟 + 实时成功响应对契约校验
+    pytest -m network --update-fixtures   # 上述用例之外，把成功响应录制进 tests/fixtures/
 
 这些用例依赖外部服务的可用性与稳定性，失败不代表服务端代码有缺陷。
 """
 
+import json
+import pathlib
+
 import pytest
 
-from helpers import error_code
+from helpers import error_code, response_schema, validate_against_contract
 
 pytestmark = pytest.mark.network
+
+# analyze / compare-swap 共用的最小 Sram 牌表（有色主将 + 无色神器 + 纯地），
+# 能覆盖 manabase / 构筑 / 健康度全部分析支路。
+SRAM_DECKLIST = (
+    "Commander\n"
+    "1 Sram, Senior Edificer\n"
+    "\n"
+    "Deck\n"
+    "1 Basalt Monolith\n"
+    "1 Heliod, Sun-Crowned\n"
+    "1 Walking Ballista\n"
+    "1 Sol Ring\n"
+    "20 Plains\n"
+)
+
+# 每个契约端点一条成功请求：(fixture 文件名, method, path, 额外 kwargs, 超时秒)。
+# analyze 及组牌工具要串行访问第三方站点，超时放宽到服务端 REQUEST_TIMEOUT 以上。
+CAPTURES = [
+    ("healthz.json", "GET", "/healthz", {}, 15),
+    ("analyze.json", "POST", "/api/v1/analyze", {"json": {"decklist": SRAM_DECKLIST}}, 180),
+    (
+        "compare_swap.json",
+        "POST",
+        "/api/v1/compare-swap",
+        {"json": {"decklist": SRAM_DECKLIST, "remove_name": "Sol Ring", "add_name": "Mind Stone"}},
+        180,
+    ),
+    ("card.json", "GET", "/api/v1/card", {"params": {"name": "Sol Ring"}}, 60),
+    (
+        "build_suggest.json",
+        "POST",
+        "/api/v1/build-suggest",
+        {"json": {"commander": "Atraxa, Praetors' Voice", "count": 3}},
+        180,
+    ),
+    (
+        "build_lands.json",
+        "POST",
+        "/api/v1/build-lands",
+        {"json": {"category": "fetch", "color_identity": ["W", "U"]}},
+        60,
+    ),
+    (
+        "build_staples.json",
+        "POST",
+        "/api/v1/build-staples",
+        {"json": {"category": "ramp", "color_identity": ["W", "U"]}},
+        60,
+    ),
+    ("commander_autocomplete.json", "GET", "/api/v1/commander-autocomplete", {"params": {"q": "atra"}}, 60),
+    ("card_autocomplete.json", "GET", "/api/v1/card-autocomplete", {"params": {"q": "sol ring"}}, 60),
+    ("random_commander.json", "POST", "/api/v1/random-commander", {}, 120),
+    (
+        "resolve_commanders.json",
+        "POST",
+        "/api/v1/resolve-commanders",
+        {"json": {"commanders": ["Atraxa, Praetors' Voice"]}},
+        60,
+    ),
+]
 
 
 def test_commander_autocomplete(api):
@@ -100,3 +164,45 @@ def test_analyze_moxfield_deck_not_found(api):
         "RATE_LIMITED",
         "ANALYSIS_FAILED",
     }
+
+
+def test_live_success_responses_match_contract(api, spec, spec_validator):
+    """联网实时校验：每个端点的真实 200 响应逐字段符合契约。
+
+    与离线的 test_contract.py 互补——那边校验录制下来的快照，这边校验当前
+    上游数据（新卡牌字段、上游返回变化都可能让响应漂移）。
+    """
+    for _, method, path, kwargs, timeout in CAPTURES:
+        resp = api.request(method, path, timeout=timeout, **kwargs)
+        assert resp.status_code == 200, f"{method} {path}: {resp.text[:300]}"
+        schema = response_schema(spec, path, method.lower(), 200)
+        validate_against_contract(spec_validator, schema, resp.json(), f"{method} {path}")
+
+
+def test_capture_fixtures(request, api, spec, spec_validator):
+    """--update-fixtures 时录制全部端点的成功响应到 tests/fixtures/。
+
+    录制前先对契约校验一遍，录制后清掉不再在 CAPTURES 名单里的陈旧文件。
+    产物提交进仓库，供离线契约测试（test_contract.py）在 CI 使用。
+    """
+    if not request.config.getoption("--update-fixtures"):
+        pytest.skip("加 --update-fixtures 才录制 fixtures")
+
+    out_dir = pathlib.Path(__file__).resolve().parent / "fixtures"
+    out_dir.mkdir(exist_ok=True)
+    captured_names = set()
+    for filename, method, path, kwargs, timeout in CAPTURES:
+        resp = api.request(method, path, timeout=timeout, **kwargs)
+        assert resp.status_code == 200, f"{method} {path}: {resp.text[:300]}"
+        body = resp.json()
+        schema = response_schema(spec, path, method.lower(), 200)
+        validate_against_contract(spec_validator, schema, body, f"{method} {path}（录制时校验）")
+        record = {"path": path, "method": method.lower(), "status": 200, "body": body}
+        (out_dir / filename).write_text(
+            json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        captured_names.add(filename)
+
+    for stale in out_dir.glob("*.json"):
+        if stale.name not in captured_names:
+            stale.unlink()

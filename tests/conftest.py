@@ -21,6 +21,42 @@ import requests
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 STARTUP_TIMEOUT = 60.0
 
+SPEC_PATH = REPO_ROOT / "docs" / "api" / "openapi.yaml"
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--update-fixtures",
+        action="store_true",
+        default=False,
+        help="network 用例把真实成功响应录制到 tests/fixtures/，供离线契约测试对 spec 校验",
+    )
+
+
+@pytest.fixture(scope="session")
+def spec():
+    """docs/api/openapi.yaml 解析结果——接口契约的单一事实源。"""
+    import yaml
+
+    with SPEC_PATH.open(encoding="utf-8") as fh:
+        return yaml.safe_load(fh)
+
+
+@pytest.fixture(scope="session")
+def spec_validator(spec):
+    """返回 make(schema)：以整份 spec 为 $ref 解析基准构造 JSON Schema 校验器。"""
+    import warnings
+
+    with warnings.catch_warnings():
+        # RefResolver 在 jsonschema 4.x 标记弃用但仍可用；referencing 库迁移另行安排
+        warnings.simplefilter("ignore", DeprecationWarning)
+        from jsonschema import Draft202012Validator, RefResolver
+
+        def make(schema):
+            return Draft202012Validator(schema, resolver=RefResolver.from_schema(spec))
+
+        return make
+
 
 def _free_port() -> int:
     with socket.socket() as sock:

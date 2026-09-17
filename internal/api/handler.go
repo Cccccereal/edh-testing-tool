@@ -18,20 +18,45 @@ type Handler struct {
 	requestTimeout time.Duration
 }
 
+// routes is the single place listing every API route. The contract test
+// (contract_test.go) compares it against docs/api/openapi.yaml in both
+// directions, so a route added here without a spec entry (or vice versa)
+// fails the build. Static frontend serving ("GET /") is intentionally not a
+// contract route.
+var routes = []struct{ method, path string }{
+	{"GET", "/healthz"},
+	{"POST", "/api/v1/analyze"},
+	{"POST", "/api/v1/compare-swap"},
+	{"GET", "/api/v1/card"},
+	{"POST", "/api/v1/build-suggest"},
+	{"POST", "/api/v1/build-lands"},
+	{"POST", "/api/v1/build-staples"},
+	{"GET", "/api/v1/commander-autocomplete"},
+	{"GET", "/api/v1/card-autocomplete"},
+	{"POST", "/api/v1/random-commander"},
+	{"POST", "/api/v1/resolve-commanders"},
+}
+
 func NewHandler(analyzer *service.Analyzer, logger *slog.Logger, requestTimeout time.Duration, static http.Handler) http.Handler {
 	handler := &Handler{analyzer: analyzer, logger: logger, requestTimeout: requestTimeout}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", handler.health)
-	mux.HandleFunc("POST /api/v1/analyze", handler.analyze)
-	mux.HandleFunc("POST /api/v1/compare-swap", handler.compareSwap)
-	mux.HandleFunc("GET /api/v1/card", handler.lookupCard)
-	mux.HandleFunc("POST /api/v1/build-suggest", handler.buildSuggest)
-	mux.HandleFunc("POST /api/v1/build-lands", handler.buildLands)
-	mux.HandleFunc("POST /api/v1/build-staples", handler.buildStaples)
-	mux.HandleFunc("GET /api/v1/commander-autocomplete", handler.commanderAutocomplete)
-	mux.HandleFunc("GET /api/v1/card-autocomplete", handler.cardAutocomplete)
-	mux.HandleFunc("POST /api/v1/random-commander", handler.randomCommander)
-	mux.HandleFunc("POST /api/v1/resolve-commanders", handler.resolveCommanders)
+	handlers := map[string]http.HandlerFunc{
+		"GET /healthz":                       handler.health,
+		"POST /api/v1/analyze":               handler.analyze,
+		"POST /api/v1/compare-swap":          handler.compareSwap,
+		"GET /api/v1/card":                   handler.lookupCard,
+		"POST /api/v1/build-suggest":         handler.buildSuggest,
+		"POST /api/v1/build-lands":           handler.buildLands,
+		"POST /api/v1/build-staples":         handler.buildStaples,
+		"GET /api/v1/commander-autocomplete": handler.commanderAutocomplete,
+		"GET /api/v1/card-autocomplete":      handler.cardAutocomplete,
+		"POST /api/v1/random-commander":      handler.randomCommander,
+		"POST /api/v1/resolve-commanders":    handler.resolveCommanders,
+	}
+	for _, route := range routes {
+		key := route.method + " " + route.path
+		mux.HandleFunc(key, handlers[key])
+	}
 	mux.Handle("GET /", static)
 	return securityHeaders(recoverPanics(requestLogger(logger, mux)))
 }
