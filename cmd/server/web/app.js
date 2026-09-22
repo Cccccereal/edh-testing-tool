@@ -578,10 +578,12 @@ function addStapleCard(name, card, gameChanger) {
   buildCards.push(entry);
   renderBuilderSidebar();
   if (isBuilderComplete()) {
+    builderComplete.hidden = false;
     if (!hasShownCompletePulse) {
       hasShownCompletePulse = true;
       builderSidebar.classList.add('complete-pulse');
       setTimeout(() => builderSidebar.classList.remove('complete-pulse'), 2000);
+      builderComplete.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   } else {
     refreshIfCandidateCollides();
@@ -672,10 +674,12 @@ function addLandCard(name) {
   buildCards.push({ name, card: { name, type_line: 'Land' } });
   renderBuilderSidebar();
   if (isBuilderComplete()) {
+    builderComplete.hidden = false;
     if (!hasShownCompletePulse) {
       hasShownCompletePulse = true;
       builderSidebar.classList.add('complete-pulse');
       setTimeout(() => builderSidebar.classList.remove('complete-pulse'), 2000);
+      builderComplete.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   } else {
     refreshIfCandidateCollides();
@@ -869,10 +873,12 @@ function addBuildCard(candidate) {
   buildCards.push(entry);
   renderBuilderSidebar();
   if (isBuilderComplete()) {
+    builderComplete.hidden = false;
     if (!hasShownCompletePulse) {
       hasShownCompletePulse = true;
       builderSidebar.classList.add('complete-pulse');
       setTimeout(() => builderSidebar.classList.remove('complete-pulse'), 2000);
+      builderComplete.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   } else {
     // Fetch a fresh random hand immediately; the un-picked cards vanish with it.
@@ -889,10 +895,12 @@ function addBasicLand(type) {
   buildCards.push({ name: type, card: { name: type, type_line: `Basic Land — ${type}` } });
   renderBuilderSidebar();
   if (isBuilderComplete()) {
+    builderComplete.hidden = false;
     if (!hasShownCompletePulse) {
       hasShownCompletePulse = true;
       builderSidebar.classList.add('complete-pulse');
       setTimeout(() => builderSidebar.classList.remove('complete-pulse'), 2000);
+      builderComplete.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   } else {
     refreshIfCandidateCollides();
@@ -901,12 +909,8 @@ function addBasicLand(type) {
 
 // Remove one copy of the named card from the draft. When the last copy is removed the
 // name also leaves buildChosen, so the 3-choose-1 pool may offer it again on a later
-// refresh. Reopening the completed deck (if the builder had finished) is left to the
-// caller, but here we simply re-show the workflow if the draft drops below 100.
-// Remove one copy of the named card from the draft. When the last copy is removed the
-// name also leaves buildChosen, so the 3-choose-1 pool may offer it again on a later
-// refresh. When dropping below 100, reset the pulse flag so the next completion shows
-// the green border animation again.
+// refresh. Dropping below 100 hides the completion banner again and resets the pulse
+// flag so the next completion shows the green border animation once more.
 function removeBuildCard(name) {
   if (!name) return;
   const index = buildCards.findIndex((card) => normalizeBuildName(card.name) === normalizeBuildName(name));
@@ -918,6 +922,7 @@ function removeBuildCard(name) {
     buildChosen = buildChosen.filter((chosen) => chosen !== key);
   }
   hasShownCompletePulse = false;
+  builderComplete.hidden = true;
   renderBuilderSidebar();
 }
 
