@@ -1,10 +1,12 @@
 package com.edhpowerlevel.client;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Base64;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -25,7 +27,11 @@ import java.io.ByteArrayInputStream;
  */
 public class MainActivity extends AppCompatActivity {
 
+    private static final int REQUEST_SAVE_EXPORT = 7001;
+
     private WebView webView;
+    private byte[] pendingExport;
+    private String pendingExportName;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -78,8 +84,59 @@ public class MainActivity extends AppCompatActivity {
         });
         setContentView(webView);
 
+        // The front-end exports decklists as data:text/plain URLs inside the WebView
+        // (blob-URL downloads have no handler there); hand them to the system
+        // save-file dialog. ACTION_CREATE_DOCUMENT needs no permissions.
+        webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
+            if (!url.startsWith("data:")) return;
+            int comma = url.indexOf(',');
+            if (comma < 0) return;
+            byte[] bytes;
+            try {
+                bytes = Base64.decode(url.substring(comma + 1), Base64.DEFAULT);
+            } catch (IllegalArgumentException e) {
+                return;
+            }
+            String name = "decklist.txt";
+            String disposition = contentDisposition == null ? "" : contentDisposition;
+            int q = disposition.indexOf("filename=");
+            if (q >= 0) {
+                String candidate = disposition.substring(q + 9).replace("\"", "").trim();
+                if (!candidate.isEmpty()) name = candidate;
+            }
+            pendingExport = bytes;
+            pendingExportName = name;
+            try {
+                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("text/plain");
+                intent.putExtra(Intent.EXTRA_TITLE, name);
+                startActivityForResult(intent, REQUEST_SAVE_EXPORT);
+            } catch (ActivityNotFoundException e) {
+                pendingExport = null;
+            }
+        });
+
         // gomobile bind can return "" on failure; fall back to a bare local placeholder.
         webView.loadUrl(baseUrl.isEmpty() ? "about:blank" : baseUrl);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_SAVE_EXPORT || resultCode != Activity.RESULT_OK || data == null) {
+            pendingExport = null;
+            return;
+        }
+        Uri target = data.getData();
+        byte[] bytes = pendingExport;
+        pendingExport = null;
+        if (target == null || bytes == null) return;
+        try (java.io.OutputStream out = getContentResolver().openOutputStream(target)) {
+            if (out != null) out.write(bytes);
+        } catch (java.io.IOException e) {
+            // Saving failed; nothing to surface in the shell UI, the user can retry.
+        }
     }
 
     /**

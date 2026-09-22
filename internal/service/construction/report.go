@@ -130,6 +130,17 @@ var targets = []struct {
 	{"board_wipe", "清场", 4},
 }
 
+// Targets returns the fixed per-metric template targets keyed by metric id.
+// The builder's gap-weighted suggestion sampling reads them to size each
+// remaining gap relative to its metric's scale.
+func Targets() map[string]int {
+	out := make(map[string]int, len(targets))
+	for _, target := range targets {
+		out[target.id] = target.target
+	}
+	return out
+}
+
 func Build(cards []InputCard) Report {
 	result := Report{Metrics: make([]Metric, 0, len(targets))}
 	incomplete := false

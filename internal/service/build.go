@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -46,8 +47,8 @@ type BuildSuggestRequest struct {
 // BuildSuggestResponse is a batch of scored candidates plus the commander's color
 // identity (needed client-side to filter the basic-land quick add).
 type BuildSuggestResponse struct {
-	CommanderName string          `json:"commander_name"`
-	ColorIdentity []string        `json:"color_identity"`
+	CommanderName string           `json:"commander_name"`
+	ColorIdentity []string         `json:"color_identity"`
 	Candidates    []BuildCandidate `json:"candidates"`
 }
 
@@ -129,16 +130,16 @@ func (a *Analyzer) BuildSuggest(ctx context.Context, request BuildSuggestRequest
 	if commanderName == "" {
 		return BuildSuggestResponse{}, errors.New("commander name is required")
 	}
-		if a.edhrec == nil || a.cards == nil {
-			return BuildSuggestResponse{}, ErrCardData
-		}
-		count := request.Count
-		if count <= 0 {
-			count = 20
-		}
-		if count > 50 {
-			count = 50
-		}
+	if a.edhrec == nil || a.cards == nil {
+		return BuildSuggestResponse{}, ErrCardData
+	}
+	count := request.Count
+	if count <= 0 {
+		count = 20
+	}
+	if count > 50 {
+		count = 50
+	}
 
 	// Resolve the commander first: we need its color identity and legality to gate
 	// every candidate, and its name to key the EDHREC recommendation pool.
@@ -193,6 +194,10 @@ func (a *Analyzer) BuildSuggest(ctx context.Context, request BuildSuggestRequest
 	// Extract commander theme for context-aware "plan" classification.
 	commanderTheme := construction.ExtractTheme([]cardcatalog.Card{commander})
 
+	// Compare the drafted mainboard against the construction template so the
+	// hand can lean toward cards that fill what the draft is still missing.
+	deficits := a.templateDeficits(ctx, commanderTheme, commander.Name, request.Chosen)
+
 	// Base draw pool: everything not chosen (chosen cards are never re-offered).
 	// Cards can be added both here and through the quick-add panels; both share the
 	// same `chosen` exclusion, so the randomized hand does not artificially hide
@@ -217,15 +222,16 @@ func (a *Analyzer) BuildSuggest(ctx context.Context, request BuildSuggestRequest
 	// Prefer a hand that avoids cards seen in the last two refreshes.
 	fresh := filterOutSeen(base, seen)
 
-	// Draw `count` cards uniformly at random. Cards in a batch have no ordering or
-	// role relationship; the only constraints are "not chosen" and, where possible,
-	// "not seen in the last two refreshes". If the pool cannot provide a full hand
-	// even after the top-up, return what is left rather than erroring.
+	// Draw `count` cards without replacement, weighted toward cards that fill the
+	// draft's remaining template gaps. With no open gaps the draw is uniform, so
+	// variety and synergy exposure are preserved — the hand just leans toward
+	// what the template is missing. If the pool cannot provide a full hand even
+	// after the top-up, return what is left rather than erroring.
 	var selected []edhrecPoolCard
 	if len(fresh) >= count {
-		selected = a.randomSelection(fresh, count)
+		selected = a.weightedSelection(fresh, count, commanderTheme, deficits)
 	} else {
-		selected = a.randomSelection(base, count)
+		selected = a.weightedSelection(base, count, commanderTheme, deficits)
 	}
 	if len(selected) == 0 {
 		return BuildSuggestResponse{}, ErrBuildBackfill
@@ -342,20 +348,117 @@ func classifyIDs(matches []construction.Match) []string {
 	return ids
 }
 
-// randomSelection draws up to `count` cards uniformly at random from the pool, so
-// the builder shows a fresh, unranked hand each refresh rather than a role-balanced,
-// gap-ranked batch. The pool is already filtered to legal, chosen-free cards.
-func (a *Analyzer) randomSelection(pool []edhrecPoolCard, count int) []edhrecPoolCard {
+// templateDeficits counts how far the drafted mainboard (all chosen names except
+// the commander) falls short of the construction template on each metric. Names
+// the catalog does not resolve are skipped rather than treated as errors, and a
+// failed batch lookup simply disables gap biasing for the call.
+func (a *Analyzer) templateDeficits(ctx context.Context, theme construction.Theme, commanderName string, chosen []string) map[string]int {
+	commanderKey := normalizeCardName(commanderName)
+	names := make([]string, 0, len(chosen))
+	for _, name := range chosen {
+		key := normalizeCardName(name)
+		if key == "" || key == commanderKey {
+			continue
+		}
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		// Empty draft (only the commander): every metric sits at its full
+		// deficit, so the very first hand is already gap-weighted.
+		deficits := make(map[string]int)
+		for id, target := range construction.Targets() {
+			deficits[id] = target
+		}
+		return deficits
+	}
+	catalog, err := a.cards.Lookup(ctx, names)
+	if err != nil {
+		return nil
+	}
+	actual := make(map[string]int)
+	themeCopy := theme
+	classifyCtx := construction.ClassifyContext{CommanderTheme: &themeCopy}
+	for _, name := range names {
+		card, ok := catalog[strings.ToLower(strings.TrimSpace(name))]
+		if !ok {
+			// Same alias fallback as buildPool: a split/DFC card chosen by its
+			// normalized front-face key still resolves through the catalog.
+			key := normalizeCardName(name)
+			for k, v := range catalog {
+				if normalizeCardName(k) == key {
+					card, ok = v, true
+					break
+				}
+			}
+		}
+		if !ok {
+			continue
+		}
+		for _, match := range construction.ClassifyWithContext(card, classifyCtx) {
+			actual[match.ID]++
+		}
+	}
+	deficits := make(map[string]int)
+	for id, target := range construction.Targets() {
+		if gap := target - actual[id]; gap > 0 {
+			deficits[id] = gap
+		}
+	}
+	return deficits
+}
+
+// gapWeights scores each pool card by how much of the draft's remaining template
+// gap it would fill: weight = 1 + Σ deficit/target over the metrics the card
+// matches. Cards with no bearing on any open gap stay at 1, so the draw degrades
+// to plain uniform random as the draft completes — variety and synergy exposure
+// are preserved, the hand just leans toward what the template is missing.
+func gapWeights(pool []edhrecPoolCard, theme construction.Theme, deficits map[string]int, targets map[string]int) []float64 {
+	weights := make([]float64, len(pool))
+	classifyCtx := construction.ClassifyContext{CommanderTheme: &theme}
+	for i, item := range pool {
+		weight := 1.0
+		for _, match := range construction.ClassifyWithContext(item.card, classifyCtx) {
+			gap, open := deficits[match.ID]
+			target, known := targets[match.ID]
+			if open && known && gap > 0 && target > 0 {
+				weight += float64(gap) / float64(target)
+			}
+		}
+		weights[i] = weight
+	}
+	return weights
+}
+
+// weightedSelection draws up to `count` cards without replacement with
+// probability proportional to the gap weights (Efraimidis–Spirakis keying).
+// With no open gaps every weight is 1 and the draw is uniform, matching the
+// previous uniform sampler.
+func (a *Analyzer) weightedSelection(pool []edhrecPoolCard, count int, theme construction.Theme, deficits map[string]int) []edhrecPoolCard {
 	if count <= 0 {
 		return nil
 	}
 	if count >= len(pool) {
-		count = len(pool)
+		out := make([]edhrecPoolCard, len(pool))
+		copy(out, pool)
+		return out
 	}
-	perm := a.rand.Perm(len(pool))
+	weights := gapWeights(pool, theme, deficits, construction.Targets())
+	type keyed struct {
+		index int
+		key   float64
+	}
+	keys := make([]keyed, len(pool))
+	for i, weight := range weights {
+		u := a.rand.Float64()
+		if u <= 0 {
+			u = 1e-12
+		}
+		keys[i] = keyed{i, -math.Log(u) / weight}
+	}
+	sort.Slice(keys, func(x, y int) bool { return keys[x].key < keys[y].key })
 	selected := make([]edhrecPoolCard, 0, count)
-	for _, i := range perm[:count] {
-		selected = append(selected, pool[i])
+	for _, k := range keys[:count] {
+		selected = append(selected, pool[k.index])
 	}
 	return selected
 }

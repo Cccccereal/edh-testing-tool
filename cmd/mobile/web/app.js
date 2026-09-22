@@ -809,6 +809,14 @@ function buildMetricLabel(id) {
   return metric ? metric.label : id;
 }
 
+// The full drafted mainboard as card names — buildCards is authoritative and
+// includes quick-added lands/staples that buildChosen (a name-only set fed by the
+// 3-choose-1 path) misses. The server counts these against the construction
+// template to weight the hand toward open gaps, so basic lands matter here.
+function draftCardNames() {
+  return buildCards.map((card) => card.name);
+}
+
 async function nextBuildBatch() {
   if (!buildCommander) return;
   // Every refresh draws a fresh random hand straight from the server. Cards shown
@@ -819,7 +827,7 @@ async function nextBuildBatch() {
     const response = await fetch('/api/v1/build-suggest', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ commander: buildCommander, chosen: buildChosen, seen: recentShown, count: 3 })
+      body: JSON.stringify({ commander: buildCommander, chosen: draftCardNames(), seen: recentShown, count: 3 })
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error?.message || '无法加载建议。');
@@ -1155,14 +1163,9 @@ document.addEventListener('click', (event) => {
 
 copyDecklistButton?.addEventListener('click', async () => {
   if (!currentDeckText) return;
-  try {
-    await navigator.clipboard.writeText(currentDeckText);
-    if (copyDecklistButton) copyDecklistButton.textContent = '已复制';
-    setTimeout(() => { if (copyDecklistButton) copyDecklistButton.textContent = '复制牌表'; }, 1600);
-  } catch {
-    if (copyDecklistButton) copyDecklistButton.textContent = '复制失败';
-    setTimeout(() => { if (copyDecklistButton) copyDecklistButton.textContent = '复制牌表'; }, 1600);
-  }
+  const ok = await copyTextToClipboard(currentDeckText);
+  if (copyDecklistButton) copyDecklistButton.textContent = ok ? '已复制' : '复制失败';
+  setTimeout(() => { if (copyDecklistButton) copyDecklistButton.textContent = '复制牌表'; }, 1600);
 });
 
 retryButton?.addEventListener('click', () => {
@@ -1763,12 +1766,8 @@ function renderSwapResult(payload) {
     <button id="copy-swap-decklist" class="ghost-button" type="button">复制更新后牌表</button>`;
   swapResult.hidden = false;
   document.querySelector('#copy-swap-decklist').addEventListener('click', async (event) => {
-    try {
-      await navigator.clipboard.writeText(payload.updated_decklist || '');
-      event.currentTarget.textContent = '已复制';
-    } catch {
-      event.currentTarget.textContent = '复制失败';
-    }
+    const ok = await copyTextToClipboard(payload.updated_decklist || '');
+    event.currentTarget.textContent = ok ? '已复制' : '复制失败';
   });
 }
 
@@ -2013,12 +2012,57 @@ function editorToDeckText() {
   return `Commander\n${commanders.join('\n')}\n\nDeck\n${mainboard.join('\n')}`;
 }
 
+// Clipboard write with a fallback for Android WebView, where navigator.clipboard
+// is often unavailable or rejects without a permission the WebView never grants.
+// The document.execCommand path works inside any user-gesture handler, which is
+// exactly where every copy button lives.
+async function copyTextToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // fall through to the legacy path
+  }
+  try {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.top = '-9999px';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    const selection = document.getSelection();
+    const savedRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
+    area.select();
+    area.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    area.remove();
+    if (savedRange && selection) {
+      selection.removeAllRanges();
+      selection.addRange(savedRange);
+    }
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 function downloadText(filename, text) {
+  // Android WebView has no download handling for blob URLs (and no listener is
+  // guaranteed on the shell side); MainActivity recognizes data:text/plain URLs
+  // and routes them to the system save-file dialog instead.
+  const isWebView = /; wv\)/.test(navigator.userAgent);
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = url;
   link.download = filename;
+  if (isWebView) {
+    const reader = new FileReader();
+    reader.onload = () => { link.href = String(reader.result); link.click(); };
+    reader.readAsDataURL(blob);
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  link.href = url;
   document.body.appendChild(link);
   link.click();
   link.remove();
