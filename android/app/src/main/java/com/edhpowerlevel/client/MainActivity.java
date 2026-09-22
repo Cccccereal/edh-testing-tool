@@ -36,6 +36,10 @@ public class MainActivity extends AppCompatActivity {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
+        // Default textZoom follows the system font scale; sizes in styles.css are
+        // laid out for ~1.0-1.1x, so cap the boost (accessibility-friendly up to
+        // 110%, prevents text overflowing its containers at 130%+).
+        settings.setTextZoom(Math.min(settings.getTextZoom(), 110));
         // The served UI is trusted (our own front-end), but keep navigation sandboxed:
         // only loopback URLs are ever loaded; external links are kept in the WebView.
         webView.setWebViewClient(new WebViewClient() {

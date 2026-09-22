@@ -52,6 +52,9 @@ body {
   font-family: var(--font-body);
   font-size: 16px;
   line-height: 1.6;
+  /* 安卓 WebView 的 textZoom 跟随系统字体缩放，长英文卡名/链接在放大后
+     必须能在任意字符处折行，否则会顶破容器（详见 tests/test_ui_overflow.py）。 */
+  overflow-wrap: anywhere;
 }
 :root.light-mode body {
   background:
@@ -173,7 +176,7 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .decklist-input-panel { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
 .decklist-input-panel summary { cursor: pointer; color: var(--blue); font-weight: 700; font-size: 15px; }
 .decklist-input-panel label { display: block; margin: 14px 0 7px; color: var(--muted); font-size: 13px; }
-.decklist-label-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.decklist-label-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem 1rem; }
 .clear-decklist { margin-top: 14px; margin-bottom: 20px; padding: 0.625rem 1rem; min-height: 44px; font-size: 13px; border: 1px solid #555a50; background: transparent; color: var(--ink); transition: border-color .15s, color .15s; }
 .clear-decklist:hover { border-color: var(--acid); color: var(--acid); }
 .clear-decklist:focus-visible { outline: 2px solid var(--acid); outline-offset: 2px; }
@@ -239,8 +242,11 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 :root.light-mode .result-card:hover { box-shadow: 10px 10px 0 #d4d7d0; }
 .result-card::before { content: ""; display: block; height: 5px; flex: 0 0 5px; background: var(--orange); }
 .edh-card::before { background: var(--blue); }
-.card-topline { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 20px 22px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: 700 13px var(--font-ui); letter-spacing: .1em; text-align: left; cursor: pointer; }
+.card-topline { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; align-items: center; width: 100%; padding: 20px 22px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: 700 13px var(--font-ui); letter-spacing: .1em; text-align: left; cursor: pointer; }
 .card-topline:focus-visible { outline: 2px solid var(--acid); outline-offset: -2px; }
+/* 状态字（等待/完成/失败/跳过）整词换行：textZoom 放大时落到第二行，而不是
+   挤在标题同一行里让标题折行互相叠压。 */
+.card-topline > span { white-space: nowrap; }
 .card-topline::after { content: "▾"; margin-left: 12px; color: var(--muted); font-size: 15px; transition: transform .15s; }
 .result-card.collapsed .card-topline { border-bottom-color: transparent; }
 .result-card.collapsed .card-topline::after { transform: rotate(-90deg); }
@@ -262,6 +268,7 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .hero-metric span { color: var(--muted); font-size: 17px; }
 .bracket-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-bottom: 22px; border: 1px solid var(--line); background: var(--line); }
 .bracket-value { display: flex; align-items: center; gap: 14px; padding: 15px; background: #1c1e1a; }
+.bracket-value > div { min-width: 0; }
 :root.light-mode .bracket-value { background: #e3e5e1; }
 .bracket-value.evaluated { background: rgba(215,255,63,.07); }
 :root.light-mode .bracket-value.evaluated { background: rgba(107,138,0,.12); }
@@ -271,6 +278,8 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .edh-card .bracket-number { background: var(--blue); }
 .bracket-value strong { display: block; font-size: 15px; }
 .bracket-value small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.35; }
+/* 窄屏 + textZoom 放大时 "Bracket" 一词放不进半宽卡片：改为上下堆叠。 */
+@media (max-width: 400px) { .bracket-pair { grid-template-columns: 1fr; } }
 .metric-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
 .metric { background: var(--surface); padding: 15px; }
 .metric small { display: block; margin-bottom: 7px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
@@ -560,12 +569,16 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .combo-missing-card { position: relative; flex: 0 0 130px; }
 .combo-missing-card .mtg-card { outline: 2px dashed color-mix(in srgb, var(--acid) 65%, transparent); outline-offset: 3px; }
 .combo-missing-pill { position: absolute; top: -9px; right: 6px; z-index: 1; padding: 2px 8px; background: var(--surface); border: 1px solid color-mix(in srgb, var(--acid) 70%, transparent); color: var(--acid); font: 700 11px var(--font-ui); letter-spacing: .04em; box-shadow: 2px 2px 0 color-mix(in srgb, var(--acid) 30%, transparent); }
-.build-entry { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); display: flex; align-items: flex-start; gap: 12px; justify-content: space-between; }
-.build-entry .ghost-button { border-style: dashed; }
-.rules-links-panel { flex: 0 0 auto; }
+.build-entry { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; justify-content: space-between; }
+.build-entry .ghost-button { border-style: dashed; flex: 0 0 auto; }
+/* margin-left:auto 让面板换行后仍贴右侧——下拉以面板右缘为锚，若面板靠左
+   （flex 换行后的默认对齐），向左展开会伸出屏幕左缘。 */
+.rules-links-panel { flex: 0 0 auto; margin-left: auto; }
 .rules-links-panel summary { cursor: pointer; color: var(--muted); font: 700 13px var(--font-ui); letter-spacing: .05em; padding: 9px 12px; border: 1px dashed var(--line); border-radius: 4px; user-select: none; }
 .rules-links-panel summary:hover { color: var(--ink); border-color: var(--blue); }
-.rules-links-panel ul { position: absolute; z-index: 20; margin: 6px 0 0; padding: 8px; list-style: none; background: #151713; border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0,0,0,.45); min-width: 280px; }
+/* 面板本身在 .build-entry 里靠右排，下拉要以面板右缘为锚向左展开，并夹在
+   视口内——固定 min-width 280px 在窄屏上会伸出屏幕右缘。 */
+.rules-links-panel ul { position: absolute; right: 0; z-index: 20; margin: 6px 0 0; padding: 8px; list-style: none; background: #151713; border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0,0,0,.45); width: max-content; max-width: 60vw; overflow-wrap: anywhere; }
 .rules-links-panel li + li { margin-top: 6px; }
 .rules-links-panel a { color: var(--blue); text-decoration: none; font-size: 13px; }
 .rules-links-panel a:hover { text-decoration: underline; }
