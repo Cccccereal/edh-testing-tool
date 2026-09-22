@@ -146,7 +146,7 @@ jobs:
             local goos="$1" goarch="$2" out="$3"
             echo ">> $goos/$goarch -> $out"
             GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 \
-              go build -buildvcs=false -trimpath -ldflags "-s -w -X powerlevel/internal/version.Version=v$v" \
+              go build -buildvcs=false -trimpath -ldflags "-s -w -X powerlevel/internal/version.Version=v$VERSION" \
               -o "dist-mobile/$out" ./cmd/server
           }
 
