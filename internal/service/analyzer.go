@@ -294,6 +294,10 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 	if runCards {
 		if cardErr != nil {
 			analysis.Warnings = append(analysis.Warnings, "卡牌图片与详情暂时无法加载。")
+			// Scryfall 断连时 Lookup 的返回值仍带着命中的那部分卡牌：展示与构建
+			// 报告继续跳过（数据不全会误导），但目录里已有的数据仍喂给组合匹配
+			// 与 bracket 计数，缺的名字由评分内部的 getcards CMC 兜底。
+			catalogCMC = catalogCMCs(target, catalog, nil)
 		} else {
 			analysis.DeckCards = buildDisplayCards(target, catalog)
 			inputs := make([]construction.InputCard, 0, len(analysis.DeckCards))
@@ -323,17 +327,23 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 
 	// The combo list enriches the 胜负手 metric of the construction report, so
 	// it is folded in before the health score is derived.
+	//
+	// `combos` holds only fully-owned combos (every component in the deck) and
+	// feeds the win-con credit and the bracket rules — matching the site, whose
+	// combo matching is done against the complete deck list. The raw Spellbook
+	// results also feed the "差一张" suggestion list, where near-misses belong.
 	var combos []spellbook.Combo
 	if runCombos {
 		if comboErr != nil {
 			analysis.Warnings = append(analysis.Warnings, "Commander Spellbook 组合暂时无法加载。")
 		} else {
-			combos = foundCombos
-			winconComboCount = countWinconCombos(foundCombos)
-			analysis.Combos, analysis.RelatedCards = buildCombos(foundCombos, analysis.DeckCards)
+			ownedKeys := deckTargetKeySet(target)
+			combos = ownedCombos(foundCombos, ownedKeys)
+			winconComboCount = countWinconCombos(combos)
+			analysis.Combos, analysis.RelatedCards = buildCombos(foundCombos, ownedKeys, analysis.DeckCards)
 			// Over-fetch so the color-identity filter can still leave a full
 			// list after dropping off-identity suggestions.
-			analysis.ComboSuggestions = buildComboSuggestions(foundCombos, analysis.DeckCards, 24)
+			analysis.ComboSuggestions = buildComboSuggestions(foundCombos, ownedKeys, 24)
 			if len(analysis.ComboSuggestions) > 0 && len(catalog) > 0 {
 				// A commander the catalog cannot resolve leaves the identity
 				// unknown; filtering is skipped rather than guessed.
@@ -375,7 +385,7 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 	if edhErr != nil || edhMetrics == nil {
 		// The chromedp path is gone; always score via the pure-HTTP getcards + formula
 		// implementation, which no longer depends on a browser.
-		edhMetrics, edhErr = edhpowerlevel.ScoreWithCombos(edhCtx, target, a.edhHTTP, combos, catalogCMC)
+		edhMetrics, edhErr = edhpowerlevel.ScoreWithCombos(edhCtx, target, a.edhHTTP, combos, catalogCMC, deckGameChangerNames(target, catalog))
 	}
 	cancelEDH()
 	if edhErr != nil {
@@ -584,10 +594,92 @@ func countWinconCombos(found []spellbook.Combo) int {
 	return count
 }
 
-func buildCombos(found []spellbook.Combo, deckCards []DisplayCard) ([]Combo, []DisplayCard) {
+// deckTargetKeySet indexes the parsed deck's card names for combo-component
+// matching: each name is keyed both in full and by front face, lowercased. It
+// is derived from the deck itself, never from the Scryfall catalog, so combo
+// detection keeps working when the catalog is unreachable.
+func deckTargetKeySet(target deck.Deck) map[string]struct{} {
+	keys := make(map[string]struct{}, (len(target.Commanders)+len(target.Mainboard))*2)
+	add := func(name string) {
+		key := strings.ToLower(strings.TrimSpace(name))
+		keys[key] = struct{}{}
+		if index := strings.Index(key, " // "); index > 0 {
+			keys[key[:index]] = struct{}{}
+		}
+	}
+	for _, card := range target.Commanders {
+		add(card.Name)
+	}
+	for _, card := range target.Mainboard {
+		add(card.Name)
+	}
+	return keys
+}
+
+// ownedCombos keeps only combos whose every component is in the deck. Spellbook
+// returns any combo touching a deck card — its partners need not be owned — and
+// everything downstream of "this deck can combo off" (the combo list, the win-con
+// credit, the bracket rules) must only see complete combos. The site has the same
+// semantics: its combos are matched server-side against the full deck list.
+func ownedCombos(found []spellbook.Combo, owned map[string]struct{}) []spellbook.Combo {
+	var complete []spellbook.Combo
+	for _, combo := range found {
+		all := true
+		for _, component := range combo.Components {
+			if _, ok := owned[strings.ToLower(strings.TrimSpace(component.Name))]; !ok {
+				all = false
+				break
+			}
+		}
+		if all {
+			complete = append(complete, combo)
+		}
+	}
+	return complete
+}
+
+// deckGameChangerNames collects the deck's Game Changers per the live Scryfall
+// flag with the in-process snapshot as fallback, so the bracket counter does not
+// depend solely on getcards' own copy of the list (which can lag WotC updates).
+func deckGameChangerNames(target deck.Deck, catalog map[string]cardcatalog.Card) map[string]struct{} {
+	set := make(map[string]struct{})
+	add := func(name string) {
+		key := strings.ToLower(frontFace(name))
+		if card, ok := catalogLookupByNames(catalog, name); ok {
+			if !isGameChanger(card) && !gameChangerByName(name) {
+				return
+			}
+		} else if !gameChangerByName(name) {
+			return
+		}
+		set[key] = struct{}{}
+	}
+	for _, card := range target.Commanders {
+		add(card.Name)
+	}
+	for _, card := range target.Mainboard {
+		add(card.Name)
+	}
+	return set
+}
+
+func buildCombos(found []spellbook.Combo, owned map[string]struct{}, deckCards []DisplayCard) ([]Combo, []DisplayCard) {
 	cardsByName := make(map[string]DisplayCard, len(deckCards))
 	for _, item := range deckCards {
 		cardsByName[strings.ToLower(item.Card.Name)] = item
+	}
+	lookupDisplay := func(component spellbook.Component) DisplayCard {
+		if item, ok := cardsByName[strings.ToLower(component.Name)]; ok {
+			return item
+		}
+		if front := frontFace(component.Name); front != component.Name {
+			if item, ok := cardsByName[strings.ToLower(front)]; ok {
+				return item
+			}
+		}
+		// Not in the enriched display list (catalog down, or a near-miss
+		// component): build a placeholder so the card still renders.
+		return DisplayCard{Card: cardcatalog.Card{OracleID: component.OracleID, Name: component.Name, ImageNormal: component.ImageNormal, ImageSmall: component.ImageSmall}, Quantity: 1}
 	}
 	seenRelated := make(map[string]struct{})
 	var combos []Combo
@@ -596,11 +688,10 @@ func buildCombos(found []spellbook.Combo, deckCards []DisplayCard) ([]Combo, []D
 		combo := Combo{Name: source.Name, Result: source.Result, Steps: source.Steps, Sources: []string{"commander_spellbook"}, SourceURL: source.SourceURL}
 		complete := true
 		for _, component := range source.Components {
-			item, ok := cardsByName[strings.ToLower(component.Name)]
-			if !ok {
-				item = DisplayCard{Card: cardcatalog.Card{OracleID: component.OracleID, Name: component.Name, ImageNormal: component.ImageNormal, ImageSmall: component.ImageSmall}, Quantity: 1}
+			if _, ok := owned[strings.ToLower(strings.TrimSpace(component.Name))]; !ok {
 				complete = false
 			}
+			item := lookupDisplay(component)
 			combo.Components = append(combo.Components, item)
 			key := strings.ToLower(component.Name)
 			if _, ok := seenRelated[key]; !ok {
@@ -645,7 +736,8 @@ func commanderNames(target deck.Deck) []string {
 // bracket combo detector to sum the battlefield component costs of each 2-card combo.
 // It derives the value from the already-fetched Scryfall catalog (or the getcards CMC
 // for any names the catalog lacks) so the early/late split uses real cast costs rather
-// than the all-zero stub.
+// than the all-zero stub. Names neither source knows are omitted, letting the score's
+// own getcards data fill them in.
 func catalogCMCs(target deck.Deck, catalog map[string]cardcatalog.Card, getcardsCMC map[string]int) map[string]int {
 	result := make(map[string]int, len(target.Commanders)+len(target.Mainboard))
 	add := func(name string) {
@@ -659,9 +751,7 @@ func catalogCMCs(target deck.Deck, catalog map[string]cardcatalog.Card, getcards
 		}
 		if cmc, ok := getcardsCMC[key]; ok {
 			result[key] = cmc
-			return
 		}
-		result[key] = 0
 	}
 	for _, card := range target.Commanders {
 		add(card.Name)

@@ -40,6 +40,14 @@ func isGameChanger(card cardcatalog.Card) bool {
 	return false
 }
 
+// gameChangerByName checks the snapshot list by name alone. It is the path for
+// deck entries the catalog could not resolve (Scryfall down, card unknown) —
+// the live `game_changer` field always wins when a catalog card is available.
+func gameChangerByName(name string) bool {
+	_, ok := gameChangerNames[normalizeCardName(name)]
+	return ok
+}
+
 // gameChangerNames is the Commander format's official Game Changers list snapshot
 // (the 53 cards from the initial Brackets announcement). It is a fallback only:
 // cards flagged `game_changer` by Scryfall take precedence, and the list here may

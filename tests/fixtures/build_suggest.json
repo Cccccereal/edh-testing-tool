@@ -9,15 +9,14 @@
           "chinese_name": "",
           "chinese_oracle_text": "",
           "chinese_type_line": "",
-          "cmc": 4,
+          "cmc": 3,
           "color_identity": [
-            "B",
-            "G"
+            "U"
           ],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/e/0/e09e9b65-ff0e-4efe-b96a-ede69c96e2ea.jpg?1783926819",
-          "image_small": "https://cards.scryfall.io/small/front/e/0/e09e9b65-ff0e-4efe-b96a-ede69c96e2ea.jpg?1783926819",
+          "image_normal": "https://cards.scryfall.io/normal/front/a/c/ac943e31-26bc-4b54-b73f-460e6e402d86.jpg?1783903239",
+          "image_small": "https://cards.scryfall.io/small/front/a/c/ac943e31-26bc-4b54-b73f-460e6e402d86.jpg?1783903239",
           "keywords": [],
           "layout": "normal",
           "legalities": {
@@ -35,111 +34,104 @@
             "oldschool": "not_legal",
             "pauper": "not_legal",
             "paupercommander": "not_legal",
-            "penny": "legal",
+            "penny": "not_legal",
             "pioneer": "not_legal",
-            "predh": "not_legal",
-            "premodern": "not_legal",
+            "predh": "legal",
+            "premodern": "legal",
             "standard": "not_legal",
             "standardbrawl": "not_legal",
             "timeless": "not_legal",
-            "tlr": "not_legal",
+            "tlr": "legal",
             "vintage": "legal"
           },
-          "mana_cost": "{2}{B}{G}",
-          "name": "Carth the Lion",
-          "oracle_id": "e0709843-0a91-4a21-9512-d7481707f3c9",
-          "oracle_text": "Whenever Carth enters or a planeswalker you control dies, look at the top seven cards of your library. You may reveal a planeswalker card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.\nPlaneswalkers' loyalty abilities you activate cost an additional [+1] to activate.",
-          "power": "3",
+          "mana_cost": "{2}{U}",
+          "name": "Propaganda",
+          "oracle_id": "ea9709b6-4c37-4d5a-b04d-cd4c42e4f9dd",
+          "oracle_text": "Creatures can't attack you unless their controller pays {2} for each creature they control that's attacking you.",
+          "power": "",
           "printed_name": "",
           "produced_mana": [],
-          "type_line": "Legendary Creature — Human Warrior"
+          "type_line": "Enchantment"
         },
-        "fills": [
-          "plan",
-          "draw_discard"
-        ],
+        "fills": [],
         "game_changer": false,
-        "inclusion_rate": 0.1419904276116217,
-        "name": "Carth the Lion",
-        "source_url": "https://edhrec.com/cards/carth-the-lion",
-        "synergy": 0.061290880555758584
+        "inclusion_rate": 0.12281524141163866,
+        "name": "Propaganda",
+        "source_url": "https://edhrec.com/cards/propaganda",
+        "synergy": 0.028055208364546558
       },
       {
         "card": {
           "chinese_name": "",
           "chinese_oracle_text": "",
           "chinese_type_line": "",
-          "cmc": 0,
+          "cmc": 1,
           "color_identity": [
-            "B",
-            "U"
+            "B"
           ],
           "faces": [],
-          "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/5/5/5525d6a6-e532-4047-9da4-bfae7927fecc.jpg?1784036860",
-          "image_small": "https://cards.scryfall.io/small/front/5/5/5525d6a6-e532-4047-9da4-bfae7927fecc.jpg?1784036860",
+          "game_changer": true,
+          "image_normal": "https://cards.scryfall.io/normal/front/3/4/34a0203f-9cce-43a4-9cb7-8ce6647895cd.jpg?1783918468",
+          "image_small": "https://cards.scryfall.io/small/front/3/4/34a0203f-9cce-43a4-9cb7-8ce6647895cd.jpg?1783918468",
           "keywords": [],
           "layout": "normal",
           "legalities": {
-            "alchemy": "legal",
+            "alchemy": "not_legal",
             "brawl": "legal",
             "commander": "legal",
             "competitivebrawl": "legal",
-            "duel": "legal",
-            "future": "legal",
+            "duel": "banned",
+            "future": "not_legal",
             "gladiator": "legal",
-            "historic": "legal",
-            "legacy": "legal",
-            "modern": "legal",
+            "historic": "banned",
+            "legacy": "banned",
+            "modern": "not_legal",
             "oathbreaker": "legal",
             "oldschool": "not_legal",
             "pauper": "not_legal",
             "paupercommander": "not_legal",
-            "penny": "legal",
-            "pioneer": "legal",
+            "penny": "not_legal",
+            "pioneer": "not_legal",
             "predh": "legal",
-            "premodern": "not_legal",
-            "standard": "legal",
-            "standardbrawl": "legal",
+            "premodern": "banned",
+            "standard": "not_legal",
+            "standardbrawl": "not_legal",
             "timeless": "legal",
-            "tlr": "legal",
-            "vintage": "legal"
+            "tlr": "banned",
+            "vintage": "restricted"
           },
-          "mana_cost": "",
-          "name": "Watery Grave",
-          "oracle_id": "fc9ec820-4245-4a96-b009-5308a818ca58",
-          "oracle_text": "({T}: Add {U} or {B}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+          "mana_cost": "{B}",
+          "name": "Vampiric Tutor",
+          "oracle_id": "ededbdae-d9dc-4206-9335-d7158f2d7700",
+          "oracle_text": "Search your library for a card, then shuffle and put that card on top. You lose 2 life.",
           "power": "",
           "printed_name": "",
-          "produced_mana": [
-            "B",
-            "U"
-          ],
-          "type_line": "Land — Island Swamp"
+          "produced_mana": [],
+          "type_line": "Instant"
         },
         "fills": [
-          "lands"
+          "tutors"
         ],
-        "game_changer": false,
-        "inclusion_rate": 0.4578118329101409,
-        "name": "Watery Grave",
-        "source_url": "https://edhrec.com/cards/watery-grave",
-        "synergy": -0.032940557628359346
+        "game_changer": true,
+        "inclusion_rate": 0.15614187816692338,
+        "name": "Vampiric Tutor",
+        "source_url": "https://edhrec.com/cards/vampiric-tutor",
+        "synergy": -0.12835102421897654
       },
       {
         "card": {
           "chinese_name": "",
           "chinese_oracle_text": "",
           "chinese_type_line": "",
-          "cmc": 0,
-          "color_identity": [],
+          "cmc": 3,
+          "color_identity": [
+            "B"
+          ],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/2/2/22017ec2-3552-4865-af76-dba042b141f5.jpg?1783906011",
-          "image_small": "https://cards.scryfall.io/small/front/2/2/22017ec2-3552-4865-af76-dba042b141f5.jpg?1783906011",
-          "keywords": [
-            "Proliferate"
-          ],
+          "image_normal": "https://cards.scryfall.io/normal/front/d/e/de5afccc-8d42-4bd6-b068-b9ea2361655e.jpg?1783903236",
+          "image_small": "https://cards.scryfall.io/small/front/d/e/de5afccc-8d42-4bd6-b068-b9ea2361655e.jpg?1783903236",
+          "keywords": [],
           "layout": "normal",
           "legalities": {
             "alchemy": "not_legal",
@@ -156,8 +148,8 @@
             "oldschool": "not_legal",
             "pauper": "not_legal",
             "paupercommander": "not_legal",
-            "penny": "legal",
-            "pioneer": "legal",
+            "penny": "not_legal",
+            "pioneer": "not_legal",
             "predh": "not_legal",
             "premodern": "not_legal",
             "standard": "not_legal",
@@ -166,26 +158,24 @@
             "tlr": "legal",
             "vintage": "legal"
           },
-          "mana_cost": "",
-          "name": "Karn's Bastion",
-          "oracle_id": "9fb8cd81-403a-4988-8f1c-b8eccf8abd9c",
-          "oracle_text": "{T}: Add {C}.\n{4}, {T}: Proliferate. (Choose any number of permanents and/or players, then give each another counter of each kind already there.)",
+          "mana_cost": "{2}{B}",
+          "name": "Toxic Deluge",
+          "oracle_id": "afaef788-34d1-460b-b884-9d7ae6ddeb18",
+          "oracle_text": "As an additional cost to cast this spell, pay X life.\nAll creatures get -X/-X until end of turn.",
           "power": "",
           "printed_name": "",
-          "produced_mana": [
-            "C"
-          ],
-          "type_line": "Land"
+          "produced_mana": [],
+          "type_line": "Sorcery"
         },
         "fills": [
-          "lands",
-          "plan"
+          "mass_interaction",
+          "board_wipe"
         ],
         "game_changer": false,
-        "inclusion_rate": 0.5972181650675236,
-        "name": "Karn's Bastion",
-        "source_url": "https://edhrec.com/cards/karns-bastion",
-        "synergy": 0.23795797382444356
+        "inclusion_rate": 0.13955668653318154,
+        "name": "Toxic Deluge",
+        "source_url": "https://edhrec.com/cards/toxic-deluge",
+        "synergy": -0.0065515176577906065
       }
     ],
     "color_identity": [

@@ -61,7 +61,7 @@ func TestComputeBracketComboClassification(t *testing.T) {
 			},
 		},
 	}
-	_, details := computeBracket(nil, 0, early, cmc)
+	_, details := computeBracket(nil, 0, early, cmc, nil)
 	if len(details.EarlyTwoCardComboNames) != 1 || details.EarlyTwoCardCombos != 1 {
 		t.Fatalf("early combo not classified: %+v", details.EarlyTwoCardComboNames)
 	}
@@ -81,7 +81,7 @@ func TestComputeBracketComboClassification(t *testing.T) {
 			},
 		},
 	}
-	_, details2 := computeBracket(nil, 0, late, cmc)
+	_, details2 := computeBracket(nil, 0, late, cmc, nil)
 	if len(details2.EarlyTwoCardComboNames) != 0 {
 		t.Fatalf("late combo misclassified as early: %+v", details2.EarlyTwoCardComboNames)
 	}
@@ -89,15 +89,109 @@ func TestComputeBracketComboClassification(t *testing.T) {
 		t.Fatalf("late combo not recorded: %v", details2.lateComboNames)
 	}
 
-	// An early 2-card combo forces a minimum "rules bracket" of 4: the early-combo
-	// restriction first bites at Bracket 4 (only Brackets 4-5 may run one), which
-	// carries through to the recommended/evaluated bracket.
-	rules, details3 := computeBracket(nil, 0, early, cmc)
-	if rules != 4 {
-		t.Fatalf("rules bracket with early combo = %d, want 4", rules)
+	// An early 2-card combo first breaches the Bracket 3 allowance (internal na 3),
+	// displayed as minimum Bracket 4 (only Brackets 4-5 may run one), which carries
+	// through to the recommended/evaluated bracket.
+	rules, details3 := computeBracket(nil, 0, early, cmc, nil)
+	if rules != 3 || displayRulesBracket(rules) != 4 {
+		t.Fatalf("rules bracket with early combo = %d (display %d), want internal 3 / display 4", rules, displayRulesBracket(rules))
 	}
 	if len(details3.EarlyTwoCardComboNames) != 1 {
 		t.Fatalf("early combo names not preserved: %+v", details3.EarlyTwoCardComboNames)
+	}
+}
+
+func gcDeck(names ...string) []*scoredCard {
+	scored := make([]*scoredCard, 0, len(names))
+	for _, name := range names {
+		scored = append(scored, &scoredCard{card: &card{name: name, gameChanger: true}})
+	}
+	return scored
+}
+
+func TestBracketGameChangerThresholds(t *testing.T) {
+	// 1-3 game changers breach Bracket 2's zero allowance but fit Bracket 3's
+	// three: minimum Bracket 3. A 4th breaches Bracket 3: minimum Bracket 4.
+	for _, tc := range []struct {
+		count int
+		want  int
+	}{{1, 3}, {2, 3}, {3, 3}, {4, 4}} {
+		names := make([]string, tc.count)
+		for i := range names {
+			names[i] = string(rune('a' + i))
+		}
+		na, details := computeBracket(gcDeck(names...), 0, nil, nil, nil)
+		if got := displayRulesBracket(na); got != tc.want {
+			t.Fatalf("%d game changers: displayed rules bracket = %d, want %d", tc.count, got, tc.want)
+		}
+		if details.GameChangers != tc.count {
+			t.Fatalf("game changer count = %d, want %d", details.GameChangers, tc.count)
+		}
+	}
+}
+
+func TestBracketExtraGameChangerSet(t *testing.T) {
+	// A card the getcards data does not flag still counts when the app's own
+	// sources (Scryfall flag / snapshot) say it is a Game Changer.
+	scored := []*scoredCard{{card: &card{name: "Ancient Tomb"}}}
+	na, details := computeBracket(scored, 0, nil, nil, map[string]struct{}{"ancient tomb": {}})
+	if displayRulesBracket(na) != 3 {
+		t.Fatalf("catalog-flagged game changer ignored: displayed rules bracket = %d, want 3", displayRulesBracket(na))
+	}
+	if details.GameChangers != 1 || len(details.GameChangerNames) != 1 || details.GameChangerNames[0] != "Ancient Tomb" {
+		t.Fatalf("game changer names not recorded: %+v", details.GameChangerNames)
+	}
+	// And the same card without the extra set stays clean.
+	naClean, detailsClean := computeBracket(scored, 0, nil, nil, nil)
+	if naClean != 0 || detailsClean.GameChangers != 0 {
+		t.Fatalf("unflagged card counted as game changer: na=%d details=%+v", naClean, detailsClean)
+	}
+}
+
+func TestBracketNamedRestrictedForcesBracket4(t *testing.T) {
+	// A named easily-chained extra-turn card (no oracle text supplied, so the
+	// regex path cannot fire) still forces minimum Bracket 4.
+	scored := []*scoredCard{{card: &card{name: "Time Warp"}}}
+	na, details := computeBracket(scored, 0, nil, nil, nil)
+	if displayRulesBracket(na) != 4 {
+		t.Fatalf("named extra-turn card: displayed rules bracket = %d, want 4", displayRulesBracket(na))
+	}
+	if details.ExtraTurns != 1 || len(details.ExtraTurnNames) != 1 {
+		t.Fatalf("extra turn names not recorded: %+v", details.ExtraTurnNames)
+	}
+
+	// Same for the named mass-land-denial list.
+	scoredDenial := []*scoredCard{{card: &card{name: "Contamination"}}}
+	naDenial, _ := computeBracket(scoredDenial, 0, nil, nil, nil)
+	if displayRulesBracket(naDenial) != 4 {
+		t.Fatalf("named MLD card: displayed rules bracket = %d, want 4", displayRulesBracket(naDenial))
+	}
+}
+
+func TestBracketCleanDeckMinimumIsOne(t *testing.T) {
+	scored := []*scoredCard{{card: &card{name: "Grizzly Bears"}}}
+	na, _ := computeBracket(scored, 0, nil, nil, nil)
+	if na != 0 || displayRulesBracket(na) != 1 {
+		t.Fatalf("clean deck: na=%d display=%d, want 0/1", na, displayRulesBracket(na))
+	}
+	// A clean weak deck can be recommended Bracket 1 — the old code's floor of 2
+	// came from feeding the bumped display value back into the evaluation.
+	if got := evaluatedBracket(0.5, na); got != 1 {
+		t.Fatalf("evaluated bracket for clean weak deck = %d, want 1", got)
+	}
+}
+
+func TestEffectiveCMCsFallsBackToScored(t *testing.T) {
+	scored := []*scoredCard{
+		{card: &card{name: "Dualcaster Mage"}, cmc: 3},
+		{card: &card{name: "Twinflame"}, cmc: 2},
+	}
+	merged := effectiveCMCs(scored, map[string]int{"twinflame": 2})
+	if merged["twinflame"] != 2 {
+		t.Fatalf("catalog value should win: %v", merged)
+	}
+	if merged["dualcaster mage"] != 3 {
+		t.Fatalf("getcards fallback missing: %v", merged)
 	}
 }
 

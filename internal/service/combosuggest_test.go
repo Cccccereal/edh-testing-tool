@@ -17,12 +17,12 @@ func suggestionCombo(id string, components ...string) spellbook.Combo {
 	return combo
 }
 
-func suggestionDeck(names ...string) []DisplayCard {
-	var cards []DisplayCard
+func suggestionDeck(names ...string) map[string]struct{} {
+	var target deck.Deck
 	for _, name := range names {
-		cards = append(cards, DisplayCard{Card: cardcatalog.Card{Name: name}, Quantity: 1})
+		target.Mainboard = append(target.Mainboard, deck.Card{Name: name, Quantity: 1})
 	}
-	return cards
+	return deckTargetKeySet(target)
 }
 
 func TestBuildComboSuggestionsSkipsCompleteAndFarCombos(t *testing.T) {

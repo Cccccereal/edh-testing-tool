@@ -22,31 +22,17 @@ type ComboSuggestion struct {
 	SourceURL string        `json:"source_url,omitempty"`
 }
 
-// deckNameKeySet indexes deck card names for combo-component matching: each
-// name is keyed both in full and by front face, so a deck entry "X // Y"
-// matches a combo component spelled either way.
-func deckNameKeySet(deckCards []DisplayCard) map[string]struct{} {
-	keys := make(map[string]struct{}, len(deckCards)*2)
-	for _, item := range deckCards {
-		key := strings.ToLower(strings.TrimSpace(item.Card.Name))
-		keys[key] = struct{}{}
-		if index := strings.Index(key, " // "); index > 0 {
-			keys[key[:index]] = struct{}{}
-		}
-	}
-	return keys
-}
-
 // buildComboSuggestions scans the per-card Spellbook results for near-complete
 // combos and ranks them the way a player reads them: fewest missing cards
-// first, then combos that end the game. Commander color-identity filtering
-// happens later in the analyzer (filterComboSuggestionsByIdentity), once the
-// local catalog has fetched identity data for the missing cards.
-func buildComboSuggestions(found []spellbook.Combo, deckCards []DisplayCard, limit int) []ComboSuggestion {
+// first, then combos that end the game. `owned` is the deck's name key set
+// (deckTargetKeySet) — full and front-face keys — so ownership does not depend
+// on the Scryfall catalog. Commander color-identity filtering happens later in
+// the analyzer (filterComboSuggestionsByIdentity), once the local catalog has
+// fetched identity data for the missing cards.
+func buildComboSuggestions(found []spellbook.Combo, owned map[string]struct{}, limit int) []ComboSuggestion {
 	if limit < 1 {
 		limit = 12
 	}
-	owned := deckNameKeySet(deckCards)
 	var suggestions []ComboSuggestion
 	for _, source := range found {
 		var ownedCards, missingCards []DisplayCard

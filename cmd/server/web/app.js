@@ -1371,7 +1371,8 @@ function render(payload) {
   ]);
   renderProvider('edh', payload.results.edhpowerlevel, [
     ['efficiency', 'Efficiency'], ['impact', 'Impact'],
-    ['score', 'Score'], ['average_playability', 'Playability']
+    ['score', 'Score'],
+    ['average_playability', '平均可施放率', 'Playability：按当前法术力基础，估算抽到（费用+7）张牌时，产费颜色与地的数量足以施放每张非地牌的复合概率，再对全牌组取平均。偏低说明法术力源不足或颜色配比失衡，不代表牌本身弱。']
   ]);
   warning.hidden = !payload.warnings?.length;
   warning.textContent = payload.warnings?.join(' ') || '';
@@ -2464,7 +2465,7 @@ function renderProvider(prefix, provider, secondaryMetrics) {
   const power = formatNumber(metrics.power_level, 2);
   const list = secondaryMetrics
     .filter(([key]) => metrics[key] !== undefined)
-    .map(([key, label]) => `<div class="metric"><small>${label}</small><strong>${formatMetric(key, metrics[key])}</strong></div>`)
+    .map(([key, label, tip]) => `<div class="metric"${tip ? ` title="${escapeHTML(tip)}"` : ''}><small>${label}</small><strong>${formatMetric(key, metrics[key])}</strong></div>`)
     .join('');
   const brackets = renderBrackets(metrics);
   const suggestions = prefix === 'salt'

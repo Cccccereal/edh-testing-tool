@@ -9,25 +9,25 @@
       "chinese_type_line": "",
       "cmc": 3,
       "color_identity": [
-        "B",
         "G",
-        "R"
+        "R",
+        "U"
       ],
       "faces": [],
       "game_changer": false,
-      "image_normal": "https://cards.scryfall.io/normal/front/e/e/ee228dcc-3170-4c24-80bc-28bcee07cb43.jpg?1783923381",
-      "image_small": "https://cards.scryfall.io/small/front/e/e/ee228dcc-3170-4c24-80bc-28bcee07cb43.jpg?1783923381",
+      "image_normal": "https://cards.scryfall.io/normal/front/4/1/41e58eb8-e5b9-4ef6-be1f-00e28cebb998.jpg?1783910621",
+      "image_small": "https://cards.scryfall.io/small/front/4/1/41e58eb8-e5b9-4ef6-be1f-00e28cebb998.jpg?1783910621",
       "keywords": [],
       "layout": "normal",
       "legalities": {
         "alchemy": "not_legal",
-        "brawl": "not_legal",
+        "brawl": "legal",
         "commander": "legal",
-        "competitivebrawl": "not_legal",
+        "competitivebrawl": "legal",
         "duel": "legal",
         "future": "not_legal",
-        "gladiator": "not_legal",
-        "historic": "not_legal",
+        "gladiator": "legal",
+        "historic": "legal",
         "legacy": "legal",
         "modern": "not_legal",
         "oathbreaker": "legal",
@@ -40,25 +40,25 @@
         "premodern": "not_legal",
         "standard": "not_legal",
         "standardbrawl": "not_legal",
-        "timeless": "not_legal",
+        "timeless": "legal",
         "tlr": "legal",
         "vintage": "legal"
       },
-      "mana_cost": "{B}{R}{G}",
-      "name": "Henzie \"Toolbox\" Torre",
-      "oracle_id": "5320f5a6-8066-47d4-aa0a-4c879f39d413",
-      "oracle_text": "Each creature spell you cast with mana value 4 or greater has blitz. The blitz cost is equal to its mana cost. (You may choose to cast that spell for its blitz cost. If you do, it gains haste and \"When this creature dies, draw a card.\" Sacrifice it at the beginning of the next end step.)\nBlitz costs you pay cost {1} less for each time you've cast your commander from the command zone this game.",
-      "power": "3",
+      "mana_cost": "{G}{U}{R}",
+      "name": "Flubs, the Fool",
+      "oracle_id": "29356966-652d-4456-84c8-7aeab5fc8d05",
+      "oracle_text": "You may play an additional land on each of your turns.\nWhenever you play a land or cast a spell, draw a card if you have no cards in hand. Otherwise, discard a card.",
+      "power": "0",
       "printed_name": "",
       "produced_mana": [],
-      "type_line": "Legendary Creature — Devil Rogue"
+      "type_line": "Legendary Creature — Frog Scout"
     },
     "color_identity": [
-      "B",
       "G",
-      "R"
+      "R",
+      "U"
     ],
     "is_partner": false,
-    "name": "Henzie \"Toolbox\" Torre"
+    "name": "Flubs, the Fool"
   }
 }

@@ -422,12 +422,16 @@ type scoreResult struct {
 // in the same shape the chromedp pipeline produced, so the rest of the app is unchanged.
 // comboCategories, when non-nil, feeds the 2-card-combo bracket rule (early vs late).
 func Score(ctx context.Context, target deck.Deck, httpClient *http.Client) (map[string]any, error) {
-	return ScoreWithCombos(ctx, target, httpClient, nil, nil)
+	return ScoreWithCombos(ctx, target, httpClient, nil, nil, nil)
 }
 
 // ScoreWithCombos is Score plus Commander Spellbook combo results, which the site's
 // bracket rules use to detect early 2-card combos (combined mana cost ≤ 7).
-func ScoreWithCombos(ctx context.Context, target deck.Deck, httpClient *http.Client, combos []spellbook.Combo, cardCMCByName map[string]int) (map[string]any, error) {
+// cardCMCByName (catalog CMCs, keyed by lowercased front face) sharpens the
+// battlefield-cost sum; getcards CMCs fill any gaps. extraGameChangers carries
+// Game Changer names from the app's own sources (Scryfall flag + snapshot) so the
+// bracket counter does not depend on getcards' copy of the list alone.
+func ScoreWithCombos(ctx context.Context, target deck.Deck, httpClient *http.Client, combos []spellbook.Combo, cardCMCByName map[string]int, extraGameChangers map[string]struct{}) (map[string]any, error) {
 	all := append(append([]deck.Card{}, target.Commanders...), target.Mainboard...)
 	cards, err := newGetcardsClient(httpClient).fetch(ctx, all)
 	if err != nil {
@@ -535,15 +539,16 @@ func ScoreWithCombos(ctx context.Context, target deck.Deck, httpClient *http.Cli
 	powerLevel := curve(score, powerCurve, 1)
 
 	// Bracket rules (minimum bracket) and evaluated bracket.
-	rulesBracket, bdetails := computeBracket(scored, powerLevel, combos, cardCMCByName)
+	rulesBracket, bdetails := computeBracket(scored, powerLevel, combos, effectiveCMCs(scored, cardCMCByName), extraGameChangers)
 
 	metrics := map[string]any{
-		"power_level":         roundTo(powerLevel, 2),
-		"efficiency":          roundTo(ce*10, 2),
-		"score":               math.Round(score),
-		"impact":              roundTo(totalImpact, 2),
-		"average_playability": roundTo(averagePlayability(scored, producerCount, lands, nonlands, len(target.Commanders)), 1),
-		"rules_bracket":       rulesBracket,
+		"power_level": roundTo(powerLevel, 2),
+		"efficiency":  roundTo(ce*10, 2),
+		"score":       math.Round(score),
+		"impact":      roundTo(totalImpact, 2),
+		// Percentage (0-100), matching the site's display; the frontend appends "%".
+		"average_playability": roundTo(averagePlayability(scored, producerCount, lands, nonlands, len(target.Commanders))*100, 1),
+		"rules_bracket":       displayRulesBracket(rulesBracket),
 		"evaluated_bracket":   evaluatedBracket(powerLevel, rulesBracket),
 	}
 	if bdetails != nil {
@@ -709,11 +714,21 @@ func min(a, b int) int {
 
 // --- bracket rules ---
 
-// maxes are keyed by bracket index 0..4 (Brackets 1..5).
-type ruleSet struct {
-	maxes      []int
-	underBrack int // if a restricted card appears and current bracket is below this, bump up
-}
+// Per-bracket allowances (index 0 = Bracket 1), mirroring the site's
+// `bracketHelper` rule tables: when a rule's match count exceeds maxes[idx],
+// the minimum internal bracket becomes idx+1.
+var (
+	turnsMaxes       = []int{0, 2, 3, 100, 100}
+	denialMaxes      = []int{0, 0, 0, 100, 100}
+	gameChangerMaxes = []int{0, 0, 3, 100, 100}
+	earlyComboMaxes  = []int{0, 0, 0, 100, 100}
+	lateComboMaxes   = []int{0, 0, 100, 100, 100}
+)
+
+// restrictedUnderBracket is the internal minimum bracket any named restricted
+// card forces (the site's restricted.underBracket): a single classic extra-turn
+// or mass-land-denial card pushes the deck to Bracket 4 or higher.
+const restrictedUnderBracket = 3
 
 // bracketDetails mirrors the chromedp pipeline's rule-bracket detail blob so the
 // frontend keeps rendering bracket breakdowns identically.
@@ -732,35 +747,41 @@ type bracketDetails struct {
 	lateComboNames []string
 }
 
-func computeBracket(scored []*scoredCard, powerLevel float64, combos []spellbook.Combo, cardCMCByName map[string]int) (int, *bracketDetails) {
-	turns := ruleSet{maxes: []int{0, 2, 3, 100, 100}}
-	denial := ruleSet{maxes: []int{0, 0, 0, 100, 100}, underBrack: 3}
-	gameChangers := ruleSet{maxes: []int{0, 0, 3, 100, 100}}
-	earlyCombos := ruleSet{maxes: []int{0, 0, 0, 0, 100}}
-	lateCombos := ruleSet{maxes: []int{0, 0, 100, 100, 100}}
-
+// computeBracket returns the internal minimum bracket `na` — the site's own
+// variable: 0 when no rule is breached, otherwise the highest breached bracket
+// index plus one. The user-facing rules bracket is displayRulesBracket(na);
+// the evaluated bracket is max(power curve, na+1), exactly like the site's
+// `xa = X > na+1 ? X : na+1`.
+func computeBracket(scored []*scoredCard, powerLevel float64, combos []spellbook.Combo, cardCMCByName map[string]int, extraGameChangers map[string]struct{}) (int, *bracketDetails) {
 	details := &bracketDetails{}
+
+	// The site tracks regex matches and named restricted-list matches separately:
+	// regex hits count against the per-bracket maxes, any named hit forces the
+	// restricted minimum. Display lists merge both.
+	var turnRegex, turnNamed, denialRegex, denialNamed []string
 	for _, s := range scored {
 		name := frontFace(s.card.name)
 		for _, line := range s.card.oracleText {
 			text := strings.ToLower(line)
-			if extraTurnRe.MatchString(text) && !contains(details.ExtraTurnNames, name) {
-				details.ExtraTurnNames = append(details.ExtraTurnNames, name)
+			if extraTurnRe.MatchString(text) && !contains(turnRegex, name) {
+				turnRegex = append(turnRegex, name)
 			}
-			if denialRe.MatchString(text) && !contains(details.MassLandDenialNames, name) && !contains(mldWhitelist, name) {
-				details.MassLandDenialNames = append(details.MassLandDenialNames, name)
+			if denialRe.MatchString(text) && !contains(denialRegex, name) && !contains(mldWhitelist, name) {
+				denialRegex = append(denialRegex, name)
 			}
 		}
-		if s.card.gameChanger && !contains(details.GameChangerNames, name) {
+		if (s.card.gameChanger || gameChangerSetHas(extraGameChangers, name)) && !contains(details.GameChangerNames, name) {
 			details.GameChangerNames = append(details.GameChangerNames, name)
 		}
-		if contains(massLandDenialCards, name) && !contains(details.MassLandDenialNames, name) {
-			details.MassLandDenialNames = append(details.MassLandDenialNames, name)
+		if contains(extraTurns, name) && !contains(turnNamed, name) {
+			turnNamed = append(turnNamed, name)
 		}
-		if contains(extraTurns, name) && !contains(details.ExtraTurnNames, name) {
-			details.ExtraTurnNames = append(details.ExtraTurnNames, name)
+		if contains(massLandDenialCards, name) && !contains(denialNamed, name) {
+			denialNamed = append(denialNamed, name)
 		}
 	}
+	details.ExtraTurnNames = mergeNames(turnRegex, turnNamed)
+	details.MassLandDenialNames = mergeNames(denialRegex, denialNamed)
 	details.ExtraTurns = len(details.ExtraTurnNames)
 	details.MassLandDenial = len(details.MassLandDenialNames)
 	details.GameChangers = len(details.GameChangerNames)
@@ -818,45 +839,28 @@ func computeBracket(scored []*scoredCard, powerLevel float64, combos []spellbook
 	}
 	details.EarlyTwoCardCombos = len(details.EarlyTwoCardComboNames)
 
-	counts := map[string]int{
-		"turns":        details.ExtraTurns,
-		"denial":       details.MassLandDenial,
-		"gameChangers": details.GameChangers,
-		"earlyCombos":  details.EarlyTwoCardCombos,
-		"lateCombos":   len(details.lateComboNames),
-	}
-	// Restricted cards force a minimum bracket: turns/denial have underBracket 3 and the
-	// named restricted lists count as "matches" even before the regex match path.
-	rulesBracket := 0 // 0 => Bracket 1
-	for _, name := range []string{"turns", "denial", "gameChangers", "earlyCombos", "lateCombos"} {
-		var rs ruleSet
-		switch name {
-		case "turns":
-			rs = turns
-		case "denial":
-			rs = denial
-		case "gameChangers":
-			rs = gameChangers
-		case "earlyCombos":
-			rs = earlyCombos
-		default:
-			rs = lateCombos
-		}
-		n := counts[name]
-		if name == "turns" {
-			if n > 0 && rs.underBrack > 0 && rulesBracket+1 < rs.underBrack {
-				rulesBracket = rs.underBrack - 1
-			}
-		}
-		for idx := len(rs.maxes) - 1; idx >= 0; idx-- {
-			if n > rs.maxes[idx] {
-				if idx+1 > rulesBracket {
-					rulesBracket = idx + 1
-				}
+	// bump mirrors the site's per-rule minimum: the highest maxes index whose
+	// count breaches, plus one; a named restricted card forces the minimum up.
+	bump := func(count int, maxes []int, restricted bool) int {
+		h := 0
+		for idx := len(maxes) - 1; idx >= 0; idx-- {
+			if count > maxes[idx] {
+				h = idx + 1
 				break
 			}
 		}
+		if restricted && h < restrictedUnderBracket {
+			h = restrictedUnderBracket
+		}
+		return h
 	}
+	na := maxOf(
+		bump(len(turnRegex), turnsMaxes, len(turnNamed) > 0),
+		bump(len(denialRegex), denialMaxes, len(denialNamed) > 0),
+		bump(details.GameChangers, gameChangerMaxes, false),
+		bump(details.EarlyTwoCardCombos, earlyComboMaxes, false),
+		bump(len(details.lateComboNames), lateComboMaxes, false),
+	)
 
 	// build reasons
 	if details.GameChangers > 3 {
@@ -876,11 +880,66 @@ func computeBracket(scored []*scoredCard, powerLevel float64, combos []spellbook
 			fmt.Sprintf("Mass Land Denial: %d - Your deck contains mass land denial.", details.MassLandDenial))
 	}
 
-	if rulesBracket == 0 {
-		rulesBracket = 1
+	details.EvaluatedBracketReason = fmt.Sprintf("Recommended Bracket: %d. Minimum Bracket: %d.", evaluatedBracket(powerLevel, na), displayRulesBracket(na))
+	return na, details
+}
+
+// displayRulesBracket converts the internal minimum `na` into the 1-based bracket
+// shown to users, matching the site's `na>0 ? na+1 : 1`.
+func displayRulesBracket(na int) int {
+	if na > 0 {
+		return na + 1
 	}
-	details.EvaluatedBracketReason = fmt.Sprintf("EDH Power Level recommends Bracket %d after considering the deck power level.", evaluatedBracket(powerLevel, rulesBracket))
-	return rulesBracket, details
+	return 1
+}
+
+// gameChangerSetHas reports whether name (front face, case-insensitive) is in
+// the extra Game Changer set handed in by the caller.
+func gameChangerSetHas(set map[string]struct{}, name string) bool {
+	if len(set) == 0 {
+		return false
+	}
+	_, ok := set[strings.ToLower(name)]
+	return ok
+}
+
+// mergeNames concatenates two name lists, dropping duplicates (the regex lists
+// and the named restricted lists overlap heavily).
+func mergeNames(primary, secondary []string) []string {
+	merged := append([]string{}, primary...)
+	for _, name := range secondary {
+		if !contains(merged, name) {
+			merged = append(merged, name)
+		}
+	}
+	return merged
+}
+
+func maxOf(values ...int) int {
+	result := 0
+	for _, v := range values {
+		if v > result {
+			result = v
+		}
+	}
+	return result
+}
+
+// effectiveCMCs overlays the getcards CMCs beneath the catalog's: the bracket
+// combo detector sums battlefield component costs, and a component the catalog
+// lacks (Scryfall down, or the card missing from it) still has a getcards value.
+func effectiveCMCs(scored []*scoredCard, catalogCMC map[string]int) map[string]int {
+	merged := make(map[string]int, len(catalogCMC)+len(scored))
+	for name, cmc := range catalogCMC {
+		merged[name] = cmc
+	}
+	for _, s := range scored {
+		key := strings.ToLower(frontFace(s.card.name))
+		if _, ok := merged[key]; !ok {
+			merged[key] = s.cmc
+		}
+	}
+	return merged
 }
 
 // gameDefiningProducers and acceptableRequirementTemplates are the numeric feature /
@@ -906,14 +965,16 @@ var (
 	denialRe    = regexp.MustCompile(`(^(noncreature|creature|red|white|blue|black|green) spells|^spells your opponents cast) cost \{\d+\} more to cast|each player sacrifices \w* (lands|land for each)|destroy all (lands|islands|mountains|forests|swamps|plains)|destroy all (\w*, )*and lands|untap (only|more than) \w* (land|permanent|nonbasic)|(islands|mountains|forests|swamps|plains|\w* lands) don't untap|nonbasic lands are (mountains|islands)`)
 )
 
-func evaluatedBracket(powerLevel float64, rulesBracket int) int {
-	// X = ceil(de(power, bracketCurve)); recommended = max(X, rules+1) capped at 5.
+func evaluatedBracket(powerLevel float64, na int) int {
+	// X = ceil(de(power, bracketCurve)); recommended = max(X, na+1) capped at 5.
+	// The site computes the same thing (`bracketHelper(ie)` with ie = power
+	// level): a clean weak deck can be recommended Bracket 1.
 	x := 5
 	if powerLevel > 0 {
 		x = int(math.Ceil(curve(powerLevel, bracketCurve, 1)))
 	}
 	recommended := x
-	if candidate := rulesBracket + 1; candidate > recommended {
+	if candidate := na + 1; candidate > recommended {
 		recommended = candidate
 	}
 	if recommended > 5 {

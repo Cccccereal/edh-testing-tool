@@ -276,13 +276,13 @@
             "cards": [
               {
                 "counts": {},
-                "name": "Basalt Monolith",
+                "name": "Sol Ring",
                 "quantity": 1,
                 "reason": "Produces mana, finds lands, or reduces cost"
               },
               {
                 "counts": {},
-                "name": "Sol Ring",
+                "name": "Basalt Monolith",
                 "quantity": 1,
                 "reason": "Produces mana, finds lands, or reduces cost"
               }
@@ -356,18 +356,18 @@
     },
     "cut_reasons": [
       {
-        "label": "加速",
-        "reasons": [
-          "跟主将的玩法没什么协同"
-        ],
-        "role": "ramp"
-      },
-      {
         "label": "计划相关",
         "reasons": [
           "单卡本身强度一般，模型不会优先选它"
         ],
         "role": "plan"
+      },
+      {
+        "label": "加速",
+        "reasons": [
+          "跟主将的玩法没什么协同"
+        ],
+        "role": "ramp"
       },
       {
         "label": "加速",
