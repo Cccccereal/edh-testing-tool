@@ -250,6 +250,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 当前构建版本与最新发布版本
+         * @description current 为构建时注入的发布 tag（本地开发构建为 "dev"）。latest 是服务端
+         *     尽力查询 GitHub Releases 的结果（成功缓存 24h，失败缓存 1h）；查询失败
+         *     或断网时为 null，前端据此保持安静。latest.notes 可能缺省（重定向兜底源
+         *     不提供发布说明）。
+         */
+        get: operations["getVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -580,6 +603,24 @@ export interface components {
             commanders: components["schemas"]["ResolvedCommander"][];
             color_identity: components["schemas"]["ManaColor"][];
         };
+        VersionResponse: {
+            /** @description 构建时注入的发布 tag，本地开发构建为 "dev" */
+            current: string;
+            /** @description 最新发布信息；查询失败或断网时为 null */
+            latest: null | components["schemas"]["LatestRelease"];
+        };
+        LatestRelease: {
+            /** @description 发布 tag，如 v20260922-1030 */
+            version: string;
+            /** @description 发布说明（重定向兜底源不提供，可能缺省） */
+            notes?: string;
+            /** @description GitHub Releases 页面 */
+            release_url: string;
+            /** @description 安卓 APK 下载直链 */
+            apk_url?: string;
+            /** @description Windows 桌面客户端下载直链 */
+            exe_url?: string;
+        };
     };
     responses: {
         /** @description 请求不合法；code 见各端点 description */
@@ -905,6 +946,26 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
             502: components["responses"]["BadGateway"];
+        };
+    };
+    getVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 版本信息 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionResponse"];
+                };
+            };
         };
     };
 }

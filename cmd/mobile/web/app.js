@@ -2727,3 +2727,76 @@ function showStickyNav() {
     });
   });
 }
+
+// ---------------------------------------------------------------------------
+// Version footer + update banner
+//
+// GET /api/v1/version answers with the running build tag and, best-effort, the
+// newest GitHub release. Release tags are commit timestamps ("v20260922-1030")
+// so a plain string compare decides "newer". Everything is silent on failure:
+// an old server without the endpoint, a dead network, or a "dev" build simply
+// shows no banner at all.
+// ---------------------------------------------------------------------------
+
+const UPDATE_DISMISS_KEY = 'update-dismissed-version';
+
+function looksLikeReleaseTag(value) {
+  return typeof value === 'string' && /^v\d{8}-\d{4}$/.test(value);
+}
+
+function showUpdateBanner(latest, current) {
+  if (document.querySelector('#update-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'update-banner';
+  banner.className = 'update-banner';
+  banner.setAttribute('role', 'status');
+  const label = document.createElement('span');
+  label.textContent = `发现新版本 ${latest.version}`;
+  // 窄屏（<560px）下隐藏当前版本号，避免横幅挤成竖排（styles.css 媒体查询）
+  const currentTag = document.createElement('span');
+  currentTag.className = 'update-current';
+  currentTag.textContent = `（当前 ${current}）`;
+  const link = document.createElement('a');
+  link.href = latest.release_url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.textContent = '前往下载';
+  if (latest.notes) label.title = latest.notes;
+  const dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.className = 'update-banner-dismiss';
+  dismiss.setAttribute('aria-label', '忽略此版本更新');
+  dismiss.textContent = '×';
+  dismiss.addEventListener('click', () => {
+    try { localStorage.setItem(UPDATE_DISMISS_KEY, latest.version); } catch { /* 私隐模式等场景下不可用，忽略 */ }
+    banner.remove();
+  });
+  banner.append(label, currentTag, link, dismiss);
+  document.body.appendChild(banner);
+}
+
+async function initVersionInfo() {
+  const el = document.querySelector('#app-version');
+  let payload;
+  try {
+    const resp = await fetch('/api/v1/version');
+    if (!resp.ok) return;
+    payload = await resp.json();
+  } catch {
+    return; // 离线或旧版服务端：安静退出
+  }
+  const current = String(payload.current || '');
+  if (el && current && current !== 'dev') {
+    el.textContent = `版本 ${current}`;
+    el.hidden = false;
+  }
+  const latest = payload.latest;
+  if (!latest || !looksLikeReleaseTag(latest.version) || !looksLikeReleaseTag(current)) return;
+  if (latest.version <= current) return;
+  try {
+    if (localStorage.getItem(UPDATE_DISMISS_KEY) === latest.version) return;
+  } catch { /* localStorage 不可用就不做记忆 */ }
+  showUpdateBanner(latest, current);
+}
+
+initVersionInfo();

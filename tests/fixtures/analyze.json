@@ -6,7 +6,7 @@
     "canonical_decklist": "Commander\n1 Sram, Senior Edificer\n\nDeck\n1 Basalt Monolith\n1 Heliod, Sun-Crowned\n20 Plains\n1 Sol Ring\n1 Walking Ballista",
     "combo_suggestions": [
       {
-        "category": "other",
+        "category": "mana",
         "missing": [
           {
             "card": {
@@ -17,14 +17,14 @@
               "color_identity": [],
               "faces": [],
               "game_changer": false,
-              "image_normal": "https://cards.scryfall.io/normal/front/6/3/63349fa3-4462-413c-bd96-bbc1049165a0.jpg?1783917104",
-              "image_small": "https://cards.scryfall.io/small/front/6/3/63349fa3-4462-413c-bd96-bbc1049165a0.jpg?1783917104",
+              "image_normal": "https://cards.scryfall.io/normal/front/8/2/82dfdb91-aa69-45a1-adcc-9fcd85f84ccf.jpg?1783915407",
+              "image_small": "https://cards.scryfall.io/small/front/8/2/82dfdb91-aa69-45a1-adcc-9fcd85f84ccf.jpg?1783915407",
               "keywords": [],
               "layout": "",
               "legalities": {},
               "mana_cost": "",
-              "name": "Triskelion",
-              "oracle_id": "74f67dcf-5afb-45aa-8d4b-3cdb23f6f2a1",
+              "name": "Forsaken Monument",
+              "oracle_id": "7777fab1-df3f-467f-b9e2-46dd2bd2166e",
               "oracle_text": "",
               "power": "",
               "printed_name": "",
@@ -37,7 +37,7 @@
             "roles": []
           }
         ],
-        "name": "Heliod, Sun-Crowned + Triskelion",
+        "name": "Basalt Monolith + Forsaken Monument",
         "owned": [
           {
             "card": {
@@ -48,14 +48,14 @@
               "color_identity": [],
               "faces": [],
               "game_changer": false,
-              "image_normal": "https://cards.scryfall.io/normal/front/3/2/3245ff74-1f9c-4518-a23f-1579f338f232.jpg?1783915722",
-              "image_small": "https://cards.scryfall.io/small/front/3/2/3245ff74-1f9c-4518-a23f-1579f338f232.jpg?1783915722",
+              "image_normal": "https://cards.scryfall.io/normal/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
+              "image_small": "https://cards.scryfall.io/small/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
               "keywords": [],
               "layout": "",
               "legalities": {},
               "mana_cost": "",
-              "name": "Heliod, Sun-Crowned",
-              "oracle_id": "63e596a2-9126-4af6-8782-c38687d664ad",
+              "name": "Basalt Monolith",
+              "oracle_id": "6b8cf2a0-b045-4d91-9d91-c602d40c6237",
               "oracle_text": "",
               "power": "",
               "printed_name": "",
@@ -68,8 +68,140 @@
             "roles": []
           }
         ],
-        "result": "Infinite damage, Infinite lifegain, Infinite lifegain triggers",
-        "source_url": "https://commanderspellbook.com/combo/1274-1495"
+        "result": "Infinite colorless mana",
+        "source_url": "https://commanderspellbook.com/combo/4131-4547"
+      },
+      {
+        "category": "mana",
+        "missing": [
+          {
+            "card": {
+              "chinese_name": "",
+              "chinese_oracle_text": "",
+              "chinese_type_line": "",
+              "cmc": 0,
+              "color_identity": [],
+              "faces": [],
+              "game_changer": false,
+              "image_normal": "https://cards.scryfall.io/normal/front/8/3/838ffc87-517a-4d94-8ce0-bc9ed01ecc52.jpg?1783928748",
+              "image_small": "https://cards.scryfall.io/small/front/8/3/838ffc87-517a-4d94-8ce0-bc9ed01ecc52.jpg?1783928748",
+              "keywords": [],
+              "layout": "",
+              "legalities": {},
+              "mana_cost": "",
+              "name": "Rings of Brighthearth",
+              "oracle_id": "bbf9494c-c4bb-4d36-98fe-8387846b342e",
+              "oracle_text": "",
+              "power": "",
+              "printed_name": "",
+              "produced_mana": [],
+              "type_line": ""
+            },
+            "commander": false,
+            "land": false,
+            "quantity": 1,
+            "roles": []
+          }
+        ],
+        "name": "Rings of Brighthearth + Basalt Monolith",
+        "owned": [
+          {
+            "card": {
+              "chinese_name": "",
+              "chinese_oracle_text": "",
+              "chinese_type_line": "",
+              "cmc": 0,
+              "color_identity": [],
+              "faces": [],
+              "game_changer": false,
+              "image_normal": "https://cards.scryfall.io/normal/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
+              "image_small": "https://cards.scryfall.io/small/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
+              "keywords": [],
+              "layout": "",
+              "legalities": {},
+              "mana_cost": "",
+              "name": "Basalt Monolith",
+              "oracle_id": "6b8cf2a0-b045-4d91-9d91-c602d40c6237",
+              "oracle_text": "",
+              "power": "",
+              "printed_name": "",
+              "produced_mana": [],
+              "type_line": ""
+            },
+            "commander": false,
+            "land": false,
+            "quantity": 1,
+            "roles": []
+          }
+        ],
+        "result": "Infinite colorless mana",
+        "source_url": "https://commanderspellbook.com/combo/4131-4235"
+      },
+      {
+        "category": "mill",
+        "missing": [
+          {
+            "card": {
+              "chinese_name": "",
+              "chinese_oracle_text": "",
+              "chinese_type_line": "",
+              "cmc": 0,
+              "color_identity": [],
+              "faces": [],
+              "game_changer": false,
+              "image_normal": "https://cards.scryfall.io/normal/front/e/2/e24fbdbb-f2ae-4823-9d2a-4c505332aa5b.jpg?1783930103",
+              "image_small": "https://cards.scryfall.io/small/front/e/2/e24fbdbb-f2ae-4823-9d2a-4c505332aa5b.jpg?1783930103",
+              "keywords": [],
+              "layout": "",
+              "legalities": {},
+              "mana_cost": "",
+              "name": "Mesmeric Orb",
+              "oracle_id": "03efb4f3-b8e2-4441-824f-886dc40712c4",
+              "oracle_text": "",
+              "power": "",
+              "printed_name": "",
+              "produced_mana": [],
+              "type_line": ""
+            },
+            "commander": false,
+            "land": false,
+            "quantity": 1,
+            "roles": []
+          }
+        ],
+        "name": "Basalt Monolith + Mesmeric Orb",
+        "owned": [
+          {
+            "card": {
+              "chinese_name": "",
+              "chinese_oracle_text": "",
+              "chinese_type_line": "",
+              "cmc": 0,
+              "color_identity": [],
+              "faces": [],
+              "game_changer": false,
+              "image_normal": "https://cards.scryfall.io/normal/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
+              "image_small": "https://cards.scryfall.io/small/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
+              "keywords": [],
+              "layout": "",
+              "legalities": {},
+              "mana_cost": "",
+              "name": "Basalt Monolith",
+              "oracle_id": "6b8cf2a0-b045-4d91-9d91-c602d40c6237",
+              "oracle_text": "",
+              "power": "",
+              "printed_name": "",
+              "produced_mana": [],
+              "type_line": ""
+            },
+            "commander": false,
+            "land": false,
+            "quantity": 1,
+            "roles": []
+          }
+        ],
+        "result": "Infinite self-mill",
+        "source_url": "https://commanderspellbook.com/combo/4131-4684"
       },
       {
         "category": "other",
@@ -83,14 +215,14 @@
               "color_identity": [],
               "faces": [],
               "game_changer": false,
-              "image_normal": "https://cards.scryfall.io/normal/front/1/5/15c34447-b0f4-4fcc-b557-23c92850b31b.jpg?1783930222",
-              "image_small": "https://cards.scryfall.io/small/front/1/5/15c34447-b0f4-4fcc-b557-23c92850b31b.jpg?1783930222",
+              "image_normal": "https://cards.scryfall.io/normal/front/9/9/993bc69a-b615-48c5-af81-252a73384e8c.jpg?1783936730",
+              "image_small": "https://cards.scryfall.io/small/front/9/9/993bc69a-b615-48c5-af81-252a73384e8c.jpg?1783936730",
               "keywords": [],
               "layout": "",
               "legalities": {},
               "mana_cost": "",
-              "name": "Archangel of Thune",
-              "oracle_id": "4f2d4538-dc1d-4c09-964b-b0d7c240fb7d",
+              "name": "Crackdown Construct",
+              "oracle_id": "bccbd5ae-4e3f-43ee-a51b-d0ec2c645238",
               "oracle_text": "",
               "power": "",
               "printed_name": "",
@@ -103,7 +235,7 @@
             "roles": []
           }
         ],
-        "name": "Archangel of Thune + Walking Ballista",
+        "name": "Crackdown Construct + Basalt Monolith",
         "owned": [
           {
             "card": {
@@ -114,14 +246,14 @@
               "color_identity": [],
               "faces": [],
               "game_changer": false,
-              "image_normal": "https://cards.scryfall.io/normal/front/5/2/5272436e-74f0-44c4-a291-ea8ebc3f1525.jpg?1783930088",
-              "image_small": "https://cards.scryfall.io/small/front/5/2/5272436e-74f0-44c4-a291-ea8ebc3f1525.jpg?1783930088",
+              "image_normal": "https://cards.scryfall.io/normal/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
+              "image_small": "https://cards.scryfall.io/small/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
               "keywords": [],
               "layout": "",
               "legalities": {},
               "mana_cost": "",
-              "name": "Walking Ballista",
-              "oracle_id": "4b515bb0-f275-4400-8032-3173b799ab40",
+              "name": "Basalt Monolith",
+              "oracle_id": "6b8cf2a0-b045-4d91-9d91-c602d40c6237",
               "oracle_text": "",
               "power": "",
               "printed_name": "",
@@ -134,271 +266,11 @@
             "roles": []
           }
         ],
-        "result": "Infinite damage, Infinite lifegain, Infinite lifegain triggers, Infinite +1/+1 counters on creatures you control",
-        "source_url": "https://commanderspellbook.com/combo/2919-3693"
-      },
-      {
-        "category": "other",
-        "missing": [
-          {
-            "card": {
-              "chinese_name": "",
-              "chinese_oracle_text": "",
-              "chinese_type_line": "",
-              "cmc": 0,
-              "color_identity": [],
-              "faces": [],
-              "game_changer": false,
-              "image_normal": "https://cards.scryfall.io/normal/front/4/7/47ce8b7e-d8e1-489a-a69e-99089eeb8739.jpg?1783926538",
-              "image_small": "https://cards.scryfall.io/small/front/4/7/47ce8b7e-d8e1-489a-a69e-99089eeb8739.jpg?1783926538",
-              "keywords": [],
-              "layout": "",
-              "legalities": {},
-              "mana_cost": "",
-              "name": "Cleric Class",
-              "oracle_id": "f0ead7f5-5c82-40fd-8e89-3e3c5d31fbad",
-              "oracle_text": "",
-              "power": "",
-              "printed_name": "",
-              "produced_mana": [],
-              "type_line": ""
-            },
-            "commander": false,
-            "land": false,
-            "quantity": 1,
-            "roles": []
-          }
-        ],
-        "name": "Cleric Class + Walking Ballista",
-        "owned": [
-          {
-            "card": {
-              "chinese_name": "",
-              "chinese_oracle_text": "",
-              "chinese_type_line": "",
-              "cmc": 0,
-              "color_identity": [],
-              "faces": [],
-              "game_changer": false,
-              "image_normal": "https://cards.scryfall.io/normal/front/5/2/5272436e-74f0-44c4-a291-ea8ebc3f1525.jpg?1783930088",
-              "image_small": "https://cards.scryfall.io/small/front/5/2/5272436e-74f0-44c4-a291-ea8ebc3f1525.jpg?1783930088",
-              "keywords": [],
-              "layout": "",
-              "legalities": {},
-              "mana_cost": "",
-              "name": "Walking Ballista",
-              "oracle_id": "4b515bb0-f275-4400-8032-3173b799ab40",
-              "oracle_text": "",
-              "power": "",
-              "printed_name": "",
-              "produced_mana": [],
-              "type_line": ""
-            },
-            "commander": false,
-            "land": false,
-            "quantity": 1,
-            "roles": []
-          }
-        ],
-        "result": "Infinite damage, Infinite lifegain, Infinite lifegain triggers",
-        "source_url": "https://commanderspellbook.com/combo/104-3693"
-      },
-      {
-        "category": "other",
-        "missing": [
-          {
-            "card": {
-              "chinese_name": "",
-              "chinese_oracle_text": "",
-              "chinese_type_line": "",
-              "cmc": 0,
-              "color_identity": [],
-              "faces": [],
-              "game_changer": false,
-              "image_normal": "https://cards.scryfall.io/normal/front/d/5/d5f80411-0a95-4e0a-b7a8-af23ddf385cc.jpg?1783930738",
-              "image_small": "https://cards.scryfall.io/small/front/d/5/d5f80411-0a95-4e0a-b7a8-af23ddf385cc.jpg?1783930738",
-              "keywords": [],
-              "layout": "",
-              "legalities": {},
-              "mana_cost": "",
-              "name": "Light of Promise",
-              "oracle_id": "64c54c9f-0550-41e2-a44a-5892a199f670",
-              "oracle_text": "",
-              "power": "",
-              "printed_name": "",
-              "produced_mana": [],
-              "type_line": ""
-            },
-            "commander": false,
-            "land": false,
-            "quantity": 1,
-            "roles": []
-          }
-        ],
-        "name": "Light of Promise + Walking Ballista",
-        "owned": [
-          {
-            "card": {
-              "chinese_name": "",
-              "chinese_oracle_text": "",
-              "chinese_type_line": "",
-              "cmc": 0,
-              "color_identity": [],
-              "faces": [],
-              "game_changer": false,
-              "image_normal": "https://cards.scryfall.io/normal/front/5/2/5272436e-74f0-44c4-a291-ea8ebc3f1525.jpg?1783930088",
-              "image_small": "https://cards.scryfall.io/small/front/5/2/5272436e-74f0-44c4-a291-ea8ebc3f1525.jpg?1783930088",
-              "keywords": [],
-              "layout": "",
-              "legalities": {},
-              "mana_cost": "",
-              "name": "Walking Ballista",
-              "oracle_id": "4b515bb0-f275-4400-8032-3173b799ab40",
-              "oracle_text": "",
-              "power": "",
-              "printed_name": "",
-              "produced_mana": [],
-              "type_line": ""
-            },
-            "commander": false,
-            "land": false,
-            "quantity": 1,
-            "roles": []
-          }
-        ],
-        "result": "Infinite damage, Infinite lifegain, Infinite lifegain triggers",
-        "source_url": "https://commanderspellbook.com/combo/338-3693"
+        "result": "Infinitely large creature until end of turn",
+        "source_url": "https://commanderspellbook.com/combo/4131-4944"
       }
     ],
-    "combos": [
-      {
-        "components": [
-          {
-            "card": {
-              "chinese_name": "",
-              "chinese_oracle_text": "",
-              "chinese_type_line": "",
-              "cmc": 3,
-              "color_identity": [
-                "W"
-              ],
-              "faces": [],
-              "game_changer": false,
-              "image_normal": "https://cards.scryfall.io/normal/front/3/2/3245ff74-1f9c-4518-a23f-1579f338f232.jpg?1783915722",
-              "image_small": "https://cards.scryfall.io/small/front/3/2/3245ff74-1f9c-4518-a23f-1579f338f232.jpg?1783915722",
-              "keywords": [
-                "Indestructible"
-              ],
-              "layout": "normal",
-              "legalities": {
-                "alchemy": "not_legal",
-                "brawl": "legal",
-                "commander": "legal",
-                "competitivebrawl": "legal",
-                "duel": "legal",
-                "future": "not_legal",
-                "gladiator": "legal",
-                "historic": "legal",
-                "legacy": "legal",
-                "modern": "legal",
-                "oathbreaker": "legal",
-                "oldschool": "not_legal",
-                "pauper": "not_legal",
-                "paupercommander": "not_legal",
-                "penny": "not_legal",
-                "pioneer": "legal",
-                "predh": "not_legal",
-                "premodern": "not_legal",
-                "standard": "not_legal",
-                "standardbrawl": "not_legal",
-                "timeless": "legal",
-                "tlr": "legal",
-                "vintage": "legal"
-              },
-              "mana_cost": "{2}{W}",
-              "name": "Heliod, Sun-Crowned",
-              "oracle_id": "63e596a2-9126-4af6-8782-c38687d664ad",
-              "oracle_text": "Indestructible\nAs long as your devotion to white is less than five, Heliod isn't a creature.\nWhenever you gain life, put a +1/+1 counter on target creature or enchantment you control.\n{1}{W}: Another target creature gains lifelink until end of turn.",
-              "power": "5",
-              "printed_name": "",
-              "produced_mana": [],
-              "type_line": "Legendary Enchantment Creature — God"
-            },
-            "commander": false,
-            "land": false,
-            "quantity": 1,
-            "roles": [
-              "plan"
-            ]
-          },
-          {
-            "card": {
-              "chinese_name": "",
-              "chinese_oracle_text": "",
-              "chinese_type_line": "",
-              "cmc": 0,
-              "color_identity": [],
-              "faces": [],
-              "game_changer": false,
-              "image_normal": "https://cards.scryfall.io/normal/front/5/2/5272436e-74f0-44c4-a291-ea8ebc3f1525.jpg?1783930088",
-              "image_small": "https://cards.scryfall.io/small/front/5/2/5272436e-74f0-44c4-a291-ea8ebc3f1525.jpg?1783930088",
-              "keywords": [],
-              "layout": "normal",
-              "legalities": {
-                "alchemy": "not_legal",
-                "brawl": "not_legal",
-                "commander": "legal",
-                "competitivebrawl": "not_legal",
-                "duel": "legal",
-                "future": "not_legal",
-                "gladiator": "not_legal",
-                "historic": "not_legal",
-                "legacy": "legal",
-                "modern": "legal",
-                "oathbreaker": "legal",
-                "oldschool": "not_legal",
-                "pauper": "not_legal",
-                "paupercommander": "not_legal",
-                "penny": "not_legal",
-                "pioneer": "banned",
-                "predh": "not_legal",
-                "premodern": "not_legal",
-                "standard": "not_legal",
-                "standardbrawl": "not_legal",
-                "timeless": "not_legal",
-                "tlr": "legal",
-                "vintage": "legal"
-              },
-              "mana_cost": "{X}{X}",
-              "name": "Walking Ballista",
-              "oracle_id": "4b515bb0-f275-4400-8032-3173b799ab40",
-              "oracle_text": "This creature enters with X +1/+1 counters on it.\n{4}: Put a +1/+1 counter on this creature.\nRemove a +1/+1 counter from this creature: It deals 1 damage to any target.",
-              "power": "0",
-              "printed_name": "",
-              "produced_mana": [],
-              "type_line": "Artifact Creature — Construct"
-            },
-            "commander": false,
-            "land": false,
-            "quantity": 1,
-            "roles": []
-          }
-        ],
-        "name": "Heliod, Sun-Crowned + Walking Ballista",
-        "result": "Infinite damage, Infinite lifegain, Infinite lifegain triggers",
-        "source_url": "https://commanderspellbook.com/combo/1274-3693",
-        "sources": [
-          "commander_spellbook"
-        ],
-        "steps": [
-          "Activate Heliod by paying {1}{W}, giving Walking Ballista lifelink until end of turn.",
-          "Activate Walking Ballista's second ability by removing a +1/+1 counter, dealing 1 damage to any target.",
-          "Walking Ballista's lifelink triggers, causing you to gain 1 life.",
-          "Heliod triggers, putting a +1/+1 counter on Walking Ballista.",
-          "Repeat from step 2."
-        ]
-      }
-    ],
+    "combos": [],
     "construction_report": {
       "metrics": [
         {
@@ -490,13 +362,13 @@
           "cards": [
             {
               "counts": {},
-              "name": "Sol Ring",
+              "name": "Basalt Monolith",
               "quantity": 1,
               "reason": "Produces mana, finds lands, or reduces cost"
             },
             {
               "counts": {},
-              "name": "Basalt Monolith",
+              "name": "Sol Ring",
               "quantity": 1,
               "reason": "Produces mana, finds lands, or reduces cost"
             }
@@ -631,6 +503,62 @@
         "roles": [
           "plan",
           "draw_discard"
+        ]
+      },
+      {
+        "card": {
+          "chinese_name": "",
+          "chinese_oracle_text": "",
+          "chinese_type_line": "",
+          "cmc": 3,
+          "color_identity": [],
+          "faces": [],
+          "game_changer": false,
+          "image_normal": "https://cards.scryfall.io/normal/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
+          "image_small": "https://cards.scryfall.io/small/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
+          "keywords": [],
+          "layout": "normal",
+          "legalities": {
+            "alchemy": "not_legal",
+            "brawl": "not_legal",
+            "commander": "legal",
+            "competitivebrawl": "not_legal",
+            "duel": "legal",
+            "future": "not_legal",
+            "gladiator": "not_legal",
+            "historic": "not_legal",
+            "legacy": "legal",
+            "modern": "not_legal",
+            "oathbreaker": "legal",
+            "oldschool": "not_legal",
+            "pauper": "not_legal",
+            "paupercommander": "not_legal",
+            "penny": "not_legal",
+            "pioneer": "not_legal",
+            "predh": "legal",
+            "premodern": "not_legal",
+            "standard": "not_legal",
+            "standardbrawl": "not_legal",
+            "timeless": "not_legal",
+            "tlr": "legal",
+            "vintage": "legal"
+          },
+          "mana_cost": "{3}",
+          "name": "Basalt Monolith",
+          "oracle_id": "6b8cf2a0-b045-4d91-9d91-c602d40c6237",
+          "oracle_text": "This artifact doesn't untap during your untap step.\n{T}: Add {C}{C}{C}.\n{3}: Untap this artifact.",
+          "power": "",
+          "printed_name": "",
+          "produced_mana": [
+            "C"
+          ],
+          "type_line": "Artifact"
+        },
+        "commander": false,
+        "land": false,
+        "quantity": 1,
+        "roles": [
+          "ramp"
         ]
       },
       {
@@ -855,62 +783,6 @@
         "quantity": 20,
         "roles": [
           "lands"
-        ]
-      },
-      {
-        "card": {
-          "chinese_name": "",
-          "chinese_oracle_text": "",
-          "chinese_type_line": "",
-          "cmc": 3,
-          "color_identity": [],
-          "faces": [],
-          "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
-          "image_small": "https://cards.scryfall.io/small/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
-          "keywords": [],
-          "layout": "normal",
-          "legalities": {
-            "alchemy": "not_legal",
-            "brawl": "not_legal",
-            "commander": "legal",
-            "competitivebrawl": "not_legal",
-            "duel": "legal",
-            "future": "not_legal",
-            "gladiator": "not_legal",
-            "historic": "not_legal",
-            "legacy": "legal",
-            "modern": "not_legal",
-            "oathbreaker": "legal",
-            "oldschool": "not_legal",
-            "pauper": "not_legal",
-            "paupercommander": "not_legal",
-            "penny": "not_legal",
-            "pioneer": "not_legal",
-            "predh": "legal",
-            "premodern": "not_legal",
-            "standard": "not_legal",
-            "standardbrawl": "not_legal",
-            "timeless": "not_legal",
-            "tlr": "legal",
-            "vintage": "legal"
-          },
-          "mana_cost": "{3}",
-          "name": "Basalt Monolith",
-          "oracle_id": "6b8cf2a0-b045-4d91-9d91-c602d40c6237",
-          "oracle_text": "This artifact doesn't untap during your untap step.\n{T}: Add {C}{C}{C}.\n{3}: Untap this artifact.",
-          "power": "",
-          "printed_name": "",
-          "produced_mana": [
-            "C"
-          ],
-          "type_line": "Artifact"
-        },
-        "commander": false,
-        "land": false,
-        "quantity": 1,
-        "roles": [
-          "ramp"
         ]
       }
     ],
@@ -7216,69 +7088,11 @@
           "chinese_oracle_text": "",
           "chinese_type_line": "",
           "cmc": 3,
-          "color_identity": [
-            "W"
-          ],
-          "faces": [],
-          "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/3/2/3245ff74-1f9c-4518-a23f-1579f338f232.jpg?1783915722",
-          "image_small": "https://cards.scryfall.io/small/front/3/2/3245ff74-1f9c-4518-a23f-1579f338f232.jpg?1783915722",
-          "keywords": [
-            "Indestructible"
-          ],
-          "layout": "normal",
-          "legalities": {
-            "alchemy": "not_legal",
-            "brawl": "legal",
-            "commander": "legal",
-            "competitivebrawl": "legal",
-            "duel": "legal",
-            "future": "not_legal",
-            "gladiator": "legal",
-            "historic": "legal",
-            "legacy": "legal",
-            "modern": "legal",
-            "oathbreaker": "legal",
-            "oldschool": "not_legal",
-            "pauper": "not_legal",
-            "paupercommander": "not_legal",
-            "penny": "not_legal",
-            "pioneer": "legal",
-            "predh": "not_legal",
-            "premodern": "not_legal",
-            "standard": "not_legal",
-            "standardbrawl": "not_legal",
-            "timeless": "legal",
-            "tlr": "legal",
-            "vintage": "legal"
-          },
-          "mana_cost": "{2}{W}",
-          "name": "Heliod, Sun-Crowned",
-          "oracle_id": "63e596a2-9126-4af6-8782-c38687d664ad",
-          "oracle_text": "Indestructible\nAs long as your devotion to white is less than five, Heliod isn't a creature.\nWhenever you gain life, put a +1/+1 counter on target creature or enchantment you control.\n{1}{W}: Another target creature gains lifelink until end of turn.",
-          "power": "5",
-          "printed_name": "",
-          "produced_mana": [],
-          "type_line": "Legendary Enchantment Creature — God"
-        },
-        "commander": false,
-        "land": false,
-        "quantity": 1,
-        "roles": [
-          "plan"
-        ]
-      },
-      {
-        "card": {
-          "chinese_name": "",
-          "chinese_oracle_text": "",
-          "chinese_type_line": "",
-          "cmc": 0,
           "color_identity": [],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/5/2/5272436e-74f0-44c4-a291-ea8ebc3f1525.jpg?1783930088",
-          "image_small": "https://cards.scryfall.io/small/front/5/2/5272436e-74f0-44c4-a291-ea8ebc3f1525.jpg?1783930088",
+          "image_normal": "https://cards.scryfall.io/normal/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
+          "image_small": "https://cards.scryfall.io/small/front/f/7/f79de5e7-1545-420c-bfe1-ee2444fca85b.jpg?1783930120",
           "keywords": [],
           "layout": "normal",
           "legalities": {
@@ -7291,14 +7105,14 @@
             "gladiator": "not_legal",
             "historic": "not_legal",
             "legacy": "legal",
-            "modern": "legal",
+            "modern": "not_legal",
             "oathbreaker": "legal",
             "oldschool": "not_legal",
             "pauper": "not_legal",
             "paupercommander": "not_legal",
             "penny": "not_legal",
-            "pioneer": "banned",
-            "predh": "not_legal",
+            "pioneer": "not_legal",
+            "predh": "legal",
             "premodern": "not_legal",
             "standard": "not_legal",
             "standardbrawl": "not_legal",
@@ -7306,19 +7120,23 @@
             "tlr": "legal",
             "vintage": "legal"
           },
-          "mana_cost": "{X}{X}",
-          "name": "Walking Ballista",
-          "oracle_id": "4b515bb0-f275-4400-8032-3173b799ab40",
-          "oracle_text": "This creature enters with X +1/+1 counters on it.\n{4}: Put a +1/+1 counter on this creature.\nRemove a +1/+1 counter from this creature: It deals 1 damage to any target.",
-          "power": "0",
+          "mana_cost": "{3}",
+          "name": "Basalt Monolith",
+          "oracle_id": "6b8cf2a0-b045-4d91-9d91-c602d40c6237",
+          "oracle_text": "This artifact doesn't untap during your untap step.\n{T}: Add {C}{C}{C}.\n{3}: Untap this artifact.",
+          "power": "",
           "printed_name": "",
-          "produced_mana": [],
-          "type_line": "Artifact Creature — Construct"
+          "produced_mana": [
+            "C"
+          ],
+          "type_line": "Artifact"
         },
         "commander": false,
         "land": false,
         "quantity": 1,
-        "roles": []
+        "roles": [
+          "ramp"
+        ]
       },
       {
         "card": {
@@ -7329,14 +7147,14 @@
           "color_identity": [],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/6/3/63349fa3-4462-413c-bd96-bbc1049165a0.jpg?1783917104",
-          "image_small": "https://cards.scryfall.io/small/front/6/3/63349fa3-4462-413c-bd96-bbc1049165a0.jpg?1783917104",
+          "image_normal": "https://cards.scryfall.io/normal/front/8/2/82dfdb91-aa69-45a1-adcc-9fcd85f84ccf.jpg?1783915407",
+          "image_small": "https://cards.scryfall.io/small/front/8/2/82dfdb91-aa69-45a1-adcc-9fcd85f84ccf.jpg?1783915407",
           "keywords": [],
           "layout": "",
           "legalities": {},
           "mana_cost": "",
-          "name": "Triskelion",
-          "oracle_id": "74f67dcf-5afb-45aa-8d4b-3cdb23f6f2a1",
+          "name": "Forsaken Monument",
+          "oracle_id": "7777fab1-df3f-467f-b9e2-46dd2bd2166e",
           "oracle_text": "",
           "power": "",
           "printed_name": "",
@@ -7357,14 +7175,14 @@
           "color_identity": [],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/0/9/090a5f1f-9a1a-4e93-8c33-a0204c2917d5.jpg?1783938454",
-          "image_small": "https://cards.scryfall.io/small/front/0/9/090a5f1f-9a1a-4e93-8c33-a0204c2917d5.jpg?1783938454",
+          "image_normal": "https://cards.scryfall.io/normal/front/8/3/838ffc87-517a-4d94-8ce0-bc9ed01ecc52.jpg?1783928748",
+          "image_small": "https://cards.scryfall.io/small/front/8/3/838ffc87-517a-4d94-8ce0-bc9ed01ecc52.jpg?1783928748",
           "keywords": [],
           "layout": "",
           "legalities": {},
           "mana_cost": "",
-          "name": "Spike Feeder",
-          "oracle_id": "5b147eab-39dd-4c2a-8f59-d778037788aa",
+          "name": "Rings of Brighthearth",
+          "oracle_id": "bbf9494c-c4bb-4d36-98fe-8387846b342e",
           "oracle_text": "",
           "power": "",
           "printed_name": "",
@@ -7385,14 +7203,14 @@
           "color_identity": [],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/8/0/80804f25-efc3-44a2-bbae-9a97fec98009.jpg?1783917291",
-          "image_small": "https://cards.scryfall.io/small/front/8/0/80804f25-efc3-44a2-bbae-9a97fec98009.jpg?1783917291",
+          "image_normal": "https://cards.scryfall.io/normal/front/6/3/63cda4a0-0dff-4edb-ae67-a2b7e2971350.jpg?1783931023",
+          "image_small": "https://cards.scryfall.io/small/front/6/3/63cda4a0-0dff-4edb-ae67-a2b7e2971350.jpg?1783931023",
           "keywords": [],
           "layout": "",
           "legalities": {},
           "mana_cost": "",
-          "name": "Shalai and Hallar",
-          "oracle_id": "e7604cd9-d00d-4957-82c9-46a7cdb88209",
+          "name": "Kinnan, Bonder Prodigy",
+          "oracle_id": "8d11aa49-d4cd-48b1-aa0f-8548fa733416",
           "oracle_text": "",
           "power": "",
           "printed_name": "",
@@ -7413,14 +7231,14 @@
           "color_identity": [],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/4/1/416d888d-2699-49bd-830b-bf5bda25c91f.jpg?1783904167",
-          "image_small": "https://cards.scryfall.io/small/front/4/1/416d888d-2699-49bd-830b-bf5bda25c91f.jpg?1783904167",
+          "image_normal": "https://cards.scryfall.io/normal/front/9/7/97d08a15-e61c-4421-a541-c68a4f87cb74.jpg?1783912910",
+          "image_small": "https://cards.scryfall.io/small/front/9/7/97d08a15-e61c-4421-a541-c68a4f87cb74.jpg?1783912910",
           "keywords": [],
           "layout": "",
           "legalities": {},
           "mana_cost": "",
-          "name": "Casey Jones, Back Alley Brute",
-          "oracle_id": "ab9ff8e9-0ffa-4ccf-a4bf-8505079616f6",
+          "name": "Forensic Gadgeteer",
+          "oracle_id": "9d5917d5-4fb3-4f37-9278-e08c1f73aae5",
           "oracle_text": "",
           "power": "",
           "printed_name": "",
@@ -7441,14 +7259,14 @@
           "color_identity": [],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/f/d/fdffa46e-8802-4479-a669-d33618f75d4f.jpg?1783939652",
-          "image_small": "https://cards.scryfall.io/small/front/f/d/fdffa46e-8802-4479-a669-d33618f75d4f.jpg?1783939652",
+          "image_normal": "https://cards.scryfall.io/normal/front/a/3/a391da36-0b40-46ea-b771-50d2b920207e.jpg?1783931531",
+          "image_small": "https://cards.scryfall.io/small/front/a/3/a391da36-0b40-46ea-b771-50d2b920207e.jpg?1783931531",
           "keywords": [],
           "layout": "",
           "legalities": {},
           "mana_cost": "",
-          "name": "Deathbringer Thoctar",
-          "oracle_id": "2500a811-2435-4915-ac83-9bfe2887621a",
+          "name": "Nyxbloom Ancient",
+          "oracle_id": "8b610f8f-c8dd-4eeb-bc6e-3bc706d5f63e",
           "oracle_text": "",
           "power": "",
           "printed_name": "",
@@ -7469,14 +7287,14 @@
           "color_identity": [],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/0/2/026b1a54-ab62-431d-a23e-5890d3932c7e.jpg?1783943145",
-          "image_small": "https://cards.scryfall.io/small/front/0/2/026b1a54-ab62-431d-a23e-5890d3932c7e.jpg?1783943145",
+          "image_normal": "https://cards.scryfall.io/normal/front/c/7/c7b0c6c4-ec99-4af1-9527-41c428af7260.jpg?1783941451",
+          "image_small": "https://cards.scryfall.io/small/front/c/7/c7b0c6c4-ec99-4af1-9527-41c428af7260.jpg?1783941451",
           "keywords": [],
           "layout": "",
           "legalities": {},
           "mana_cost": "",
-          "name": "Volcano Hellion",
-          "oracle_id": "12a88c08-11e3-4f51-a17c-ca06452bac6f",
+          "name": "Power Artifact",
+          "oracle_id": "9a8c8d52-1701-4ae0-9d2d-cce4e476673b",
           "oracle_text": "",
           "power": "",
           "printed_name": "",
@@ -7497,14 +7315,14 @@
           "color_identity": [],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/7/8/78d8f53e-537d-4eaa-99e3-cac57fa53d22.jpg?1784798171",
-          "image_small": "https://cards.scryfall.io/small/front/7/8/78d8f53e-537d-4eaa-99e3-cac57fa53d22.jpg?1784798171",
+          "image_normal": "https://cards.scryfall.io/normal/front/1/b/1bd8e61c-2ee8-4243-a848-7008810db8a0.jpg?1783931007",
+          "image_small": "https://cards.scryfall.io/small/front/1/b/1bd8e61c-2ee8-4243-a848-7008810db8a0.jpg?1783931007",
           "keywords": [],
           "layout": "",
           "legalities": {},
           "mana_cost": "",
-          "name": "The Great Goblin",
-          "oracle_id": "83dcfac0-6efd-4e37-9402-15f9889e84e1",
+          "name": "Zirda, the Dawnwaker",
+          "oracle_id": "7b515c56-7b1e-42a8-82b0-1b30201fb162",
           "oracle_text": "",
           "power": "",
           "printed_name": "",
@@ -7525,14 +7343,14 @@
           "color_identity": [],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/b/c/bc1f42a2-fe11-45da-9552-069803b4068a.jpg?1783915670",
-          "image_small": "https://cards.scryfall.io/small/front/b/c/bc1f42a2-fe11-45da-9552-069803b4068a.jpg?1783915670",
+          "image_normal": "https://cards.scryfall.io/normal/front/e/2/e24fbdbb-f2ae-4823-9d2a-4c505332aa5b.jpg?1783930103",
+          "image_small": "https://cards.scryfall.io/small/front/e/2/e24fbdbb-f2ae-4823-9d2a-4c505332aa5b.jpg?1783930103",
           "keywords": [],
           "layout": "",
           "legalities": {},
           "mana_cost": "",
-          "name": "Mikaeus, the Unhallowed",
-          "oracle_id": "5d27c63e-d1ef-48af-b51d-01ebc6daeac9",
+          "name": "Mesmeric Orb",
+          "oracle_id": "03efb4f3-b8e2-4441-824f-886dc40712c4",
           "oracle_text": "",
           "power": "",
           "printed_name": "",
@@ -7553,14 +7371,14 @@
           "color_identity": [],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/1/5/15c34447-b0f4-4fcc-b557-23c92850b31b.jpg?1783930222",
-          "image_small": "https://cards.scryfall.io/small/front/1/5/15c34447-b0f4-4fcc-b557-23c92850b31b.jpg?1783930222",
+          "image_normal": "https://cards.scryfall.io/normal/front/8/1/81e0d739-990f-4ba5-b456-165c033014cf.jpg?1783930143",
+          "image_small": "https://cards.scryfall.io/small/front/8/1/81e0d739-990f-4ba5-b456-165c033014cf.jpg?1783930143",
           "keywords": [],
           "layout": "",
           "legalities": {},
           "mana_cost": "",
-          "name": "Archangel of Thune",
-          "oracle_id": "4f2d4538-dc1d-4c09-964b-b0d7c240fb7d",
+          "name": "Mana Reflection",
+          "oracle_id": "a3a8a044-283d-443e-bc40-c2f826d70c22",
           "oracle_text": "",
           "power": "",
           "printed_name": "",
@@ -7581,14 +7399,14 @@
           "color_identity": [],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/4/7/47ce8b7e-d8e1-489a-a69e-99089eeb8739.jpg?1783926538",
-          "image_small": "https://cards.scryfall.io/small/front/4/7/47ce8b7e-d8e1-489a-a69e-99089eeb8739.jpg?1783926538",
+          "image_normal": "https://cards.scryfall.io/normal/front/2/e/2e98970d-06a8-4c91-ba47-4a02c5b949f2.jpg?1783913801",
+          "image_small": "https://cards.scryfall.io/small/front/2/e/2e98970d-06a8-4c91-ba47-4a02c5b949f2.jpg?1783913801",
           "keywords": [],
           "layout": "",
           "legalities": {},
           "mana_cost": "",
-          "name": "Cleric Class",
-          "oracle_id": "f0ead7f5-5c82-40fd-8e89-3e3c5d31fbad",
+          "name": "The Enigma Jewel // Locus of Enlightenment",
+          "oracle_id": "c0d2bdd9-1e68-4d3a-83f8-ec2ba440a494",
           "oracle_text": "",
           "power": "",
           "printed_name": "",
@@ -7609,14 +7427,42 @@
           "color_identity": [],
           "faces": [],
           "game_changer": false,
-          "image_normal": "https://cards.scryfall.io/normal/front/d/5/d5f80411-0a95-4e0a-b7a8-af23ddf385cc.jpg?1783930738",
-          "image_small": "https://cards.scryfall.io/small/front/d/5/d5f80411-0a95-4e0a-b7a8-af23ddf385cc.jpg?1783930738",
+          "image_normal": "https://cards.scryfall.io/normal/front/9/9/993bc69a-b615-48c5-af81-252a73384e8c.jpg?1783936730",
+          "image_small": "https://cards.scryfall.io/small/front/9/9/993bc69a-b615-48c5-af81-252a73384e8c.jpg?1783936730",
           "keywords": [],
           "layout": "",
           "legalities": {},
           "mana_cost": "",
-          "name": "Light of Promise",
-          "oracle_id": "64c54c9f-0550-41e2-a44a-5892a199f670",
+          "name": "Crackdown Construct",
+          "oracle_id": "bccbd5ae-4e3f-43ee-a51b-d0ec2c645238",
+          "oracle_text": "",
+          "power": "",
+          "printed_name": "",
+          "produced_mana": [],
+          "type_line": ""
+        },
+        "commander": false,
+        "land": false,
+        "quantity": 1,
+        "roles": []
+      },
+      {
+        "card": {
+          "chinese_name": "",
+          "chinese_oracle_text": "",
+          "chinese_type_line": "",
+          "cmc": 0,
+          "color_identity": [],
+          "faces": [],
+          "game_changer": false,
+          "image_normal": "https://cards.scryfall.io/normal/front/7/3/7340b21f-726d-47e8-a2bf-1cde21be70f4.jpg?1783935609",
+          "image_small": "https://cards.scryfall.io/small/front/7/3/7340b21f-726d-47e8-a2bf-1cde21be70f4.jpg?1783935609",
+          "keywords": [],
+          "layout": "",
+          "legalities": {},
+          "mana_cost": "",
+          "name": "Wake Thrasher",
+          "oracle_id": "f2d1e991-e13a-43c7-85aa-d53dd14822e6",
           "oracle_text": "",
           "power": "",
           "printed_name": "",
@@ -7643,26 +7489,22 @@
         "metrics": {
           "average_playability": 100,
           "bracket_details": {
-            "early_2_card_combo_names": [
-              "Heliod, Sun-Crowned + Walking Ballista"
-            ],
-            "early_2_card_combos": 1,
-            "evaluated_bracket_reason": "Recommended Bracket: 4. Minimum Bracket: 4.",
+            "early_2_card_combo_names": null,
+            "early_2_card_combos": 0,
+            "evaluated_bracket_reason": "Recommended Bracket: 1. Minimum Bracket: 1.",
             "extra_turn_names": [],
             "extra_turns": 0,
             "game_changer_names": null,
             "game_changers": 0,
             "mass_land_denial": 0,
             "mass_land_denial_names": [],
-            "rules_bracket_reasons": [
-              "Early 2-Card Combos: 1 - Your deck contains 1 early 2-card combo(s)."
-            ]
+            "rules_bracket_reasons": null
           },
           "efficiency": 8.47,
-          "evaluated_bracket": 4,
+          "evaluated_bracket": 1,
           "impact": 97.98,
           "power_level": 0.4,
-          "rules_bracket": 4,
+          "rules_bracket": 1,
           "score": 101
         },
         "status": "success"

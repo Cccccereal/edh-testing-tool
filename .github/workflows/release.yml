@@ -48,7 +48,7 @@ jobs:
           $env:GOOS = "windows"
           $env:GOARCH = "amd64"
           $env:CGO_ENABLED = "0"
-          go build -buildvcs=false -trimpath -ldflags "-s -w" -o server.exe ./cmd/server
+          go build -buildvcs=false -trimpath -ldflags "-s -w -X powerlevel/internal/version.Version=v$env:VERSION" -o server.exe ./cmd/server
           if ($LASTEXITCODE -ne 0) { throw "go build failed" }
 
       - name: Setup Rust
@@ -146,7 +146,7 @@ jobs:
             local goos="$1" goarch="$2" out="$3"
             echo ">> $goos/$goarch -> $out"
             GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 \
-              go build -buildvcs=false -trimpath -ldflags "-s -w" \
+              go build -buildvcs=false -trimpath -ldflags "-s -w -X powerlevel/internal/version.Version=v$v" \
               -o "dist-mobile/$out" ./cmd/server
           }
 
@@ -238,6 +238,14 @@ jobs:
         run: |
           bash scripts/sync-web.sh
 
+      # 版本号提前解析：AAR 里的服务端和 APK 的 versionName/versionCode 都要用
+      - name: Resolve version from commit time
+        run: |
+          v="$(git log -1 --date=format:'%Y%m%d-%H%M' --format=%cd)"
+          c="$(git log -1 --date=format:'%Y%m%d%H' --format=%cd)"
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$c" >> "$GITHUB_ENV"
+
       - name: Install gomobile
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
@@ -248,7 +256,9 @@ jobs:
           ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
         run: |
           mkdir -p android/app/libs
-          gomobile bind -target=android -androidapi 24 -o android/app/libs/mobile.aar ./cmd/mobile
+          gomobile bind -target=android -androidapi 24 \
+            -ldflags "-s -w -X powerlevel/internal/version.Version=v$VERSION" \
+            -o android/app/libs/mobile.aar ./cmd/mobile
 
       - name: Assemble signed APK
         working-directory: android
@@ -260,7 +270,9 @@ jobs:
           KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease \
+            -PappVersionName="v$VERSION" -PappVersionCode="$VERSION_CODE" \
+            --no-daemon
 
       - name: Verify APK signatures (v1 + v2)
         run: |
@@ -269,13 +281,13 @@ jobs:
           APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
           "$APKSIGNER" verify --print-certs "$APK" || (echo "apksigner verify failed" && exit 1)
 
-      - name: Resolve version and stage APK
+      - name: Stage APK
         run: |
-          v="$(git log -1 --date=format:'%Y%m%d-%H%M' --format=%cd)"
-          echo "VERSION=$v" >> "$GITHUB_ENV"
           APK="android/app/build/outputs/apk/release/app-release.apk"
-          cp "$APK" "edh-powerlevel-$v.apk"
-          echo "APK_PATH=edh-powerlevel-$v.apk" >> "$GITHUB_ENV"
+          # 名字与 tag 对齐（带 v 前缀）；update.Checker 的重定向兜底按
+          # edh-powerlevel-<tag>.apk 重建直链，两边必须一致
+          cp "$APK" "edh-powerlevel-v$VERSION.apk"
+          echo "APK_PATH=edh-powerlevel-v$VERSION.apk" >> "$GITHUB_ENV"
 
       - name: Upload APK to release
         uses: softprops/action-gh-release@v2

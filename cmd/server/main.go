@@ -24,6 +24,7 @@ import (
 	"powerlevel/internal/providers/moxfield"
 	"powerlevel/internal/providers/spellbook"
 	"powerlevel/internal/service"
+	"powerlevel/internal/update"
 )
 
 //go:embed web/*
@@ -101,7 +102,7 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              cfg.Address,
-		Handler:           api.NewHandler(analyzer, logger, cfg.RequestTimeout, http.FileServer(http.FS(webRoot)), api.NewImageProxy(cfg.ScryfallImageURL, httpClient, cfg.CacheDir)),
+		Handler:           api.NewHandler(analyzer, logger, cfg.RequestTimeout, http.FileServer(http.FS(webRoot)), api.NewImageProxy(cfg.ScryfallImageURL, httpClient, cfg.CacheDir), update.NewChecker(httpClient)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      cfg.RequestTimeout + 5*time.Second,

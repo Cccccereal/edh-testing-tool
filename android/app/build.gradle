@@ -15,8 +15,10 @@ android {
         applicationId "com.edhpowerlevel.client"
         minSdk 24
         targetSdk 34
-        versionCode 1
-        versionName "0.1.0"
+        // 注入来源：release.yml assembleRelease 时传 -PappVersionName/-PappVersionCode
+        //（tag = 提交时间戳）；本地直接 gradle 构建时回退到下方默认值。
+        versionCode project.findProperty("appVersionCode")?.toInteger() ?: 1
+        versionName project.findProperty("appVersionName") ?: "0.1.0"
     }
 
     signingConfigs {

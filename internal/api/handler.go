@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"powerlevel/internal/service"
+	"powerlevel/internal/update"
 )
 
 // Handler wires the HTTP surface to the Analyzer. Domain-specific handlers live
@@ -16,6 +17,7 @@ type Handler struct {
 	analyzer       *service.Analyzer
 	logger         *slog.Logger
 	requestTimeout time.Duration
+	updates        *update.Checker
 }
 
 // routes is the single place listing every API route. The contract test
@@ -35,10 +37,11 @@ var routes = []struct{ method, path string }{
 	{"GET", "/api/v1/card-autocomplete"},
 	{"POST", "/api/v1/random-commander"},
 	{"POST", "/api/v1/resolve-commanders"},
+	{"GET", "/api/v1/version"},
 }
 
-func NewHandler(analyzer *service.Analyzer, logger *slog.Logger, requestTimeout time.Duration, static http.Handler, images http.Handler) http.Handler {
-	handler := &Handler{analyzer: analyzer, logger: logger, requestTimeout: requestTimeout}
+func NewHandler(analyzer *service.Analyzer, logger *slog.Logger, requestTimeout time.Duration, static http.Handler, images http.Handler, updates *update.Checker) http.Handler {
+	handler := &Handler{analyzer: analyzer, logger: logger, requestTimeout: requestTimeout, updates: updates}
 	mux := http.NewServeMux()
 	handlers := map[string]http.HandlerFunc{
 		"GET /healthz":                       handler.health,
@@ -52,6 +55,7 @@ func NewHandler(analyzer *service.Analyzer, logger *slog.Logger, requestTimeout 
 		"GET /api/v1/card-autocomplete":      handler.cardAutocomplete,
 		"POST /api/v1/random-commander":      handler.randomCommander,
 		"POST /api/v1/resolve-commanders":    handler.resolveCommanders,
+		"GET /api/v1/version":                handler.version,
 	}
 	for _, route := range routes {
 		key := route.method + " " + route.path

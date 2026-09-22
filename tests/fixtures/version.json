@@ -1,0 +1,15 @@
+{
+  "path": "/api/v1/version",
+  "method": "get",
+  "status": 200,
+  "body": {
+    "current": "dev",
+    "latest": {
+      "apk_url": "https://github.com/Cccccereal/edh-testing-tool/releases/download/v20260922-1256/edh-powerlevel-20260922-1256.apk",
+      "exe_url": "https://github.com/Cccccereal/edh-testing-tool/releases/download/v20260922-1256/edh-powerlevel-client.exe",
+      "notes": "**Full Changelog**: https://github.com/Cccccereal/edh-testing-tool/compare/v20260916-1357...v20260922-1256",
+      "release_url": "https://github.com/Cccccereal/edh-testing-tool/releases/tag/v20260922-1256",
+      "version": "v20260922-1256"
+    }
+  }
+}

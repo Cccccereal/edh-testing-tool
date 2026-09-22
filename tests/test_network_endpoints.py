@@ -67,6 +67,8 @@ CAPTURES = [
     ),
     ("commander_autocomplete.json", "GET", "/api/v1/commander-autocomplete", {"params": {"q": "atra"}}, 60),
     ("card_autocomplete.json", "GET", "/api/v1/card-autocomplete", {"params": {"q": "sol ring"}}, 60),
+    # version 端点会真的去查 GitHub Releases（最多 5s×2 源），超时放宽
+    ("version.json", "GET", "/api/v1/version", {}, 60),
     ("random_commander.json", "POST", "/api/v1/random-commander", {}, 120),
     (
         "resolve_commanders.json",
@@ -229,7 +231,8 @@ def test_image_proxy_serves_real_card_image(api):
     图片 URL 取自 /api/v1/card 的真实响应，与前端 proxiedImage 的重写方式
     （去掉 https://cards.scryfall.io 前缀、加 /img）保持一致。
     """
-    card = api.get("/api/v1/card", params={"name": "Sol Ring"}, timeout=60).json()
+    body = api.get("/api/v1/card", params={"name": "Sol Ring"}, timeout=60).json()
+    card = body["card"]  # 契约形状：{ card: {...} }（见 fixtures/card.json）
     image = card.get("image_small") or card.get("image_normal")
     assert image and image.startswith(SCRYFALL_IMAGE_HOST), f"卡图 URL 异常: {image!r}"
     proxied = "/img" + image[len(SCRYFALL_IMAGE_HOST):]

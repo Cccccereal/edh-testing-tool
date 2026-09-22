@@ -1,6 +1,8 @@
 package com.edhpowerlevel.client;
 
 import android.annotation.SuppressLint;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.webkit.WebResourceRequest;
@@ -41,13 +43,24 @@ public class MainActivity extends AppCompatActivity {
         // 110%, prevents text overflowing its containers at 130%+).
         settings.setTextZoom(Math.min(settings.getTextZoom(), 110));
         // The served UI is trusted (our own front-end), but keep navigation sandboxed:
-        // only loopback URLs are ever loaded; external links are kept in the WebView.
+        // only loopback URLs load in the WebView; external links go to the system
+        // browser (shouldOverrideUrlLoading below).
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String host = uri.getHost();
-                return host != null && !host.equals("127.0.0.1") && !host.equals("localhost");
+                if (host == null) return false;
+                if (host.equals("127.0.0.1") || host.equals("localhost")) return false;
+                // Real external link (update downloads, rule sites): return true to keep
+                // it out of the WebView and hand it to the system browser. Without this
+                // the navigation was silently dropped and external links were dead.
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                } catch (ActivityNotFoundException e) {
+                    // No browser app installed; drop the navigation instead of crashing.
+                }
+                return true;
             }
 
             @Override

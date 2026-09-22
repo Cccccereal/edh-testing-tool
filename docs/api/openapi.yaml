@@ -338,6 +338,23 @@ paths:
         "502":
           $ref: "#/components/responses/BadGateway"
 
+  /api/v1/version:
+    get:
+      tags: [meta]
+      operationId: getVersion
+      summary: 当前构建版本与最新发布版本
+      description: |
+        current 为构建时注入的发布 tag（本地开发构建为 "dev"）。latest 是服务端
+        尽力查询 GitHub Releases 的结果（成功缓存 24h，失败缓存 1h）；查询失败
+        或断网时为 null，前端据此保持安静。latest.notes 可能缺省（重定向兜底源
+        不提供发布说明）。
+      responses:
+        "200":
+          description: 版本信息
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionResponse" }
+
 components:
   responses:
     BadRequest:
@@ -843,3 +860,22 @@ components:
       properties:
         commanders: { type: array, items: { $ref: "#/components/schemas/ResolvedCommander" } }
         color_identity: { type: array, items: { $ref: "#/components/schemas/ManaColor" } }
+    VersionResponse:
+      type: object
+      required: [current, latest]
+      properties:
+        current: { type: string, description: 构建时注入的发布 tag，本地开发构建为 "dev" }
+        latest:
+          description: 最新发布信息；查询失败或断网时为 null
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/LatestRelease"
+    LatestRelease:
+      type: object
+      required: [version, release_url]
+      properties:
+        version: { type: string, description: 发布 tag，如 v20260922-1030 }
+        notes: { type: string, description: 发布说明（重定向兜底源不提供，可能缺省） }
+        release_url: { type: string, description: GitHub Releases 页面 }
+        apk_url: { type: string, description: 安卓 APK 下载直链 }
+        exe_url: { type: string, description: Windows 桌面客户端下载直链 }

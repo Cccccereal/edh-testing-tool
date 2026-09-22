@@ -7,17 +7,24 @@
       "chinese_name": "",
       "chinese_oracle_text": "",
       "chinese_type_line": "",
-      "cmc": 3,
+      "cmc": 4,
       "color_identity": [
+        "B",
         "G",
-        "R",
-        "U"
+        "U",
+        "W"
       ],
       "faces": [],
       "game_changer": false,
-      "image_normal": "https://cards.scryfall.io/normal/front/4/1/41e58eb8-e5b9-4ef6-be1f-00e28cebb998.jpg?1783910621",
-      "image_small": "https://cards.scryfall.io/small/front/4/1/41e58eb8-e5b9-4ef6-be1f-00e28cebb998.jpg?1783910621",
-      "keywords": [],
+      "image_normal": "https://cards.scryfall.io/normal/front/d/0/d0d33d52-3d28-4635-b985-51e126289259.jpg?1783930136",
+      "image_small": "https://cards.scryfall.io/small/front/d/0/d0d33d52-3d28-4635-b985-51e126289259.jpg?1783930136",
+      "keywords": [
+        "Deathtouch",
+        "Flying",
+        "Lifelink",
+        "Vigilance",
+        "Proliferate"
+      ],
       "layout": "normal",
       "legalities": {
         "alchemy": "not_legal",
@@ -34,31 +41,32 @@
         "oldschool": "not_legal",
         "pauper": "not_legal",
         "paupercommander": "not_legal",
-        "penny": "not_legal",
+        "penny": "legal",
         "pioneer": "not_legal",
         "predh": "not_legal",
         "premodern": "not_legal",
         "standard": "not_legal",
         "standardbrawl": "not_legal",
         "timeless": "legal",
-        "tlr": "legal",
+        "tlr": "not_legal",
         "vintage": "legal"
       },
-      "mana_cost": "{G}{U}{R}",
-      "name": "Flubs, the Fool",
-      "oracle_id": "29356966-652d-4456-84c8-7aeab5fc8d05",
-      "oracle_text": "You may play an additional land on each of your turns.\nWhenever you play a land or cast a spell, draw a card if you have no cards in hand. Otherwise, discard a card.",
-      "power": "0",
+      "mana_cost": "{G}{W}{U}{B}",
+      "name": "Atraxa, Praetors' Voice",
+      "oracle_id": "7e6b9b59-cd68-4e3c-827b-38833c92d6eb",
+      "oracle_text": "Flying, vigilance, deathtouch, lifelink\nAt the beginning of your end step, proliferate. (Choose any number of permanents and/or players, then give each another counter of each kind already there.)",
+      "power": "4",
       "printed_name": "",
       "produced_mana": [],
-      "type_line": "Legendary Creature — Frog Scout"
+      "type_line": "Legendary Creature — Phyrexian Angel Horror"
     },
     "color_identity": [
+      "B",
       "G",
-      "R",
-      "U"
+      "U",
+      "W"
     ],
     "is_partner": false,
-    "name": "Flubs, the Fool"
+    "name": "Atraxa, Praetors' Voice"
   }
 }
