@@ -16,9 +16,12 @@ import (
 )
 
 const (
-	maxBatchSize    = 75
-	maxResponseSize = 8 << 20
-	userAgent       = "PowerLevelAggregator/0.2"
+	maxBatchSize = 75
+	// notFoundFallbackLimit caps how many collection-endpoint not_found names one
+	// batch retried via /cards/named; see fetchBatch.
+	notFoundFallbackLimit = 15
+	maxResponseSize       = 8 << 20
+	userAgent             = "PowerLevelAggregator/0.2"
 )
 
 type CardFace struct {
@@ -424,7 +427,68 @@ func (c *Client) fetchBatch(ctx context.Context, names []string) ([]Card, error)
 	for _, raw := range payload.Data {
 		cards = append(cards, normalizeCard(raw))
 	}
+	// The collection endpoint intermittently fails to resolve prolifically
+	// reprinted cards by name (Sol Ring is the classic case) while /cards/named
+	// succeeds for the same name. Without this fallback a not_found silently
+	// dropped the card from the batch — a builder staples panel would render
+	// everything except that one card. The cap bounds worst-case latency when a
+	// batch legitimately contains many nonexistent names.
+	if len(payload.NotFound) > 0 {
+		missed := make([]string, 0, len(payload.NotFound))
+		for _, raw := range payload.NotFound {
+			var miss struct {
+				Name string `json:"name"`
+			}
+			if json.Unmarshal(raw, &miss) == nil && miss.Name != "" {
+				missed = append(missed, miss.Name)
+			}
+		}
+		if len(missed) > notFoundFallbackLimit {
+			missed = missed[:notFoundFallbackLimit]
+		}
+		for _, name := range missed {
+			if card, err := c.fetchNamed(ctx, name); err == nil {
+				cards = append(cards, card)
+			}
+		}
+	}
 	return cards, nil
+}
+
+// fetchNamed resolves one card by exact name via /cards/named — the single-card
+// fallback for identifiers the collection endpoint reports as not_found.
+func (c *Client) fetchNamed(ctx context.Context, name string) (Card, error) {
+	resp, err := c.doWithRetry(ctx, func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/cards/named", nil)
+		if err != nil {
+			return nil, err
+		}
+		query := req.URL.Query()
+		query.Set("exact", name)
+		req.URL.RawQuery = query.Encode()
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", userAgent)
+		return req, nil
+	})
+	if err != nil {
+		return Card{}, fmt.Errorf("request Scryfall: %w", err)
+	}
+	defer drainAndClose(resp)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize+1))
+	if err != nil {
+		return Card{}, err
+	}
+	if len(data) > maxResponseSize {
+		return Card{}, errors.New("Scryfall response is too large")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return Card{}, fmt.Errorf("Scryfall returned HTTP %d", resp.StatusCode)
+	}
+	var raw scryfallCard
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return Card{}, fmt.Errorf("decode Scryfall response: %w", err)
+	}
+	return normalizeCard(raw), nil
 }
 
 // scryfallQueryName maps a deck card name onto the identifier Scryfall accepts.

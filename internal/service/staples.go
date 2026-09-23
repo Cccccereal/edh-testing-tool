@@ -64,9 +64,10 @@ var staplePool = map[string][]stapleCard{
 		{"Gruul Signet", "RG"}, {"Selesnya Signet", "GW"}, {"Orzhov Signet", "WB"},
 		{"Izzet Signet", "UR"}, {"Golgari Signet", "BG"}, {"Boros Signet", "RW"},
 		{"Simic Signet", "GU"},
-		// 十种印记（Talismans）。
-		{"Talisman of Conviction", "W"}, {"Talisman of Curiosity", "U"}, {"Talisman of Hierarchy", "B"},
-		{"Talisman of Impulse", "R"}, {"Talisman of Resilience", "G"}, {"Talisman of Dominance", "UB"},
+		// 十种印记（Talismans）。五个单名印记实际都是友方双色（Conviction 实为
+		// RW 等）；此处登记真实色组，且 BuildStaples 还会按解析后的 CI 二次过滤。
+		{"Talisman of Conviction", "RW"}, {"Talisman of Curiosity", "GU"}, {"Talisman of Hierarchy", "WB"},
+		{"Talisman of Impulse", "RG"}, {"Talisman of Resilience", "BG"}, {"Talisman of Dominance", "UB"},
 		{"Talisman of Creativity", "UR"}, {"Talisman of Indulgence", "BR"}, {"Talisman of Progress", "WU"},
 		{"Talisman of Unity", "GW"},
 		// 无色法力石。
@@ -87,7 +88,7 @@ var staplePool = map[string][]stapleCard{
 		{"Kinnan, Bonder Prodigy", "GU"}, {"Grand Warlord Radha", "RG"}, {"Prime Speaker Vannifar", "GU"},
 		{"Sakura-Tribe Elder", "G"}, {"Wood Elves", "G"}, {"Farhaven Elf", "G"},
 		{"Llanowar Scout", "G"}, {"Growth Spasm", "G"}, {"Delighted Halfling", "G"},
-		{"Bloom Tender", "G"}, {"Fanatic of Rhonas", "G"}, {"Ragavan, Nimble Pilferer", "R"},
+		{"Fanatic of Rhonas", "G"}, {"Ragavan, Nimble Pilferer", "R"},
 	},
 }
 
@@ -117,21 +118,38 @@ func (a *Analyzer) BuildStaples(ctx context.Context, categoryID string, commande
 	}
 
 	var names []string
+	seenNames := make(map[string]struct{})
+	addName := func(name string) {
+		key := strings.ToLower(strings.TrimSpace(name))
+		if key == "" {
+			return
+		}
+		// Defensive dedupe: the hand-curated pool once listed a card twice and
+		// the duplicate surfaced as two identical buttons in the panel.
+		if _, dup := seenNames[key]; dup {
+			return
+		}
+		seenNames[key] = struct{}{}
+		names = append(names, name)
+	}
 	if categoryID == "game-changer" {
 		for name := range gameChangerNames {
-			names = append(names, name)
+			addName(name)
 		}
 	} else {
 		for _, staple := range staplePool[categoryID] {
 			if !colorsAllowed(colorLetters(staple.ci), identity) {
 				continue
 			}
-			names = append(names, staple.name)
+			addName(staple.name)
 		}
 	}
 
-	catalog, err := a.cards.Lookup(ctx, names)
-	if err != nil {
+	// A failed lookup may still carry every card that had a cache fallback
+	// (cardcatalog serves stale disk entries on upstream failure); keep the
+	// partial catalog so a flaky network shows fewer staples instead of none.
+	catalog, _ := a.cards.Lookup(ctx, names)
+	if catalog == nil {
 		catalog = map[string]cardcatalog.Card{}
 	}
 
@@ -142,7 +160,12 @@ func (a *Analyzer) BuildStaples(ctx context.Context, categoryID string, commande
 			// A staple we could not resolve is skipped rather than shown broken.
 			continue
 		}
-		if categoryID == "game-changer" && !colorsAllowed(card.ColorIdentity, identity) {
+		// Color identity is re-checked against the resolved Scryfall data for
+		// every group, not only game-changer: the pool's compact CI strings are
+		// just a pre-filter and have been wrong before (the five allied
+		// Talismans were once listed as single colors, leaking off-color cards
+		// into mono-color commanders).
+		if !colorsAllowed(card.ColorIdentity, identity) {
 			continue
 		}
 		if categoryID == "game-changer" && !isGameChanger(card) {
