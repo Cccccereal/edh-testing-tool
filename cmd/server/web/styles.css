@@ -836,6 +836,15 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
   .result-card:hover { transform: none; }
   .fade-in-hidden { opacity: 1; transform: none; }
   .fade-in-visible { animation: none; }
+  .fade-out-visible { animation: none; }
+}
+/* 触屏设备（手机/平板 WebView）关闭滚动淡入淡出：低端机上带 60px 位移的
+   动画容易掉帧、观感迟滞；桌面端（hover+精确指针）保留。
+   fade-out-visible 必须一并禁用，否则滚出视口的区块会定格在半透明。 */
+@media (hover: none) and (pointer: coarse) {
+  .fade-in-hidden { opacity: 1; transform: none; }
+  .fade-in-visible { animation: none; }
+  .fade-out-visible { animation: none; }
 }
 .disclaimer { color: var(--muted); font-size: 14px; margin: 20px 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
