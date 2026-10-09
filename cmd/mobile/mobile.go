@@ -80,6 +80,7 @@ func Start(port int) string {
 		cfg.PartialCacheTTL,
 		cfg.CacheMaxEntries,
 	)
+	analyzer.SetEDHCacheDir(cfg.CacheDir)
 
 	webRoot, err := fs.Sub(embedWebDir, "web")
 	if err != nil {

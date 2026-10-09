@@ -32,6 +32,10 @@ type Combo struct {
 	// ProducesFeatureIDs holds the numeric feature IDs the combo produces; the site
 	// compares these against a fixed "game-defining" producer list.
 	ProducesFeatureIDs []int
+	// BracketTag is Spellbook's own per-variant bracket classification letter
+	// (live values include R/S/P/E; semantics are not officially documented, so
+	// it is carried for diagnostics but not used in scoring decisions).
+	BracketTag string
 }
 
 type Component struct {
@@ -217,7 +221,7 @@ func (c *Client) fetchPage(ctx context.Context, name string, limit, offset int) 
 		if len(item.Uses) > 2 {
 			continue
 		}
-		combo := Combo{ID: item.ID, SourceURL: "https://commanderspellbook.com/combo/" + item.ID, ManaValueNeeded: item.ManaValueNeeded}
+		combo := Combo{ID: item.ID, SourceURL: "https://commanderspellbook.com/combo/" + item.ID, ManaValueNeeded: item.ManaValueNeeded, BracketTag: item.BracketTag}
 		for _, use := range item.Uses {
 			zone := ""
 			if len(use.ZoneLocations) > 0 {

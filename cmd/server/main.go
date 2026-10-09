@@ -86,6 +86,7 @@ func main() {
 		cfg.PartialCacheTTL,
 		cfg.CacheMaxEntries,
 	)
+	analyzer.SetEDHCacheDir(cfg.CacheDir)
 
 	// Development mode: set DEV=1 to serve frontend files from disk for hot reload
 	var webRoot fs.FS

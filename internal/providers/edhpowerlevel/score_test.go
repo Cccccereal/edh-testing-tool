@@ -54,6 +54,7 @@ func TestComputeBracketComboClassification(t *testing.T) {
 		{
 			Name:               "Dualcaster Mage + Twinflame",
 			ManaValueNeeded:    2,
+			Result:             "Infinite Storm, Infinite Spell Copies (damage with payoffs)",
 			ProducesFeatureIDs: []int{9999},
 			Components: []spellbook.Component{
 				{Name: "Dualcaster Mage", Zone: "B,Hand"},
@@ -74,6 +75,7 @@ func TestComputeBracketComboClassification(t *testing.T) {
 		{
 			Name:               "Dualcaster Mage + Twinflame",
 			ManaValueNeeded:    5,
+			Result:             "Infinite Storm, Infinite Spell Copies (damage with payoffs)",
 			ProducesFeatureIDs: []int{9999},
 			Components: []spellbook.Component{
 				{Name: "Dualcaster Mage", Zone: "B,Hand"},

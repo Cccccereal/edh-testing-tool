@@ -27,9 +27,15 @@ type Result struct {
 	Metrics map[string]any
 }
 
+// response mirrors the live api.commandersalt.com/decks shape as of 2026-09.
+// Known drift since the original integration (both handled below): deckName is
+// now null and the display name moved to title; the brackets object moved to
+// details.brackets (still found by the full-payload walk); and the site grew
+// combo/synergy/threat ratings next to the classic power/salt pair.
 type response struct {
 	ID               string                     `json:"id"`
 	Name             string                     `json:"name"`
+	Title            string                     `json:"title"`
 	DeckName         string                     `json:"deckName"`
 	Commanders       []string                   `json:"commanders"`
 	Cards            map[string]responseCard    `json:"cards"`
@@ -39,6 +45,9 @@ type response struct {
 	PowerLevelRating float64                    `json:"powerLevelRating"`
 	BracketRating    float64                    `json:"bracketRating"`
 	SaltRating       float64                    `json:"saltRating"`
+	ComboRating      float64                    `json:"comboRating"`
+	SynergyRating    float64                    `json:"synergyRating"`
+	ThreatRating     float64                    `json:"threatRating"`
 	CardCount        int                        `json:"_cardCount"`
 	Combos           json.RawMessage            `json:"combos"`
 	Brackets         json.RawMessage            `json:"brackets"`
@@ -107,6 +116,9 @@ func (c *Client) Analyze(ctx context.Context, sourceURL, sourceID string) (Resul
 
 	resultDeck := deck.Deck{SourceURL: sourceURL, SourceID: sourceID, Name: payload.DeckName}
 	if resultDeck.Name == "" {
+		resultDeck.Name = payload.Title
+	}
+	if resultDeck.Name == "" {
 		resultDeck.Name = strings.Join(payload.Commanders, " / ")
 	}
 	for _, item := range payload.Cards {
@@ -157,11 +169,29 @@ func (c *Client) Analyze(ctx context.Context, sourceURL, sourceID string) (Resul
 			}
 		}
 	}
+	// Last resort for the display bracket: the flat top-level rating (float,
+	// e.g. 3.51) that replaced the old nested object for clients that only read
+	// scalars. The rules bracket keeps whatever the walk found — the flat field
+	// does not distinguish WOTC tiers.
+	if evaluatedBracket == 0 && payload.BracketRating > 0 {
+		evaluatedBracket = int(payload.BracketRating + 0.5)
+	}
 	metrics := map[string]any{
 		"power_level":       payload.PowerLevelRating,
 		"rules_bracket":     rulesBracket,
 		"evaluated_bracket": evaluatedBracket,
 		"salt":              payload.SaltRating,
+	}
+	// New-generation ratings (2026-09 site update); only present when nonzero so
+	// older cached payloads stay clean.
+	if payload.ComboRating > 0 {
+		metrics["combo"] = payload.ComboRating
+	}
+	if payload.SynergyRating > 0 {
+		metrics["synergy"] = payload.SynergyRating
+	}
+	if payload.ThreatRating > 0 {
+		metrics["threat"] = payload.ThreatRating
 	}
 	if suggestions, ok := parseSuggestions(fullPayload); ok {
 		metrics["suggestions"] = suggestions

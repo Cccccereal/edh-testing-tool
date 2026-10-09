@@ -2,16 +2,21 @@ package edhpowerlevel
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"powerlevel/internal/deck"
 	"powerlevel/internal/providers/spellbook"
@@ -215,37 +220,108 @@ type card struct {
 }
 
 // getcardsClient fetches card data from EDH Power Level's Cloud Function. It is a
-// plain HTTP client — no browser involved.
+// plain HTTP client — no browser involved. A disk cache (keyed per card name)
+// means only genuinely new cards hit the upstream, and an upstream outage
+// (the function has 500'd for whole evenings before) degrades to slightly-old
+// data instead of a failed score.
 type getcardsClient struct {
 	httpClient *http.Client
+	baseURL    string
+	disk       *getcardsDiskCache
 	mu         sync.Mutex
 }
 
-func newGetcardsClient(httpClient *http.Client) *getcardsClient {
+func newGetcardsClient(httpClient *http.Client, baseURL string, diskDir string) *getcardsClient {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
-	return &getcardsClient{httpClient: httpClient}
+	if baseURL == "" {
+		baseURL = getcardsURL
+	}
+	return &getcardsClient{httpClient: httpClient, baseURL: baseURL, disk: newGetcardsDiskCache(diskDir)}
 }
 
-// fetch returns card data keyed by (lowercased) front-face name.
+// getcardsTTL is how long a disk-cached card row is trusted without refresh.
+// Prices and EDHREC ranks drift slowly; a week keeps scores fresh enough while
+// making repeat analyses of the same/overlapping decks fully offline.
+const getcardsTTL = 7 * 24 * time.Hour
+
+// fetch returns card data keyed by (lowercased) front-face name. Fresh disk
+// rows serve directly; stale and unknown names are re-requested in one batch.
+// When the upstream fails, stale rows are served instead and the error only
+// surfaces when at least one card has no fallback at all.
 func (c *getcardsClient) fetch(ctx context.Context, cards []deck.Card) (map[string]*card, error) {
 	if len(cards) == 0 {
 		return map[string]*card{}, nil
 	}
-	names := make([]string, 0, len(cards))
-	for _, card := range cards {
-		for i := 0; i < card.Quantity; i++ {
-			names = append(names, encodeCardName(frontFace(card.Name)))
+
+	// Unique front-face names: card rows do not change with copies, so both the
+	// cache lookups and the upstream request deduplicate them.
+	unique := make([]string, 0, len(cards))
+	seen := make(map[string]struct{}, len(cards))
+	for _, deckCard := range cards {
+		key := strings.ToLower(frontFace(deckCard.Name))
+		if key == "" {
+			continue
+		}
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique = append(unique, key)
+	}
+
+	result := make(map[string]*card, len(unique))
+	stale := make(map[string]*card)
+	request := make([]string, 0, len(unique))
+	for _, name := range unique {
+		raw, fetchedAt, found := c.disk.get(name)
+		if !found {
+			request = append(request, name)
+			continue
+		}
+		if time.Since(fetchedAt) < getcardsTTL {
+			indexCard(result, raw)
+		} else {
+			indexCard(stale, raw)
+			request = append(request, name)
 		}
 	}
-	combo := buildCombo(cards)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, getcardsURL, nil)
+
+	if len(request) > 0 {
+		fresh, err := c.fetchBatch(ctx, cards, request)
+		if err != nil {
+			for key, value := range stale {
+				result[key] = value
+			}
+			for _, name := range unique {
+				if lookupCard(result, name) == nil {
+					return nil, err
+				}
+			}
+			return result, nil
+		}
+		for name, raw := range fresh {
+			indexCard(result, raw)
+			c.disk.put(name, raw, time.Now())
+		}
+	}
+	return result, nil
+}
+
+// fetchBatch performs one GET against the Cloud Function for the given card
+// names and returns the raw rows keyed by their canonical (lowercased) name.
+func (c *getcardsClient) fetchBatch(ctx context.Context, cards []deck.Card, names []string) (map[string]rawCard, error) {
+	encoded := make([]string, 0, len(names))
+	for _, name := range names {
+		encoded = append(encoded, encodeCardName(name))
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("card-list", strings.Join(names, "~"))
-	req.Header.Set("combo-list", combo)
+	req.Header.Set("card-list", strings.Join(encoded, "~"))
+	req.Header.Set("combo-list", buildCombo(cards))
 	req.Header.Set("User-Agent", "PowerLevelAggregator/0.5")
 
 	c.mu.Lock()
@@ -266,30 +342,117 @@ func (c *getcardsClient) fetch(ctx context.Context, cards []deck.Card) (map[stri
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, fmt.Errorf("decode getcards: %w", err)
 	}
-	result := make(map[string]*card, len(payload.Data))
+	out := make(map[string]rawCard, len(payload.Data))
 	for i := range payload.Data {
-		raw := &payload.Data[i]
-		c := &card{
-			name:        raw.Name,
-			flavorNames: flavorNames(raw.FlavorName),
-			price:       numberOrRaw(raw.Price),
-			cmc:         int(numberOrZero(raw.CMC)),
-			rank:        numberOrRaw(raw.EDHRecRank),
-			colors:      raw.Colors,
-			producer:    raw.ProducedMana,
-			manaCost:    raw.ManaCost,
-			typeLine:    raw.TypeLine,
-			layout:      raw.Layout,
-			reserved:    raw.Reserved,
-			gameChanger: raw.GameChanger,
-			oracleText:  raw.OracleText,
-		}
-		result[strings.ToLower(strings.TrimSpace(raw.Name))] = c
-		for _, flavor := range c.flavorNames {
-			result[strings.ToLower(strings.TrimSpace(flavor))] = c
-		}
+		raw := payload.Data[i]
+		out[strings.ToLower(strings.TrimSpace(raw.Name))] = raw
 	}
-	return result, nil
+	return out, nil
+}
+
+// indexCard converts a raw wire row into the scoring shape and keys it by its
+// canonical name plus every flavor (alternate-printing) name.
+func indexCard(dst map[string]*card, raw rawCard) {
+	c := &card{
+		name:        raw.Name,
+		flavorNames: flavorNames(raw.FlavorName),
+		price:       numberOrRaw(raw.Price),
+		cmc:         int(numberOrZero(raw.CMC)),
+		rank:        numberOrRaw(raw.EDHRecRank),
+		colors:      raw.Colors,
+		producer:    raw.ProducedMana,
+		manaCost:    raw.ManaCost,
+		typeLine:    raw.TypeLine,
+		layout:      raw.Layout,
+		reserved:    raw.Reserved,
+		gameChanger: raw.GameChanger,
+		oracleText:  raw.OracleText,
+	}
+	dst[strings.ToLower(strings.TrimSpace(raw.Name))] = c
+	for _, flavor := range c.flavorNames {
+		dst[strings.ToLower(strings.TrimSpace(flavor))] = c
+	}
+}
+
+// --- per-card disk cache (same pattern as cardcatalog's) ----------------------
+//
+// One JSON file per canonical card name under <cacheDir>/getcards/. File names
+// are the SHA-256 of the key so unicode, "Fire // Ice" slashes and path limits
+// never reach the filesystem. All operations are best-effort: a broken or
+// missing cache must never fail a request the network could still serve.
+
+type getcardsDiskEntry struct {
+	FetchedAt time.Time `json:"fetched_at"`
+	Raw       rawCard   `json:"raw"`
+}
+
+type getcardsDiskCache struct {
+	dir string
+}
+
+func newGetcardsDiskCache(dir string) *getcardsDiskCache {
+	if dir == "" {
+		return nil
+	}
+	full := filepath.Join(dir, "getcards")
+	if err := os.MkdirAll(full, 0o755); err != nil {
+		return nil
+	}
+	return &getcardsDiskCache{dir: full}
+}
+
+func (d *getcardsDiskCache) path(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return filepath.Join(d.dir, hex.EncodeToString(sum[:])+".json")
+}
+
+// get returns the cached row for key, its fetch time, and whether it was found.
+func (d *getcardsDiskCache) get(key string) (rawCard, time.Time, bool) {
+	if d == nil {
+		return rawCard{}, time.Time{}, false
+	}
+	data, err := os.ReadFile(d.path(key))
+	if err != nil {
+		return rawCard{}, time.Time{}, false
+	}
+	var entry getcardsDiskEntry
+	if err := json.Unmarshal(data, &entry); err != nil {
+		// Corrupt entry (partial write, format change): drop it so the next
+		// successful fetch can rewrite the slot.
+		_ = os.Remove(d.path(key))
+		return rawCard{}, time.Time{}, false
+	}
+	if entry.Raw.Name == "" {
+		return rawCard{}, time.Time{}, false
+	}
+	return entry.Raw, entry.FetchedAt, true
+}
+
+// put writes the row atomically (temp file + rename) so a crash never leaves a
+// half-written entry behind.
+func (d *getcardsDiskCache) put(key string, raw rawCard, fetchedAt time.Time) {
+	if d == nil {
+		return
+	}
+	data, err := json.Marshal(getcardsDiskEntry{FetchedAt: fetchedAt, Raw: raw})
+	if err != nil {
+		return
+	}
+	temp, err := os.CreateTemp(d.dir, "*.tmp")
+	if err != nil {
+		return
+	}
+	name := temp.Name()
+	if _, err := temp.Write(data); err != nil {
+		_ = temp.Close()
+		_ = os.Remove(name)
+		return
+	}
+	if err := temp.Close(); err != nil {
+		_ = os.Remove(name)
+		return
+	}
+	_ = os.Rename(name, d.path(key))
 }
 
 // flavorNames decodes getcards' `flavor_name` field, which is an array of alternate
@@ -365,6 +528,25 @@ func frontFace(name string) string {
 // lookupCard resolves a deck card name against the getcards map, matching by exact
 // name, front-face (for split cards), or a flavor/alternate-printing name so that
 // exports using e.g. "Hope's Aero Magic" resolve to "Cyclonic Rift".
+// comboHasGameEndingFeature reports whether a combo's produced feature names
+// read as a vector that can actually end the game on an early turn: damage,
+// mana (any outlet wins), extra turns/combat, haste tokens, mill, poison, or a
+// hard win/loss line. Keyword list is calibrated against live Spellbook feature
+// names (see the probes in the 2026-09 changelog work): value engines like
+// "Infinite creature ETB/LTB + death triggers" carry none of these.
+func comboHasGameEndingFeature(combo spellbook.Combo) bool {
+	result := strings.ToLower(combo.Result)
+	for _, keyword := range []string{
+		"win the game", "loses the game", "lose the game", "lifeloss", "damage", "mana", "treasure",
+		"turns", "extra turn", "combat", "haste", "mill", "poison",
+	} {
+		if strings.Contains(result, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
 func lookupCard(cards map[string]*card, name string) *card {
 	if c := cards[strings.ToLower(strings.TrimSpace(name))]; c != nil {
 		return c
@@ -421,8 +603,8 @@ type scoreResult struct {
 // Score runs the full EDH Power Level formula against a deck and returns the metrics
 // in the same shape the chromedp pipeline produced, so the rest of the app is unchanged.
 // comboCategories, when non-nil, feeds the 2-card-combo bracket rule (early vs late).
-func Score(ctx context.Context, target deck.Deck, httpClient *http.Client) (map[string]any, error) {
-	return ScoreWithCombos(ctx, target, httpClient, nil, nil, nil)
+func Score(ctx context.Context, target deck.Deck, httpClient *http.Client, diskDir string) (map[string]any, error) {
+	return ScoreWithCombos(ctx, target, httpClient, nil, nil, nil, diskDir)
 }
 
 // ScoreWithCombos is Score plus Commander Spellbook combo results, which the site's
@@ -431,9 +613,9 @@ func Score(ctx context.Context, target deck.Deck, httpClient *http.Client) (map[
 // battlefield-cost sum; getcards CMCs fill any gaps. extraGameChangers carries
 // Game Changer names from the app's own sources (Scryfall flag + snapshot) so the
 // bracket counter does not depend on getcards' copy of the list alone.
-func ScoreWithCombos(ctx context.Context, target deck.Deck, httpClient *http.Client, combos []spellbook.Combo, cardCMCByName map[string]int, extraGameChangers map[string]struct{}) (map[string]any, error) {
+func ScoreWithCombos(ctx context.Context, target deck.Deck, httpClient *http.Client, combos []spellbook.Combo, cardCMCByName map[string]int, extraGameChangers map[string]struct{}, diskDir string) (map[string]any, error) {
 	all := append(append([]deck.Card{}, target.Commanders...), target.Mainboard...)
-	cards, err := newGetcardsClient(httpClient).fetch(ctx, all)
+	cards, err := newGetcardsClient(httpClient, getcardsURL, diskDir).fetch(ctx, all)
 	if err != nil {
 		return nil, err
 	}
@@ -789,8 +971,17 @@ func computeBracket(scored []*scoredCard, powerLevel float64, combos []spellbook
 	// Early/late 2-card combo detection (mirrors the site's `Ke.forEach` block). A
 	// combo is "early" when its total mana (mv + battlefield card cmcs + any addenda)
 	// is ≤ 7; otherwise it's "late".
+	//
+	// Deliberate divergence from the mirrored site (adopting CommanderSalt's
+	// 2026.4195 calibration): a line whose produced features contain no
+	// game-ending vector — Murderous Redcap + Metallic Mimic is the canonical
+	// case (infinite ETB/LTB/death triggers only) — is neither early nor late.
+	// The pure mana threshold flagged such value engines as early combo wins.
 	for _, combo := range combos {
 		if len(combo.Components) < 2 {
+			continue
+		}
+		if !comboHasGameEndingFeature(combo) {
 			continue
 		}
 		w := len(combo.Components)
