@@ -15,11 +15,11 @@ var manaSymbolRe = regexp.MustCompile(`\{([^}]+)\}`)
 type manaCostParser struct{}
 
 type ParsedManaCost struct {
-	ManaValue       int
-	Pips            map[ManaColor]int
-	HasVariableCost bool
+	ManaValue         int
+	Pips              map[ManaColor]int
+	HasVariableCost   bool
 	TrueColorlessPips int
-	SnowPips        int
+	SnowPips          int
 }
 
 func parseManaCost(cost string) ParsedManaCost {

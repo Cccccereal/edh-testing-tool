@@ -18,6 +18,15 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # gofmt 检查（本地 .gitattributes 统一 LF；格式化漂移直接红）
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::以下文件未通过 gofmt：$unformatted"
+            exit 1
+          fi
+
       # 含前端镜像一致性检查（cmd/mobile/web 必须严格跟随 cmd/server/web）
       # 与接口契约路由同步检查（internal/api 路由表 ↔ docs/api/openapi.yaml paths）
       - name: Go tests (unit + fuzz seeds + web mirror + route contract)
