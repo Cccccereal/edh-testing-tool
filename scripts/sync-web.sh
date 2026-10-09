@@ -11,7 +11,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 SRC="$PROJECT_ROOT/cmd/server/web"
 DST="$PROJECT_ROOT/cmd/mobile/web"
 
-FILES=("index.html" "styles.css" "app.js")
+FILES=("index.html" "styles.css" "app.js" "config.js")
 
 for file in "${FILES[@]}"; do
     from="$SRC/$file"

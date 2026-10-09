@@ -93,7 +93,7 @@ let buildCandidates = [];       // currently displayed 3 candidates
 let recentShown = [];           // sliding window of names shown (not chosen) in the last two refreshes
 
 const BASIC_LANDS = ['Plains', 'Island', 'Swamp', 'Mountain', 'Forest', 'Wastes'];
-const BUILD_TARGET = 100;
+const BUILD_TARGET = window.PL_CONFIG.buildTarget;
 
 // Canonical WUBRG order for the color-pip composition and symbol mapping. Symbols are
 // Scryfall-style glyphs ({W} → "{W}"), so they render as recognizable mana letters.
@@ -275,14 +275,8 @@ const STAPLE_CATEGORIES = [
 ];
 
 // construction metric targets (labels mirror the server's construction.Report).
-const BUILD_METRICS = [
-  { id: 'lands', label: '正向法力', target: 38 },
-  { id: 'plan', label: '计划相关', target: 30 },
-  { id: 'mass_interaction', label: '群体干扰', target: 6 },
-  { id: 'single_interaction', label: '单体干扰', target: 12 },
-  { id: 'draw_discard', label: '牌差件', target: 12 },
-  { id: 'ramp', label: '加速', target: 10 }
-];
+// 目标值/标签在 config.js（window.PL_CONFIG.buildMetrics），与 Go 侧 targets 有镜像测试把关
+const BUILD_METRICS = window.PL_CONFIG.buildMetrics;
 
 function openBuilder() {
   builder.hidden = false;
@@ -1668,14 +1662,8 @@ function buildDeckText(cards) {
   return `Commander\n${commanders.join('\n')}\n\nDeck\n${mainboard.join('\n')}`;
 }
 
-const COMBO_CATEGORIES = {
-  win: { label: '制胜', fallback: ['win the game', 'opponents lose the game', 'target opponent loses the game'] },
-  lifeloss: { label: '无限掉血', fallback: ['lifeloss'] },
-  mana: { label: '无限法术力', fallback: ['mana'] },
-  turns: { label: '额外回合', fallback: ['extra turn', 'infinite turn', 'near-infinite turn', 'additional combat', 'extra combat'] },
-  mill: { label: '无限磨牌', fallback: ['mill'] },
-  other: { label: '组合产物', fallback: [] },
-};
+// 分类关键词在 config.js（window.PL_CONFIG.comboCategories）
+const COMBO_CATEGORIES = window.PL_CONFIG.comboCategories;
 
 function comboCategory(combo) {
   if (combo.category && COMBO_CATEGORIES[combo.category]) return combo.category;

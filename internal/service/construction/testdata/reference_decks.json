@@ -1,0 +1,175 @@
+{
+  "comment": "参照牌组金测：调分类词表/目标值后跑 TestReferenceDecks，每副牌期望值的变化会逐条打印，据此确认调整没有伤到无辜指标。卡片字段与 cardcatalog.Card 的 TypeLine/OracleText 同义。",
+  "decks": [
+    {
+      "name": "rocks-and-ramp",
+      "note": "神器加速 + 绿色找地：8 张非地牌全部计为加速（含 Sol Ring——add { 即加速；CMC0 产费神器同时计入 lands/正向法力）",
+      "cards": [
+        {
+          "name": "Sol Ring",
+          "type_line": "Artifact",
+          "oracle_text": "{T}: Add {C}{C}.",
+          "cmc": 0
+        },
+        {
+          "name": "Arcane Signet",
+          "type_line": "Artifact",
+          "oracle_text": "{T}: Add one mana of any color in your commander's color identity."
+        },
+        {
+          "name": "Fellwar Stone",
+          "type_line": "Artifact",
+          "oracle_text": "{T}: Add one mana of any color that a land an opponent controls could produce."
+        },
+        {
+          "name": "Mind Stone",
+          "type_line": "Artifact",
+          "oracle_text": "{T}: Add {C}. {4}, {T}: Draw a card."
+        },
+        {
+          "name": "Cultivate",
+          "type_line": "Sorcery",
+          "oracle_text": "Search your library for up to two basic lands, put one onto the battlefield tapped and the other into your hand. Then shuffle."
+        },
+        {
+          "name": "Kodama's Reach",
+          "type_line": "Sorcery",
+          "oracle_text": "Search your library for up to two basic lands, put one onto the battlefield tapped and the other into your hand. Then shuffle."
+        },
+        {
+          "name": "Rampant Growth",
+          "type_line": "Sorcery",
+          "oracle_text": "Search your library for a basic land card and put it onto the battlefield tapped. Then shuffle."
+        },
+        {
+          "name": "Fyndhorn Elves",
+          "type_line": "Creature — Elf Druid",
+          "oracle_text": "{T}: Add {G}."
+        },
+        {
+          "name": "Forest",
+          "type_line": "Basic Land — Forest",
+          "oracle_text": "{T}: Add {G}."
+        },
+        {
+          "name": "Plains",
+          "type_line": "Basic Land — Plains",
+          "oracle_text": "{T}: Add {W}."
+        }
+      ],
+      "expect": {
+        "ramp": 8
+      }
+    },
+    {
+      "name": "aristocrats-drain",
+      "note": "放血引擎：可被牌组喂养的重复放血 payoff 计为胜负手（2026-09 校准）",
+      "cards": [
+        {
+          "name": "Blood Artist",
+          "type_line": "Creature — Vampire",
+          "oracle_text": "Whenever Blood Artist or another creature dies, each opponent loses 1 life."
+        },
+        {
+          "name": "Zulaport Cutthroat",
+          "type_line": "Creature — Vampire",
+          "oracle_text": "Whenever Zulaport Cutthroat or another creature you control dies, each opponent loses 1 life."
+        },
+        {
+          "name": "Gray Merchant of Asphodel",
+          "type_line": "Creature — Zombie",
+          "oracle_text": "When Gray Merchant of Asphodel enters the battlefield, each opponent loses X life, where X is half your devotion to black."
+        },
+        {
+          "name": "Viscera Seer",
+          "type_line": "Creature — Vampire Wizard",
+          "oracle_text": "Sacrifice a creature: Scry 1."
+        },
+        {
+          "name": "Swamp",
+          "type_line": "Basic Land — Swamp",
+          "oracle_text": "{T}: Add {B}."
+        }
+      ],
+      "expect": {
+        "wincon": 3
+      }
+    },
+    {
+      "name": "spot-removal-control",
+      "note": "点伤/锁定光环/夺获/硬解计单体干扰；一发点伤不是胜负手；清场与检索各自归位",
+      "cards": [
+        {
+          "name": "Lightning Bolt",
+          "type_line": "Instant",
+          "oracle_text": "Lightning Bolt deals 3 damage to any target."
+        },
+        {
+          "name": "Swords to Plowshares",
+          "type_line": "Instant",
+          "oracle_text": "Exile target creature. Its controller gains life equal to its power."
+        },
+        {
+          "name": "Pacifism",
+          "type_line": "Enchantment — Aura",
+          "oracle_text": "Enchant creature. Enchanted creature can't attack or block, and its activated abilities can't be activated."
+        },
+        {
+          "name": "Control Magic",
+          "type_line": "Enchantment — Aura",
+          "oracle_text": "Gain control of target creature."
+        },
+        {
+          "name": "Counterspell",
+          "type_line": "Instant",
+          "oracle_text": "Counter target spell."
+        },
+        {
+          "name": "Wrath of God",
+          "type_line": "Sorcery",
+          "oracle_text": "Destroy all creatures. They can't be regenerated."
+        },
+        {
+          "name": "Vampiric Tutor",
+          "type_line": "Instant",
+          "oracle_text": "Search your library for a card, then shuffle your library. Put that card on top of it."
+        },
+        {
+          "name": "Island",
+          "type_line": "Basic Land — Island",
+          "oracle_text": "{T}: Add {U}."
+        }
+      ],
+      "expect": {
+        "single_interaction": 5,
+        "board_wipe": 1,
+        "tutors": 1,
+        "wincon": 0
+      }
+    },
+    {
+      "name": "land-swap-tutor",
+      "note": "一换一换地不是加速也不是检索（固定 taxonomy）；一换二（Harrow 式）是加速",
+      "cards": [
+        {
+          "name": "Crop Rotation",
+          "type_line": "Instant",
+          "oracle_text": "Sacrifice a land: Search your library for a land card, put it onto the battlefield, then shuffle."
+        },
+        {
+          "name": "Harrow",
+          "type_line": "Instant",
+          "oracle_text": "As an additional cost to cast this spell, sacrifice a land. Search your library for up to two basic land cards, put them onto the battlefield untapped, then shuffle."
+        },
+        {
+          "name": "Forest",
+          "type_line": "Basic Land — Forest",
+          "oracle_text": "{T}: Add {G}."
+        }
+      ],
+      "expect": {
+        "ramp": 1
+      }
+    }
+  ]
+}

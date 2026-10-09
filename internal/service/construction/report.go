@@ -111,25 +111,6 @@ type ClassifyContext struct {
 	CardSynergy    float64 // EDHREC synergy score for this card (0.0 if unknown)
 }
 
-var targets = []struct {
-	id, label string
-	target    int
-}{
-	{"lands", "正向法力", 38},
-	{"plan", "计划相关", 30},
-	{"mass_interaction", "群体干扰", 6},
-	{"single_interaction", "单体干扰", 12},
-	{"draw_discard", "牌差件", 12},
-	{"ramp", "加速", 10},
-	{"tutors", "检索", 5},
-	// 角色类指标：直接点出胜负手/终结者/穿透/清场，替代原来含糊的 "计划相关"
-	// 兜底分类，让报告告诉玩家"牌组靠什么赢"。
-	{"wincon", "胜负手", 4},
-	{"finisher", "终结者", 5},
-	{"evasive", "穿透", 6},
-	{"board_wipe", "清场", 4},
-}
-
 // Targets returns the fixed per-metric template targets keyed by metric id.
 // The builder's gap-weighted suggestion sampling reads them to size each
 // remaining gap relative to its metric's scale.
@@ -312,7 +293,7 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 		// 通用找地短语（如 "search for a land card"）。一换一的换地
 		//（Crop Rotation 式"牺牲一片地再找一片"）按 2026-09 分类校准
 		// 归为检索而非加速——不产生法术力质量提升。
-		if strings.Contains(text, "search") && strings.Contains(text, "land") && strings.Contains(text, "battlefield") && !strings.Contains(text, "sacrifice a land") {
+		if strings.Contains(text, "search") && strings.Contains(text, "land") && strings.Contains(text, "battlefield") && !(strings.Contains(text, "sacrifice a land") && !strings.Contains(text, "two") && !strings.Contains(text, "three") && !strings.Contains(text, "up to")) {
 			return true, "Tutors lands onto battlefield"
 		}
 	case "wincon":
@@ -365,21 +346,7 @@ func hasCatalogData(card cardcatalog.Card) bool {
 // clause is a hard "ends the game" phrase rather than a maybe — the goal is to
 // flag actual win-cons, not generic "whenever" triggers.
 func winconTextMatch(text string) bool {
-	for _, phrase := range []string{
-		"you win the game",
-		"each opponent loses the game",
-		"each other player loses the game",
-		"your opponents lose the game",
-		"target opponent loses the game",
-		// Alternate win-cons: the game is over when an opponent has no library
-		// left, or at 10+ poison counters.
-		"if that player would draw a card and their library has no cards in it instead, that player loses the game",
-		"if a player would draw a card and their library has no cards in it instead, that player loses the game",
-		"when a player has 10 or more poison counters, that player loses the game",
-		// Classic poison/mill finishers that end the game as a rules effect.
-		"a player with 10 or more poison counters loses the game",
-		"players with 10 or more poison counters lose the game",
-	} {
+	for _, phrase := range winconTextPhrases {
 		if strings.Contains(text, phrase) {
 			return true
 		}
@@ -403,39 +370,6 @@ func cardPower(card cardcatalog.Card) int {
 		return 0
 	}
 	return value
-}
-
-// evasionKeywords are the keywords that let a creature get damage through.
-var evasionKeywords = []string{"flying", "menace", "trample", "shadow", "fear", "intimidate", "skulk"}
-
-// isEvasiveCreature reports whether a card is a creature with an evasion keyword
-// or an explicit "can't be blocked" ability, scanning all faces. Trample counts as
-// evasion (it pushes damage through chump blockers) but does not qualify as
-// finisher "big threat" evasion on its own — handled by the caller via cardPower.
-func isEvasiveCreature(card cardcatalog.Card, text, typeLine string) bool {
-	if !strings.Contains(typeLine, "creature") {
-		return false
-	}
-	for _, keyword := range evasionKeywords {
-		if strings.Contains(text, keyword) {
-			return true
-		}
-	}
-	if strings.Contains(text, "can't be blocked") {
-		return true
-	}
-	for _, face := range card.Faces {
-		faceText := strings.ToLower(face.OracleText)
-		for _, keyword := range evasionKeywords {
-			if strings.Contains(faceText, keyword) {
-				return true
-			}
-		}
-		if strings.Contains(faceText, "can't be blocked") {
-			return true
-		}
-	}
-	return false
 }
 
 func faceText(card cardcatalog.Card) string {

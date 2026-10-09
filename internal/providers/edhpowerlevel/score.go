@@ -37,6 +37,18 @@ var (
 
 	bracketCurve = []float64{0, 4.7, 6.7, 7.7, 9.25, 10}
 
+	// earlyComboManaThreshold：两张组合牌的总法术力（所需法术力 + 战场牌 CMC）
+	// 不超过该值即视为"早二卡组合"（bracket 4 规则的触发条件）。
+	earlyComboManaThreshold = 7
+
+	// gameEndingFeatureKeywords：判定一条组合线是否带"终结向量"的关键词表
+	//（对 live Spellbook 的 feature 名称校准）。命中任一才允许进入早/晚二卡
+	// 组合统计；纯价值引擎（如 Redcap+Mimic 的 ETB/LTB/死亡触发）会被跳过。
+	gameEndingFeatureKeywords = []string{
+		"win the game", "loses the game", "lose the game", "lifeloss", "damage", "mana", "treasure",
+		"turns", "extra turn", "combat", "haste", "mill", "poison",
+	}
+
 	landFactor     = 0.6
 	reservedFactor = 0.2
 	favorPrice     = 0.25
@@ -536,10 +548,7 @@ func frontFace(name string) string {
 // "Infinite creature ETB/LTB + death triggers" carry none of these.
 func comboHasGameEndingFeature(combo spellbook.Combo) bool {
 	result := strings.ToLower(combo.Result)
-	for _, keyword := range []string{
-		"win the game", "loses the game", "lose the game", "lifeloss", "damage", "mana", "treasure",
-		"turns", "extra turn", "combat", "haste", "mill", "poison",
-	} {
+	for _, keyword := range gameEndingFeatureKeywords {
 		if strings.Contains(result, keyword) {
 			return true
 		}
@@ -1018,7 +1027,7 @@ func computeBracket(scored []*scoredCard, powerLevel float64, combos []spellbook
 			}
 		}
 		combined := combo.ManaValueNeeded + ya
-		if combined > 7 {
+		if combined > earlyComboManaThreshold {
 			if !contains(details.lateComboNames, combo.Name) {
 				details.lateComboNames = append(details.lateComboNames, combo.Name)
 			}
