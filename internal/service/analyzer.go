@@ -9,6 +9,7 @@ import (
 	"math"
 	mathrand "math/rand"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -84,6 +85,7 @@ type Analyzer struct {
 	commanderSalt   CommanderSaltAnalyzer
 	edh             EDHAnalyzer
 	edhHTTP         *http.Client
+	edhDiskDir      string
 	cards           CardCatalog
 	spellbook       Spellbook
 	edhrec          EDHRecommender
@@ -96,6 +98,13 @@ type Analyzer struct {
 	buildPoolCache  *edhrecPoolCache
 	rand            *mathrand.Rand
 	rankingsCache   *commanderRankingsCache
+}
+
+// SetEDHCacheDir wires the on-disk getcards cache directory (config CacheDir).
+// A setter rather than a constructor param keeps the 12-arg NewAnalyzer stable
+// for the many test constructors; empty string disables the disk tier.
+func (a *Analyzer) SetEDHCacheDir(dir string) {
+	a.edhDiskDir = dir
 }
 
 func NewAnalyzer(
@@ -136,6 +145,9 @@ func (a *Analyzer) Analyze(ctx context.Context, sourceURL, sourceID string, supp
 	if supplied != nil {
 		requestKey += ":" + deckRevision(supplied.ExportPlainText())
 	}
+	// ScoringVersion 参与缓存键：改公式/调目标值后把版本号 +1，
+	// 旧分析缓存立即失效，不必等 TTL 过期才看到新参数的效果。
+	requestKey += fmt.Sprintf(":scoring-v%d", ScoringVersion)
 	if cached, ok := a.cache.get(requestKey, time.Now()); ok {
 		return cached, nil
 	}
@@ -259,6 +271,10 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 			comboCtx, cancelCombos := context.WithTimeout(ctx, a.providerTimeout)
 			defer cancelCombos()
 			foundCombos, comboErr = a.spellbook.Search(comboCtx, deckNames(target), 12)
+			// Spellbook ships the same component set as several variant lines;
+			// score and count each distinct line once (CommanderSalt 2026.4195
+			// "each distinct combo line is scored once").
+			foundCombos = dedupeComboLines(foundCombos)
 			return nil
 		})
 	}
@@ -385,7 +401,7 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 	if edhErr != nil || edhMetrics == nil {
 		// The chromedp path is gone; always score via the pure-HTTP getcards + formula
 		// implementation, which no longer depends on a browser.
-		edhMetrics, edhErr = edhpowerlevel.ScoreWithCombos(edhCtx, target, a.edhHTTP, combos, catalogCMC, deckGameChangerNames(target, catalog))
+		edhMetrics, edhErr = edhpowerlevel.ScoreWithCombos(edhCtx, target, a.edhHTTP, combos, catalogCMC, deckGameChangerNames(target, catalog), a.edhDiskDir)
 	}
 	cancelEDH()
 	if edhErr != nil {
@@ -580,6 +596,39 @@ func colorsAllowed(colors []string, allowed map[string]struct{}) bool {
 // win-con. Combos that merely produce infinite mana or infinite combat phases
 // are not win-cons by themselves — they need a payoff, and the payoff card
 // usually carries the win-con text or is a big-enough finisher already.
+// ScoringVersion guards the analysis cache against stale scores: bump it
+// whenever the scoring formula, construction targets, or classification
+// wordings change, and cached analyses invalidate immediately instead of
+// serving pre-tuning results until their TTL expires.
+const ScoringVersion = 1
+
+// dedupeComboLines collapses Spellbook variant entries that share the same
+// component set: one combo often ships as multiple lines (extra features,
+// printing-specific variants), and every duplicate used to inflate the wincon
+// count and the early/late 2-card combo tallies. The key is the sorted,
+// lowercased component-name set; the first line wins.
+func dedupeComboLines(combos []spellbook.Combo) []spellbook.Combo {
+	if len(combos) < 2 {
+		return combos
+	}
+	seen := make(map[string]struct{}, len(combos))
+	out := make([]spellbook.Combo, 0, len(combos))
+	for _, combo := range combos {
+		parts := make([]string, 0, len(combo.Components))
+		for _, component := range combo.Components {
+			parts = append(parts, strings.ToLower(component.Name))
+		}
+		sort.Strings(parts)
+		key := strings.Join(parts, "|")
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, combo)
+	}
+	return out
+}
+
 func countWinconCombos(found []spellbook.Combo) int {
 	count := 0
 	for _, combo := range found {

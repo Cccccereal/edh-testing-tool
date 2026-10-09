@@ -25,13 +25,6 @@ const themeToggle = document.querySelector('#theme-toggle');
 let currentDeckText = '';
 /** @type {DisplayCard[]} */
 let currentDeckCards = [];
-let pendingSwapAdd = '';
-let selectedSwapRemove = '';
-const swapModal = document.querySelector('#swap-modal');
-const swapSearch = document.querySelector('#swap-search');
-const swapSubmit = document.querySelector('#swap-submit');
-const swapMessage = document.querySelector('#swap-message');
-const swapResult = document.querySelector('#swap-result');
 
 // --- light deck editor state (pure front-end, direction A) ---------------------
 // The editor works on a mutable copy of the analyzed deck. Every mutating action
@@ -1017,11 +1010,21 @@ function builderCardMatches(id, card) {
     case 'mass_interaction':
       return text.includes('each player') || text.includes('all creatures') || text.includes('destroy all') || text.includes('exile all');
     case 'single_interaction':
-      return text.includes('target') && (text.includes('destroy') || text.includes('exile') || text.includes('counter target') || text.includes('return target'));
+      if (text.includes('target') && (text.includes('destroy') || text.includes('exile') || text.includes('counter target') || text.includes('return target'))) return true;
+      if (text.includes('damage to any target') && !text.includes('each creature')) return true;
+      if (text.includes('enchanted creature') && (text.includes("can't attack") || text.includes("doesn't untap"))) return true;
+      if (text.includes('gains control of target')) return true;
+      return false;
     case 'draw_discard':
       return text.includes('draw a card') || text.includes('draw cards') || text.includes('draw that many') || text.includes('discard');
     case 'ramp':
-      return !typeLine.includes('land') && (text.includes('add {') || text.includes('additional land') || text.includes('search your library for a basic land') || text.includes('costs {'));
+      if (typeLine.includes('land')) return false;
+      if (text.includes('add {') || text.includes('additional land') || text.includes('search your library for a basic land') || text.includes('costs {')) return true;
+      // 无符号写法的产法力（Arcane Signet 等）
+      if (text.includes('add one mana of any')) return true;
+      // 一换一换地（Crop Rotation 式）是检索不是加速
+      if (text.includes('search') && text.includes('land') && text.includes('battlefield') && !text.includes('sacrifice a land')) return true;
+      return false;
     case 'plan':
       return text.includes('token') || text.includes('proliferate') || text.includes('infect') || text.includes('poison') || text.includes('whenever');
     default:
@@ -1372,10 +1375,13 @@ function scrollToSlowly(target, duration = 1100) {
 function render(payload) {
   const skeleton = document.querySelector('#skeleton');
   if (skeleton) skeleton.hidden = true;
+  baselineSnapshot = extractCompareMetrics(payload);
+  const editorCompare = document.querySelector('#editor-compare');
+  if (editorCompare) editorCompare.hidden = false;
   document.querySelector('#deck-name').textContent = payload.deck.name || payload.deck.commanders.join(' / ');
   document.querySelector('#deck-meta').textContent = `${payload.deck.commanders.join(' / ')} · ${payload.deck.card_count} 张牌`;
   renderProvider('salt', payload.results.commandersalt, [
-    ['salt', 'Salt']
+    ['salt', 'Salt'], ['combo', 'Combo'], ['synergy', 'Synergy'], ['threat', 'Threat']
   ]);
   renderProvider('edh', payload.results.edhpowerlevel, [
     ['efficiency', 'Efficiency'], ['impact', 'Impact'],
@@ -1662,115 +1668,6 @@ function buildDeckText(cards) {
   return `Commander\n${commanders.join('\n')}\n\nDeck\n${mainboard.join('\n')}`;
 }
 
-function openSwap(addName) {
-  pendingSwapAdd = addName;
-  selectedSwapRemove = '';
-  document.querySelector('#swap-add-name').textContent = addName;
-  swapSearch.value = '';
-  swapMessage.textContent = '';
-  swapResult.hidden = true;
-  swapSubmit.disabled = true;
-  renderSwapRemoveList('');
-  swapModal.hidden = false;
-  swapSearch.focus();
-}
-
-function closeSwap() {
-  swapModal.hidden = true;
-  pendingSwapAdd = '';
-  selectedSwapRemove = '';
-}
-
-function renderSwapRemoveList(query) {
-  const normalized = query.trim().toLowerCase();
-  const cards = currentDeckCards.filter((item) => !item.commander && (!normalized || String(item.card?.name || '').toLowerCase().includes(normalized)));
-  // Group mainboard cards by their construction role so a swap reads like a deck
-  // decision ("cut from ramp", "cut from 穿透"), not a raw Nonlands/Lands split.
-  const roleLabel = (item) => swapRoleLabel(item);
-  const groups = [
-    ['非地牌', cards.filter((item) => !item.land)],
-    ['地牌', cards.filter((item) => item.land)]
-  ];
-  document.querySelector('#swap-remove-list').innerHTML = groups.filter(([, items]) => items.length).map(([label, items]) => `<section><h3>${label}</h3>${items.map((item) => `<button type="button" class="swap-remove-option${selectedSwapRemove === item.card.name ? ' selected' : ''}" data-remove-name="${escapeHTML(item.card.name)}"><span>${item.quantity}×</span><strong>${escapeHTML(item.card.name)}</strong><small class="swap-remove-role">${escapeHTML(roleLabel(item))}</small></button>`).join('')}</section>`).join('') || '<p>没有匹配的 Mainboard 卡牌。</p>';
-}
-
-// swapRoleLabel derives a card's primary construction role from its classified
-// metrics, falling back to "地牌" / "未分类".
-const SWAP_ROLE_ORDER = ['wincon', 'finisher', 'evasive', 'board_wipe', 'mass_interaction', 'single_interaction', 'draw_discard', 'ramp', 'tutors', 'plan'];
-function swapRoleLabel(item) {
-  if (item.land) return '地牌';
-  const role = (item.roles || []).find((id) => SWAP_ROLE_ORDER.includes(id));
-  if (!role) return '未分类';
-  return ({ wincon: '胜负手', finisher: '终结者', evasive: '穿透', board_wipe: '清场', mass_interaction: '群体干扰', single_interaction: '单体干扰', draw_discard: '牌差件', ramp: '加速', tutors: '检索', plan: '计划相关' })[role];
-}
-
-async function compareSwap() {
-  if (!currentDeckText || !pendingSwapAdd || !selectedSwapRemove) return;
-  swapSubmit.disabled = true;
-  swapSubmit.textContent = '比较中…';
-  swapMessage.textContent = '';
-  try {
-    const response = await fetch('/api/v1/compare-swap', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decklist: currentDeckText, remove_name: selectedSwapRemove, add_name: pendingSwapAdd })
-    });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error?.message || '替换比较失败。');
-    renderSwapResult(payload);
-  } catch (error) {
-    swapMessage.textContent = error.message || '替换比较失败。';
-  } finally {
-    swapSubmit.disabled = !selectedSwapRemove;
-    swapSubmit.textContent = '比较替换';
-  }
-}
-
-// renderCutReasons explains why the removed card is a good cut: role surplus,
-// weak card quality, or no synergy with the commander. Mirrors the server's
-// SwapCutReason payload. 后端返回的 cut_reasons 是"整副牌的切除建议"；
-// 这里只挑出与当前被移除卡牌相关的条目，避免把整副牌的理由全列出来刷屏。
-// 同一条理由去重后最多显示 3 条。
-function renderCutReasons(reasons) {
-  if (!Array.isArray(reasons) || !reasons.length) return '';
-  const removedName = String(selectedSwapRemove || '').toLowerCase();
-  const removedItem = removedName ? currentDeckCards.find((c) => !c.commander && String(c.card?.name || '').toLowerCase() === removedName) : null;
-  const removedRoles = removedItem ? removedItem.roles || [] : [];
-  const relevant = reasons.filter((reason) => removedRoles.includes(reason.role) || (reason.label || '').toLowerCase().includes(removedName));
-  // 按角色去重：同一角色保留一条最完整的理由
-  const seen = new Set();
-  const deduped = [];
-  for (const reason of relevant) {
-    const key = reason.role || reason.label || '';
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(reason);
-  }
-  const shown = (deduped.length ? deduped : reasons.slice(0, 3)).slice(0, 3);
-  const items = shown.map((reason) => `<li>${escapeHTML(reason.label || '')}${(reason.reasons || []).map((text) => `<span>${escapeHTML(text)}</span>`).join('')}</li>`).join('');
-  return `<div class="swap-cut-reasons"><h4>为什么选它踢掉</h4><ul>${items}</ul></div>`;
-}
-
-function renderSwapResult(payload) {
-  const deltas = (payload.deltas || []).map((metric) => {
-    const delta = Number(metric.delta || 0);
-    const deltaText = delta > 0 ? `+${delta}` : String(delta);
-    return `<tr><th>${escapeHTML(metric.label)}</th><td>${metric.before}</td><td>${metric.after}</td><td class="swap-delta ${delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral'}">${deltaText}</td></tr>`;
-  }).join('');
-  const issues = (payload.legality?.issues || []).map((issue) => `<li>${escapeHTML(issue)}</li>`).join('');
-  swapResult.innerHTML = `<div class="swap-result-title"><strong>${escapeHTML(payload.removed?.name || '')}</strong><span>→</span><strong>${escapeHTML(payload.added?.name || '')}</strong></div>
-    ${renderCutReasons(payload.cut_reasons)}
-    <table><thead><tr><th>指标</th><th>替换前</th><th>替换后</th><th>变化</th></tr></thead><tbody>${deltas}</tbody></table>
-    <div class="swap-legality ${payload.legality?.valid ? 'valid' : 'warning'}"><strong>基础合法性：${payload.legality?.valid ? '通过' : '需要注意'}</strong><span>牌张数 ${payload.before?.card_count} → ${payload.after?.card_count} · Commander 色组 ${(payload.legality?.color_identity || []).join('') || '无色'}</span>${issues ? `<ul>${issues}</ul>` : ''}</div>
-    <textarea readonly aria-label="更新后的牌表">${escapeHTML(payload.updated_decklist || '')}</textarea>
-    <button id="copy-swap-decklist" class="ghost-button" type="button">复制更新后牌表</button>`;
-  swapResult.hidden = false;
-  document.querySelector('#copy-swap-decklist').addEventListener('click', async (event) => {
-    const ok = await copyTextToClipboard(payload.updated_decklist || '');
-    event.currentTarget.textContent = ok ? '已复制' : '复制失败';
-  });
-}
-
 const COMBO_CATEGORIES = {
   win: { label: '制胜', fallback: ['win the game', 'opponents lose the game', 'target opponent loses the game'] },
   lifeloss: { label: '无限掉血', fallback: ['lifeloss'] },
@@ -1838,7 +1735,7 @@ function renderRecommendations(recommendations, keywords) {
             <div><span>Inclusion</span><strong>${(Number(item.inclusion_rate || 0) * 100).toFixed(1)}%</strong></div>
           </div>
           ${fills ? `<ul class="recommendation-fills">${fills}</ul>` : ''}
-          <button class="swap-start ghost-button" type="button" data-add-name="${escapeHTML(item.card?.name || '')}">加入构筑</button>
+          <button class="recommend-add ghost-button" type="button" data-add-name="${escapeHTML(item.card?.name || '')}">直接加入构筑</button>
           <p>${escapeHTML(item.reason || '')}</p>
           <a href="${escapeHTML(item.source_url || 'https://edhrec.com/')}" target="_blank" rel="noopener noreferrer">在 EDHREC 查看 ↗</a>
         </article>`;
@@ -1911,6 +1808,89 @@ function markDirty() {
   editorDirty = true;
   editorDirtyNote.hidden = false;
 }
+
+// --- 即时测算对比：原始分析基线 vs 当前编辑牌表 ------------------------------
+// 基线在每次完整分析（render）时记录，重新测算只更新“当前”列，
+// 反复对比始终相对原始牌表，避免基准漂移。
+
+let baselineSnapshot = null;
+const editorCompareRunButton = document.querySelector('#editor-compare-run');
+const editorCompareResult = document.querySelector('#editor-compare-result');
+
+// 提取可对比的指标快照：双评分 + 构筑指标。缺席的（如 CommanderSalt 失败）
+// 保持缺省，渲染对比时跳过。
+function extractCompareMetrics(payload) {
+  const edh = payload.results?.edhpowerlevel?.metrics || {};
+  const salt = payload.results?.commandersalt?.metrics || {};
+  const rows = [];
+  const push = (key, label, digits) => {
+    const value = edh[key] ?? salt[key];
+    if (value === undefined || value === null) return;
+    rows.push({ key, label, value: Number(value), digits });
+  };
+  push('power_level', 'EDH 强度', 2);
+  push('score', 'EDH Score', 2);
+  push('evaluated_bracket', '评估 Bracket', 0);
+  push('salt', 'Salt', 1);
+  const construction = (payload.construction_report?.metrics || [])
+    .map((metric) => ({ id: metric.id, label: metric.label, actual: metric.actual, target: metric.target }));
+  return { rows, construction };
+}
+
+function formatCompareValue(row) {
+  return row.digits > 0 ? row.value.toFixed(row.digits) : String(Math.round(row.value));
+}
+
+function renderCompareResult(baseline, current) {
+  const scoreRows = baseline.rows.map((row) => {
+    const fresh = current.rows.find((item) => item.key === row.key);
+    const after = fresh ? formatCompareValue(fresh) : '—';
+    const delta = fresh ? fresh.value - row.value : null;
+    return `<tr><th>${escapeHTML(row.label)}</th><td>${escapeHTML(formatCompareValue(row))}</td><td>${escapeHTML(after)}</td>${renderCompareDelta(delta, row.digits)}</tr>`;
+  }).join('');
+  const byId = new Map(current.construction.map((metric) => [metric.id, metric]));
+  const constructionRows = baseline.construction.map((metric) => {
+    const fresh = byId.get(metric.id);
+    const after = fresh ? fresh.actual : '—';
+    const delta = fresh ? fresh.actual - metric.actual : null;
+    return `<tr><th>${escapeHTML(metric.label)}<small>目标 ${metric.target}</small></th><td>${metric.actual}</td><td>${escapeHTML(String(after))}</td>${renderCompareDelta(delta, 0)}</tr>`;
+  }).join('');
+  editorCompareResult.innerHTML = `
+    <table><thead><tr><th>指标</th><th>原始</th><th>当前</th><th>变化</th></tr></thead>
+      <tbody>${scoreRows}${constructionRows}</tbody></table>`;
+  editorCompareResult.hidden = false;
+}
+
+function renderCompareDelta(delta, digits) {
+  if (delta === null) return '<td class="swap-delta neutral">—</td>';
+  const text = delta === 0 ? '0' : `${delta > 0 ? '+' : ''}${digits > 0 ? delta.toFixed(digits) : Math.round(delta)}`;
+  return `<td class="swap-delta ${delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral'}">${escapeHTML(text)}</td>`;
+}
+
+async function runEditorCompare() {
+  if (!baselineSnapshot || !editorCompareRunButton) return;
+  editorCompareRunButton.disabled = true;
+  editorCompareRunButton.textContent = '测算中…（约 10–60 秒）';
+  editorCompareResult.hidden = true;
+  try {
+    const response = await fetch('/api/v1/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decklist: editorToDeckText() })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error?.message || '测算失败。');
+    renderCompareResult(baselineSnapshot, extractCompareMetrics(payload));
+  } catch (error) {
+    editorCompareResult.innerHTML = `<p class="form-message">${escapeHTML(error.message || '测算失败，请稍后重试。')}</p>`;
+    editorCompareResult.hidden = false;
+  } finally {
+    editorCompareRunButton.disabled = false;
+    editorCompareRunButton.textContent = '重新测算';
+  }
+}
+
+editorCompareRunButton?.addEventListener('click', runEditorCompare);
 
 function syncEditorUI() {
   editorUndoButton.disabled = editorUndo.length === 0;
@@ -2174,10 +2154,8 @@ function renderCard(item) {
   </div>`;
 }
 
-swapSearch.addEventListener('input', () => renderSwapRemoveList(swapSearch.value));
-swapSubmit.addEventListener('click', compareSwap);
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && !swapModal.hidden) closeSwap();
+
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
     if (event.shiftKey) {
       event.preventDefault();
@@ -2215,20 +2193,15 @@ document.addEventListener('click', (event) => {
     deleteVersion(Number(deleteVersionButton.dataset.deleteVersion));
     return;
   }
-  const swapStart = event.target.closest('.swap-start');
-  if (swapStart) {
-    openSwap(swapStart.dataset.addName || '');
-    return;
-  }
-  const removeOption = event.target.closest('.swap-remove-option');
-  if (removeOption) {
-    selectedSwapRemove = removeOption.dataset.removeName || '';
-    swapSubmit.disabled = !selectedSwapRemove;
-    renderSwapRemoveList(swapSearch.value);
-    return;
-  }
-  if (event.target.closest('[data-swap-close]') || event.target.closest('#swap-close')) {
-    closeSwap();
+  const recommendAdd = event.target.closest('.recommend-add');
+  if (recommendAdd) {
+    const name = recommendAdd.dataset.addName || '';
+    if (name) {
+      applyEdit(() => addCardToEditor(name));
+      recommendAdd.textContent = '已加入牌表 ✓';
+      recommendAdd.classList.add('added');
+      recommendAdd.disabled = true;
+    }
     return;
   }
   const button = event.target.closest('.card-faces button');
@@ -2668,21 +2641,15 @@ function escapeHTML(value) {
   })[char]);
 }
 
-// Scroll-triggered fade-in. A section reveals as soon as any part of it enters
-// the viewport and only re-hides once it has fully left: thresholding on
-// intersection *ratio* permanently hid very tall sections (one taller than
-// ~4 viewports can never reach a 25% ratio, so 关联卡牌 stayed invisible).
-// The dataset guard keeps repeat analyses from re-hiding sections in view.
+// Scroll-triggered reveal, state-driven (learned from bekventures.com): the
+// observer toggles a single `in-view` class and CSS transitions handle both
+// directions with the same curve, so scrolling back replays the exact mirror
+// of the entrance instead of a separate "dim" keyframe. The dataset guard
+// keeps repeat analyses from re-hiding sections already in view.
 function initScrollAnimations() {
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('fade-in-visible');
-        entry.target.classList.remove('fade-out-visible', 'fade-in-hidden');
-      } else {
-        entry.target.classList.remove('fade-in-visible');
-        entry.target.classList.add('fade-out-visible');
-      }
+      entry.target.classList.toggle('in-view', entry.isIntersecting);
     });
   }, { rootMargin: '50px 0px 50px 0px' });
 
@@ -2691,7 +2658,7 @@ function initScrollAnimations() {
   document.querySelectorAll('.catalog-section:not(#recommendation-section), .result-card').forEach((el) => {
     if (el.dataset.scrollAnimated) return;
     el.dataset.scrollAnimated = '1';
-    el.classList.add('fade-in-hidden');
+    el.classList.add('scroll-reveal');
     observer.observe(el);
   });
 }
@@ -2727,8 +2694,8 @@ function handleRecommendationToggle(e) {
 }
 
 function showStickyNav() {
-  const nav = document.querySelector('#sticky-nav');
-  nav.hidden = false;
+  const links = document.querySelector('#sticky-nav-links');
+  if (links) links.hidden = false;
   document.body.classList.add('has-sticky-nav');
   
   // Set up intersection observer for active link highlighting
@@ -2788,6 +2755,18 @@ function looksLikeReleaseTag(value) {
   return typeof value === 'string' && /^v\d{8}-\d{4}$/.test(value);
 }
 
+// 发布说明摘要：取第一条有效行，去 markdown 加粗/列表符，超长截断。
+// "Full Changelog" 对比链接是 generate_release_notes 的噪音，跳过。
+function summarizeReleaseNotes(notes) {
+  if (!notes) return '';
+  for (const rawLine of String(notes).split('\n')) {
+    const line = rawLine.replace(/\*\*/g, '').replace(/^\s*[-*]\s*/, '').trim();
+    if (!line || /^full changelog/i.test(line)) continue;
+    return line.length > 140 ? `${line.slice(0, 137)}...` : line;
+  }
+  return '';
+}
+
 function showUpdateBanner(latest, current) {
   if (document.querySelector('#update-banner')) return;
   const banner = document.createElement('div');
@@ -2800,6 +2779,19 @@ function showUpdateBanner(latest, current) {
   const currentTag = document.createElement('span');
   currentTag.className = 'update-current';
   currentTag.textContent = `（当前 ${current}）`;
+  // 发布说明摘要：让用户知道"这次更新改了什么"——评分算法类调整直接
+  // 关系到用户分数为何变化（churn 治理，学 CommanderSalt 的季度日志）。
+  // GitHub generate_release_notes 的 "Full Changelog" 对比行是噪音，过滤掉。
+  const notesSummary = summarizeReleaseNotes(latest.notes);
+  if (notesSummary) {
+    const notesLine = document.createElement('span');
+    notesLine.className = 'update-notes';
+    notesLine.textContent = notesSummary;
+    var bannerLines = document.createElement('div');
+    bannerLines.className = 'update-banner-main';
+    bannerLines.append(label, currentTag, notesLine);
+    banner.appendChild(bannerLines);
+  }
   const link = document.createElement('a');
   link.href = latest.release_url;
   link.target = '_blank';
@@ -2815,7 +2807,13 @@ function showUpdateBanner(latest, current) {
     try { localStorage.setItem(UPDATE_DISMISS_KEY, latest.version); } catch { /* 私隐模式等场景下不可用，忽略 */ }
     banner.remove();
   });
-  banner.append(label, currentTag, link, dismiss);
+  if (!banner.querySelector('.update-banner-main')) {
+    const line = document.createElement('div');
+    line.className = 'update-banner-main';
+    line.append(label, currentTag);
+    banner.appendChild(line);
+  }
+  banner.append(link, dismiss);
   document.body.appendChild(banner);
 }
 

@@ -236,6 +236,20 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 		if strings.Contains(text, "target") && (strings.Contains(text, "destroy") || strings.Contains(text, "exile") || strings.Contains(text, "counter target") || strings.Contains(text, "return target")) {
 			return true, "Targeted removal or interaction"
 		}
+		// 2026-09 分类校准（对齐 CommanderSalt 的单解边界）：
+		// "任意目标"的点伤算单解（闪电击/火球），但不带 "each creature"
+		// 的全表伤害（地震类仍按其本性处理，不算单解）。
+		if strings.Contains(text, "damage to any target") && !strings.Contains(text, "each creature") {
+			return true, "Targeted damage as removal"
+		}
+		// 锁定光环（Pacifism 式缴械、监视式不重置）与夺获
+		//（Control Magic 式获得控制权）都是单卡解。
+		if strings.Contains(text, "enchanted creature") && (strings.Contains(text, "can't attack") || strings.Contains(text, "doesn't untap")) {
+			return true, "Lockdown aura as removal"
+		}
+		if strings.Contains(text, "gains control of target") || strings.Contains(text, "gain control of target") {
+			return true, "Takes control of a permanent"
+		}
 	case "draw_discard":
 		// 牌差件：抽牌、弃牌、放逐牌组顶、坟场利用
 		if strings.Contains(text, "draw a card") || strings.Contains(text, "draw cards") || strings.Contains(text, "draw that many") || strings.Contains(text, "discard") || strings.Contains(text, "draw two") || strings.Contains(text, "draw three") {
@@ -281,22 +295,36 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 		if strings.Contains(text, "add {") || strings.Contains(text, "additional land") || strings.Contains(text, "search your library for a basic land") || strings.Contains(text, "costs {") {
 			return true, "Produces mana, finds lands, or reduces cost"
 		}
+		// 无符号写法的产法力（Arcane Signet "Add one mana of any color..."）——
+		// 2026-09 分类校准：此前这类常见神器加速完全不被计为加速。
+		if strings.Contains(text, "add one mana of any") {
+			return true, "Produces mana"
+		}
 		// 珍宝 (Treasure tokens)
 		if strings.Contains(text, "treasure") {
 			return true, "Creates Treasure tokens"
 		}
-		// 找非基本地进场（包括 shock lands, triomes, 等）
-		if (strings.Contains(text, "search your library for a land") || strings.Contains(text, "search your library for a plains") || strings.Contains(text, "search your library for an island") || strings.Contains(text, "search your library for a swamp") || strings.Contains(text, "search your library for a mountain") || strings.Contains(text, "search your library for a forest")) && !strings.Contains(text, "basic") {
+		// 找非基本地进场（包括 shock lands, triomes, 等）。一换一换地
+		//（"sacrifice a land" + 单数 a land card，Crop Rotation 式）归检索。
+		if (strings.Contains(text, "search your library for a land") || strings.Contains(text, "search your library for a plains") || strings.Contains(text, "search your library for an island") || strings.Contains(text, "search your library for a swamp") || strings.Contains(text, "search your library for a mountain") || strings.Contains(text, "search your library for a forest")) && !strings.Contains(text, "basic") && !(strings.Contains(text, "sacrifice a land") && strings.Contains(text, "a land card") && !strings.Contains(text, "two") && !strings.Contains(text, "three")) {
 			return true, "Finds non-basic lands"
 		}
-		// 通用找地短语（如 "search for a land card"）
-		if strings.Contains(text, "search") && strings.Contains(text, "land") && strings.Contains(text, "battlefield") {
+		// 通用找地短语（如 "search for a land card"）。一换一的换地
+		//（Crop Rotation 式"牺牲一片地再找一片"）按 2026-09 分类校准
+		// 归为检索而非加速——不产生法术力质量提升。
+		if strings.Contains(text, "search") && strings.Contains(text, "land") && strings.Contains(text, "battlefield") && !strings.Contains(text, "sacrifice a land") {
 			return true, "Tutors lands onto battlefield"
 		}
 	case "wincon":
 		// 胜负手：直接结束对局的文字，或与"恰好 N 张"关联的致胜异能。
 		if winconTextMatch(text) {
 			return true, "Win condition in card text"
+		}
+		// 2026-09 分类校准：随场面放大的群体放血（Gray Merchant、
+		// Blood Artist 式"每个对手失去生命"）是真实的赢法——
+		// 对齐 CommanderSalt 把可被牌组喂养的重复放血 payoff 计为胜负手。
+		if strings.Contains(text, "each opponent loses") {
+			return true, "Table-wide drain scales into a win"
 		}
 		if strings.Contains(text, "you may choose a new commander") {
 			return true, "Replaces commander (can set up a loop)"

@@ -10,15 +10,17 @@
 
 </head>
 <body>
-  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换主题">暗色</button>
-  <nav id="sticky-nav" class="sticky-nav" hidden>
+  <nav id="sticky-nav" class="sticky-nav">
     <div class="sticky-nav-inner">
-      <a href="#results" class="sticky-nav-link">结果</a>
-      <a href="#manabase-section" class="sticky-nav-link">法力基础</a>
-      <a href="#construction-section" class="sticky-nav-link">构筑分析</a>
-      <a href="#combo-section" class="sticky-nav-link">Combo</a>
-      <a href="#recommendation-section" class="sticky-nav-link">推荐</a>
-      <button type="button" class="sticky-nav-link" data-deck-drawer-open>牌表编辑</button>
+      <div id="sticky-nav-links" class="sticky-nav-links" hidden>
+        <a href="#results" class="sticky-nav-link">结果</a>
+        <a href="#manabase-section" class="sticky-nav-link">法力基础</a>
+        <a href="#construction-section" class="sticky-nav-link">构筑分析</a>
+        <a href="#combo-section" class="sticky-nav-link">Combo</a>
+        <a href="#recommendation-section" class="sticky-nav-link">推荐</a>
+        <button type="button" class="sticky-nav-link" data-deck-drawer-open>牌表编辑</button>
+      </div>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换主题">暗色</button>
     </div>
   </nav>
   <main class="shell">
@@ -253,19 +255,15 @@
       </div>
       <div id="deck-card-list" class="deck-card-list collapsed" aria-live="polite"></div>
       <p id="decklist-filter-note" class="decklist-filter-note" hidden></p>
+      <div id="editor-compare" class="editor-compare" hidden>
+        <div class="editor-compare-head">
+          <div><strong>即时测算对比</strong><span>当前牌表 vs 原始分析</span></div>
+          <button id="editor-compare-run" class="primary-button" type="button">重新测算</button>
+        </div>
+        <p class="editor-compare-note">对当前编辑中的牌表跑一遍完整分析流水线（约 10–60 秒），对比评分与构筑指标的变化。</p>
+        <div id="editor-compare-result" class="editor-compare-result" hidden></div>
+      </div>
     </aside>
-  </div>
-  <div id="swap-modal" class="swap-modal" hidden>
-    <div class="swap-backdrop" data-swap-close></div>
-    <section class="swap-panel" role="dialog" aria-modal="true" aria-labelledby="swap-title">
-      <div class="swap-panel-head"><div><p class="eyebrow">SINGLE CARD SWAP</p><h2 id="swap-title">单卡替换预览</h2><p>仅预览，不会修改 Moxfield 或保存到服务器。</p></div><button id="swap-close" class="ghost-button" type="button">关闭</button></div>
-      <div class="swap-choice"><span>加入</span><strong id="swap-add-name"></strong></div>
-      <label class="swap-search-label">筛选要移除的 Mainboard 卡牌<input id="swap-search" type="search" placeholder="输入卡牌名称"></label>
-      <div id="swap-remove-list" class="swap-remove-list"></div>
-      <p id="swap-message" class="swap-message" role="alert"></p>
-      <button id="swap-submit" class="primary-button" type="button" disabled>比较替换</button>
-      <div id="swap-result" class="swap-result" hidden></div>
-    </section>
   </div>
   <div id="card-preview" class="card-preview" role="tooltip" hidden>
     <img id="card-preview-image" alt="">

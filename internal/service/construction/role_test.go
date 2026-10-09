@@ -146,25 +146,27 @@ func TestClassifyWinconAlternate(t *testing.T) {
 		expect map[string]string
 	}{
 		{
-			name:   "mill out wincon",
-			card:   cardcatalog.Card{TypeLine: "Sorcery", OracleText: "Target player puts the top 13 cards of their library into their graveyard. If that player would draw a card and their library has no cards in it instead, that player loses the game."},
+			name: "mill out wincon",
+			card: cardcatalog.Card{TypeLine: "Sorcery", OracleText: "Target player puts the top 13 cards of their library into their graveyard. If that player would draw a card and their library has no cards in it instead, that player loses the game."},
 			// A mill-out spell is legitimately both a card-advantage tool and a
 			// win-con; the draw_discard classification is intentional overlap.
 			expect: map[string]string{"wincon": "Win condition in card text", "draw_discard": "Draws cards or causes discard"},
 		},
 		{
-			name:   "poison wincon",
-			card:   cardcatalog.Card{TypeLine: "Creature — Phyrexian", OracleText: "When a player has 10 or more poison counters, that player loses the game."},
+			name: "poison wincon",
+			card: cardcatalog.Card{TypeLine: "Creature — Phyrexian", OracleText: "When a player has 10 or more poison counters, that player loses the game."},
 			// Poison keyword also trips the heuristic plan classifier — intentional
 			// overlap, the wincon text is the meaningful signal here.
 			expect: map[string]string{"wincon": "Win condition in card text", "plan": "Heuristic plan/synergy card"},
 		},
 		{
-			name:   "generic trigger not wincon",
-			card:   cardcatalog.Card{TypeLine: "Creature — Snake", OracleText: "Whenever you draw a card, each opponent loses 1 life."},
-			// The "whenever" trigger and "draw a card" text trip the heuristic plan and
-			// draw_discard classifiers — but the key assertion is that it is NOT a win-con.
-			expect: map[string]string{"plan": "Heuristic plan/synergy card", "draw_discard": "Draws cards or causes discard"},
+			name: "repeatable drain payoff counts as wincon",
+			card: cardcatalog.Card{TypeLine: "Creature — Snake", OracleText: "Whenever you draw a card, each opponent loses 1 life."},
+			// 2026-09 calibration (CommanderSalt): repeatable table-wide drain
+			// payoffs (the Blood Artist / Zulaport shape) ARE win conditions —
+			// the deck feeds them, the drain scales into a win. Overlap with the
+			// heuristic plan and draw_discard classifiers is intentional.
+			expect: map[string]string{"wincon": "Table-wide drain scales into a win", "plan": "Heuristic plan/synergy card", "draw_discard": "Draws cards or causes discard"},
 		},
 	}
 	for _, tc := range cases {
