@@ -9,28 +9,47 @@ import (
 	"powerlevel/internal/providers/cardcatalog"
 )
 
+// metricGroups 把构筑指标按玩家关心的问题分组，顺序即结果页展示顺序：
+// 先回答"靠什么赢"，再看法力运转、应对手段与牌组主线。分组只影响呈现，
+// 不参与任何判定、缺口或健康分计算。
+var metricGroups = []struct {
+	id, label, note string
+}{
+	{"win", "靠什么赢", "结束对局的三条路：牌面写死的赢法、场面收尾的大威胁、打穿阻挡的手段"},
+	{"engine", "怎么运转", "法力与资源的供给：产地、加速、检索与补牌"},
+	{"interaction", "怎么应对", "对对手牌的回应：单点解、群体解与清场"},
+	{"plan", "牌组主线", "围绕主将与主题协同的核心牌（启发式判断）"},
+}
+
 // targets 定义每条构筑指标的模板目标值。target 直接决定：
 //   - 分析页/构筑概览的进度条与 "actual/target" 显示；
 //   - 组牌器三选一的缺口加权权重（缺口 = target - actual）。
 //
 // 调整 target 只影响权重与展示，不会改分类判定本身。
+// group 指向 metricGroups 的分组 id；hint 是随 API 下发的口径说明，
+// 回答"这张指标卡到底数的是什么"——胜负手与终结者的区分轴是
+// 文本致胜（牌面写明获胜）vs 场面致胜（靠大威胁收尾），写在 hint 里。
 var targets = []struct {
 	id, label string
 	target    int
+	group     string
+	hint      string
 }{
-	{"lands", "正向法力", 38},
-	{"plan", "计划相关", 30},
-	{"mass_interaction", "群体干扰", 6},
-	{"single_interaction", "单体干扰", 12},
-	{"draw_discard", "牌差件", 12},
-	{"ramp", "加速", 10},
-	{"tutors", "检索", 5},
-	// 角色类指标：直接点出胜负手/终结者/穿透/清场，替代原来含糊的 "计划相关"
-	// 兜底分类，让报告告诉玩家"牌组靠什么赢"。
-	{"wincon", "胜负手", 4},
-	{"finisher", "终结者", 5},
-	{"evasive", "穿透", 6},
-	{"board_wipe", "清场", 4},
+	// 靠什么赢
+	{"wincon", "胜负手", 4, "win", "牌面直接写明获胜/令对手落败的牌，加上已识别的制胜组合（如 Thassa's Oracle）"},
+	{"finisher", "终结者", 5, "win", "5 攻以上带穿透的大生物或全军增幅，靠场面收尾（如 Craterhoof）"},
+	{"evasive", "穿透", 6, "win", "飞行/威慑/践踏等穿透关键词，保证伤害打得进去"},
+	// 怎么运转
+	{"lands", "正向法力", 38, "engine", "地与 0 费产费神器，净增法术力来源（Sol Ring 也算）"},
+	{"ramp", "加速", 10, "engine", "产费、找地、降费与珍宝"},
+	{"draw_discard", "牌差件", 12, "engine", "抽牌、放逐牌库顶、坟场回收等资源补给"},
+	{"tutors", "检索", 5, "engine", "从牌库检索特定牌（纯找地归加速）"},
+	// 怎么应对
+	{"single_interaction", "单体干扰", 12, "interaction", "指向性解场：消灭、放逐、反击、夺取控制权"},
+	{"mass_interaction", "群体干扰", 6, "interaction", "影响多个对手或全场永久物"},
+	{"board_wipe", "清场", 4, "interaction", "清除全场生物或大幅削弱场面"},
+	// 牌组主线
+	{"plan", "计划相关", 30, "plan", "token、增殖、\"每当\"触发等与主将协同的核心牌"},
 }
 
 // evasionKeywords：让生物打穿阻挡的关键词。只影响 evasive/finisher 判定。

@@ -343,7 +343,11 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .suggestion-item p { margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
 .provider-error { color: #ffc0b5; line-height: 1.6; font-size: 14px; }
 .provider-muted { color: var(--muted); line-height: 1.6; font-size: 14px; }
-.construction-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+/* 构筑指标外层：分组两两并排一行（靠什么赢|怎么运转，怎么应对|牌组主线），
+   每组半宽、组内指标竖向堆叠成列表条——卡片宽而浅，口径文字不用挤成多行。 */
+#construction-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; align-items: start; }
+@media (max-width: 900px) { #construction-metrics { grid-template-columns: minmax(0, 1fr); } }
+.construction-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .manabase-content { border: 1px solid var(--line); background: var(--surface); padding: 22px; }
 .manabase-hero { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
 .manabase-land-stat { display: grid; gap: 4px; padding: 16px; background: #1c1e1a; }
@@ -441,12 +445,20 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .manabase-stat small { color: var(--muted); font-size: 11px; }
 .decklist-filter-note { margin: 10px 0 0; padding: 8px 12px; border: 1px solid rgba(200, 232, 74, .35); border-radius: 8px; background: rgba(200, 232, 74, .06); color: var(--ink); font-size: 13px; }
 .decklist-filter-empty { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
-.construction-metric { border: 1px solid var(--line); background: var(--surface); align-self: start; }
+.construction-group { margin-bottom: 0; }
+#construction-metrics .construction-group:last-child { margin-bottom: 0; }
+.construction-group-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.construction-group-head h3 { margin: 0; font: 700 15px var(--font-ui); letter-spacing: .04em; }
+.construction-group-head p { margin: 0; color: var(--muted); font-size: 12px; }
+.construction-metric { border: 1px solid var(--line); background: var(--surface); }
+/* 指标卡随行等高（grid 默认 stretch）：同组小框顶对齐底对齐，行看起来是一整条。 */
 .construction-metric summary { list-style: none; padding: 16px; cursor: pointer; }
 .construction-metric summary::-webkit-details-marker { display: none; }
 .construction-metric summary > div:first-child { display: flex; justify-content: space-between; gap: 12px; }
 .construction-metric summary span { color: var(--muted); font-size: 13px; }
 .construction-metric summary strong { font-size: 19px; }
+/* 口径说明行：紧跟标签与数字，回答"这条指标数的是什么"（如胜负手 vs 终结者）。 */
+.construction-hint { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; font-style: normal; line-height: 1.5; }
 .construction-metric summary small { display: block; margin-top: 8px; color: var(--orange); font-size: 12px; }
 .construction-metric.met summary small { color: var(--acid); }
 /* 正向法力 split line: "其中 37 地 + 1 加速" — muted so the actual/target

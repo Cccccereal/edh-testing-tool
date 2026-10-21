@@ -14,6 +14,7 @@
 | 可调项 | 位置 | 调整效果 |
 |---|---|---|
 | 构筑指标目标值（正向法力 38 等） | `internal/service/construction/tables.go` `targets` | 进度条显示 + 三选一缺口加权权重；改前端的 `config.js` 也要同步（有镜像测试把关） |
+| 构筑指标分组与口径说明 | `construction/tables.go` `metricGroups` / `targets` 的 `group`、`hint` | 结果页"靠什么赢/怎么运转/怎么应对/牌组主线"分块与每张卡下的一句话口径；分组只影响呈现，不影响判定与缺口 |
 | 胜负手短语表 | `construction/tables.go` `winconTextPhrases` | 命中即计胜负手；只收"规则上直接终局"的表述 |
 | 穿透关键词表 | `construction/tables.go` `evasionKeywords` | evasive/finisher 判定 |
 | 早二卡组合法术力阈值 | `internal/providers/edhpowerlevel/score.go` `earlyComboManaThreshold`（当前 7） | bracket 4 的"早二卡组合"触发线 |

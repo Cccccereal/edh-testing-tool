@@ -6,7 +6,7 @@
   <meta name="description" content="同时查询 CommanderSalt 与 EDH Power Level 的 Commander 牌组评分。">
   <meta name="color-scheme" content="dark">
   <title>Commander Power Check</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=4">
 
 </head>
 <body>
@@ -154,17 +154,15 @@
         </div>
       </div>
       <div class="result-grid">
-        <!-- 骨架占位色条与加载后的卡片一一对应：EDH（蓝）在前，CommanderSalt（橙粉）在后 -->
-        <article class="result-card">
-          <div style="height: 5px; background: var(--blue);"></div>
+        <!-- 骨架卡与加载后的卡片同类名，顶部色条由 .result-card::before（橙粉）/.edh-card::before（蓝）统一提供 -->
+        <article class="result-card edh-card">
           <div style="padding: 28px 22px;">
             <div class="skeleton skeleton-text" style="width: 50%;"></div>
             <div class="skeleton skeleton-metric"></div>
             <div class="skeleton skeleton-metric"></div>
           </div>
         </article>
-        <article class="result-card">
-          <div style="height: 5px; background: var(--orange);"></div>
+        <article class="result-card salt-card">
           <div style="padding: 28px 22px;">
             <div class="skeleton skeleton-text" style="width: 50%;"></div>
             <div class="skeleton skeleton-metric"></div>
@@ -280,8 +278,8 @@
     </section>
   </div>
   <p id="app-version" class="app-version" hidden></p>
-  <script src="/config.js"></script>
-  <script src="/app.js" defer></script>
+  <script src="/config.js?v=4"></script>
+  <script src="/app.js?v=4" defer></script>
   <script>document.querySelector('#editor-versions-close').addEventListener('click', () => { document.querySelector('#editor-versions-panel').hidden = true; });</script>
   <script>document.querySelector('#deck-drawer-close').addEventListener('click', () => { document.querySelector('#deck-drawer').hidden = true; document.body.style.overflow = ''; });</script>
 </body>

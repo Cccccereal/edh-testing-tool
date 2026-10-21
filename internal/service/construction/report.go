@@ -26,11 +26,23 @@ type Metric struct {
 	Status     string           `json:"status"`
 	Coverage   float64          `json:"coverage"`
 	Incomplete bool             `json:"incomplete"`
+	Group      string           `json:"group"`
+	Hint       string           `json:"hint"`
 	Cards      []ClassifiedCard `json:"cards"`
 }
 
+// MetricGroup is presentation metadata for the metric grid: metrics render
+// grouped under these headings, in this order. The grouping never feeds back
+// into classification, gaps, or the health score.
+type MetricGroup struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Note  string `json:"note"`
+}
+
 type Report struct {
-	Metrics []Metric `json:"metrics"`
+	Metrics []Metric      `json:"metrics"`
+	Groups  []MetricGroup `json:"groups"`
 	// WinconComboCount is the number of Spellbook combos in the deck that end
 	// the game (win the game / opponent loses). Combo finishers are the
 	// commander format's most common win-con, and their cards usually carry no
@@ -124,6 +136,9 @@ func Targets() map[string]int {
 
 func Build(cards []InputCard) Report {
 	result := Report{Metrics: make([]Metric, 0, len(targets))}
+	for _, group := range metricGroups {
+		result.Groups = append(result.Groups, MetricGroup{ID: group.id, Label: group.label, Note: group.note})
+	}
 	incomplete := false
 	for _, item := range cards {
 		if !hasCatalogData(item.Card) {
@@ -132,7 +147,7 @@ func Build(cards []InputCard) Report {
 		}
 	}
 	for _, target := range targets {
-		metric := Metric{ID: target.id, Label: target.label, Target: target.target, Incomplete: incomplete}
+		metric := Metric{ID: target.id, Label: target.label, Target: target.target, Incomplete: incomplete, Group: target.group, Hint: target.hint}
 		for _, item := range cards {
 			matched, reason := classify(target.id, item.Card)
 			if !matched {

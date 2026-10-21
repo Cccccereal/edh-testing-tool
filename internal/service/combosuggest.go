@@ -47,8 +47,10 @@ func buildComboSuggestions(found []spellbook.Combo, owned map[string]struct{}, l
 		}
 		// Complete combos already render in the combo list; combos missing
 		// three or more cards (possible if the API ever widens past 2-card
-		// variants) are too far away to recommend.
-		if len(missingCards) == 0 || len(missingCards) > 2 {
+		// variants) are too far away to recommend. A combo with zero owned
+		// components is search noise, not a near-miss — "差一张" implies the
+		// deck already runs the other piece.
+		if len(ownedCards) == 0 || len(missingCards) == 0 || len(missingCards) > 2 {
 			continue
 		}
 		suggestions = append(suggestions, ComboSuggestion{

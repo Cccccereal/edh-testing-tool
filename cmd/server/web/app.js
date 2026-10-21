@@ -1625,22 +1625,35 @@ function renderConstructionReport(report) {
   const container = document.querySelector('#construction-metrics');
   const metrics = Array.isArray(report?.metrics) ? report.metrics : [];
   section.hidden = !metrics.length;
-  container.innerHTML = metrics.map((metric) => {
+  const winconCombos = Number(report?.wincon_combo_count || 0);
+  const metricCard = (metric) => {
     const percent = Math.min(100, Math.round((Number(metric.actual) / Math.max(1, Number(metric.target))) * 100));
     const cards = (metric.cards || []).map((card) => `<li><strong>${card.quantity}× ${escapeHTML(card.name)}</strong><span>${escapeHTML(card.reason)}</span></li>`).join('');
-    // The lands metric ("正向法力") counts lands + 0-cost fast mana by design.
-    // Sum the per-card counts to show the real-land vs fast-mana split so a
-    // "38 正向法力" number does not read as "38 lands".
+    // 拆分说明：正向法力 = 地 + 0 费加速神器；胜负手 = 牌面胜负牌 + 制胜组合。
+    // 两个指标的 actual 都是合计值，不拆开的话数字对不上展开的卡列表。
     let split = '';
     if (metric.id === 'lands') {
       const lands = (metric.cards || []).reduce((sum, card) => sum + (card.counts?.land || 0), 0);
       const fast = (metric.cards || []).reduce((sum, card) => sum + (card.counts?.fast_mana || 0), 0);
       split = ` <small class="construction-split">其中 ${lands} 地 + ${fast} 加速</small>`;
+    } else if (metric.id === 'wincon' && winconCombos > 0) {
+      split = ` <small class="construction-split">其中 ${Math.max(0, metric.actual - winconCombos)} 张牌 + ${winconCombos} 条制胜组合</small>`;
     }
     return `<details class="construction-metric ${metric.status}">
-      <summary><div><span>${escapeHTML(metric.label)}</span><strong>${metric.actual} / ${metric.target}</strong></div><div class="construction-bar"><i data-pct="${percent}"></i></div><small>${metric.gap > 0 ? `缺少 ${metric.gap}${split}` : `已充分${split}`}</small></summary>
+      <summary><div><span>${escapeHTML(metric.label)}</span><strong>${metric.actual} / ${metric.target}</strong></div>${metric.hint ? `<em class="construction-hint">${escapeHTML(metric.hint)}</em>` : ''}<div class="construction-bar"><i data-pct="${percent}"></i></div><small>${metric.gap > 0 ? `缺少 ${metric.gap}${split}` : `已充分${split}`}</small></summary>
       ${cards ? `<ul>${cards}</ul>` : '<p>没有识别到相关卡牌。</p>'}
     </details>`;
+  };
+  // 分组渲染（怎么赢 / 怎么运转 / 怎么应对 / 牌组主线）；旧缓存没有 groups 时平铺兜底。
+  // 布局由 CSS 控制：#construction-metrics 两列，分组两两并排，组内指标竖向堆叠。
+  const groups = Array.isArray(report?.groups) && report.groups.length ? report.groups : [{ id: '', label: '', note: '' }];
+  container.innerHTML = groups.map((group) => {
+    const groupMetrics = metrics.filter((metric) => (metric.group || '') === group.id);
+    if (!groupMetrics.length) return '';
+    return `<section class="construction-group">
+      ${group.label ? `<header class="construction-group-head"><h3>${escapeHTML(group.label)}</h3>${group.note ? `<p>${escapeHTML(group.note)}</p>` : ''}</header>` : ''}
+      <div class="construction-grid">${groupMetrics.map(metricCard).join('')}</div>
+    </section>`;
   }).join('');
 
   // Fill bars by pixel width on the next frame instead of inline percent width, for

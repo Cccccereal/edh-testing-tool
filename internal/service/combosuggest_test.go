@@ -47,6 +47,20 @@ func TestBuildComboSuggestionsSkipsCompleteAndFarCombos(t *testing.T) {
 	}
 }
 
+func TestBuildComboSuggestionsSkipsZeroOwnedNoise(t *testing.T) {
+	// A combo whose components are all absent from the deck is search noise
+	// (the q substring regression), never a "one card short" suggestion.
+	deck := suggestionDeck("Thassa's Oracle")
+	found := []spellbook.Combo{
+		suggestionCombo("1", "Deafening Silence", "Knowledge Pool"), // zero owned
+		suggestionCombo("2", "Thassa's Oracle", "Doomsday"),         // missing 1
+	}
+	suggestions := buildComboSuggestions(found, deck, 12)
+	if len(suggestions) != 1 || suggestions[0].Name != "Thassa's Oracle + Doomsday" {
+		t.Fatalf("expected only the owned-adjacent combo, got %+v", suggestions)
+	}
+}
+
 func TestBuildComboSuggestionsSortsFewestMissingFirst(t *testing.T) {
 	deck := suggestionDeck("Sanguine Bond")
 	found := []spellbook.Combo{
