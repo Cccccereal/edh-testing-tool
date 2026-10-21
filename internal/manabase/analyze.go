@@ -1,6 +1,7 @@
 package manabase
 
 import (
+	"math"
 	"sort"
 	"strconv"
 
@@ -13,13 +14,16 @@ import (
 func Analyze(entries []ClassifyEntry) Report {
 	deck := classify(entries)
 
-	// Land count = weighted land sources (real land slots).
-	actualLands := 0
+	// Land count = weighted land sources (real land slots). Weights are summed
+	// in float and rounded once: per-source int() truncation dropped every
+	// fractional weight to zero (a 0.5 MDFC land face, a 0.67 3-color fetch).
+	weightedLands := 0.0
 	for _, s := range deck.Sources {
 		if s.IsLand {
-			actualLands += int(s.Weight)
+			weightedLands += s.Weight
 		}
 	}
+	actualLands := int(math.Round(weightedLands))
 
 	deckSize := deck.TotalCards - deck.CommanderCount
 	targetLands := singletonLandTarget(

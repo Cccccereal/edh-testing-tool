@@ -139,3 +139,37 @@ func TestAnalyzeEndToEnd(t *testing.T) {
 		t.Fatalf("no blue color finding in %+v", report.ColorFindings)
 	}
 }
+
+func TestSpellLandMDFCCountsHalfSource(t *testing.T) {
+	// Fell the Profane // Fell Mire 形状：正面 Instant，背面 Land。
+	// 正面进曲线；背面以 0.5 权重计入地源并发贡献 B 色，不能整张隐身。
+	entries := []ClassifyEntry{
+		Entry(cardcatalog.Card{Name: "Swamp", TypeLine: "Basic Land — Swamp", ProducedMana: []string{"B"}}, 10, false),
+		Entry(cardcatalog.Card{
+			Name:         "Fell the Profane // Fell Mire",
+			ManaCost:     "{1}{B}",
+			Layout:       "modal_dfc",
+			TypeLine:     "Instant // Land",
+			Cmc:          2,
+			OracleText:   "Destroy target creature or planeswalker.\nFell Mire enters tapped. {T}: Add {B}.",
+			ProducedMana: []string{"B"},
+			Faces: []cardcatalog.CardFace{
+				{Name: "Fell the Profane", TypeLine: "Instant", ManaCost: "{1}{B}", OracleText: "Destroy target creature or planeswalker."},
+				{Name: "Fell Mire", TypeLine: "Land", OracleText: "Fell Mire enters tapped. {T}: Add {B}."},
+			},
+		}, 4, false),
+	}
+	report := Analyze(entries)
+	// 10 地 + 4×0.5 MDFC = 12。
+	if report.ActualLands != 12 {
+		t.Fatalf("ActualLands = %d, want 12 (10 lands + 4 MDFC × 0.5)", report.ActualLands)
+	}
+	// 法术面仍在曲线里（4 张非地咒语）。
+	nonland := 0
+	for _, c := range report.CostCounts {
+		nonland += c.Count
+	}
+	if nonland < 4 {
+		t.Fatalf("MDFC spell faces must stay in the curve: %+v", report.CostCounts)
+	}
+}

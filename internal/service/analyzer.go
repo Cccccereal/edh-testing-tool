@@ -627,7 +627,9 @@ func colorsAllowed(colors []string, allowed map[string]struct{}) bool {
 // whenever the scoring formula, construction targets, or classification
 // wordings change, and cached analyses invalidate immediately instead of
 // serving pre-tuning results until their TTL expires.
-const ScoringVersion = 1
+// v2: 穿透认持续赋予者（武具/灵气/地）并剥离提醒文本；manabase 给
+// spell//land MDFC 记半个人源地——构筑计数与健康分口径随之变化。
+const ScoringVersion = 2
 
 // dedupeComboLines collapses Spellbook variant entries that share the same
 // component set: one combo often ships as multiple lines (extra features,

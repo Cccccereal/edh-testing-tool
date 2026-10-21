@@ -4,6 +4,7 @@
 package construction
 
 import (
+	"regexp"
 	"strings"
 
 	"powerlevel/internal/providers/cardcatalog"
@@ -38,7 +39,7 @@ var targets = []struct {
 	// 靠什么赢
 	{"wincon", "胜负手", 4, "win", "牌面直接写明获胜/令对手落败的牌，加上已识别的制胜组合（如 Thassa's Oracle）"},
 	{"finisher", "终结者", 5, "win", "5 攻以上带穿透的大生物或全军增幅，靠场面收尾（如 Craterhoof）"},
-	{"evasive", "穿透", 6, "win", "飞行/威慑/践踏等穿透关键词，保证伤害打得进去"},
+	{"evasive", "穿透", 6, "win", "带穿透关键词的生物，以及持续赋予穿透的武具/灵气/地（如 Aether Tunnel、Rogue's Passage）；一次性欺敌咒语不计"},
 	// 怎么运转
 	{"lands", "正向法力", 38, "engine", "地与 0 费产费神器，净增法术力来源（Sol Ring 也算）"},
 	{"ramp", "加速", 10, "engine", "产费、找地、降费与珍宝"},
@@ -53,36 +54,75 @@ var targets = []struct {
 }
 
 // evasionKeywords：让生物打穿阻挡的关键词。只影响 evasive/finisher 判定。
-var evasionKeywords = []string{"flying", "menace", "trample", "shadow", "fear", "intimidate", "skulk"}
+// 地行者家族与 horsemanship 显式列出：老卡的关键词行没有括号提醒文本，
+// 之前靠提醒文本里 "can't be blocked" 的巧合命中，剥掉提醒后必须认词本身。
+var evasionKeywords = []string{
+	"flying", "menace", "trample", "shadow", "fear", "intimidate", "skulk",
+	"horsemanship", "unblockable",
+	"swampwalk", "islandwalk", "mountainwalk", "forestwalk", "plainswalk",
+	"landwalk", "desertwalk", "snowwalk", "cavewalk",
+}
+
+// reminderTextRe strips parenthesized reminder text from oracle text before
+// keyword matching: "Reach (This creature can block creatures with flying.)"
+// must not read as flying, and landwalk detection must rely on the keyword
+// word itself rather than the "(This creature can't be blocked if …)" reminder.
+var reminderTextRe = regexp.MustCompile(`\([^)]*\)`)
+
+// stripReminder lowercases-and-deparenthesizes text for evasion matching.
+func stripReminder(text string) string {
+	return strings.ToLower(reminderTextRe.ReplaceAllString(text, ""))
+}
 
 // isEvasiveCreature reports whether a card is a creature with an evasion keyword
 // or an explicit "can't be blocked" ability, scanning all faces. Trample counts as
 // evasion (it pushes damage through chump blockers) but does not qualify as
 // finisher "big threat" evasion on its own — handled by the caller via cardPower.
+// Reminder text is stripped first so reach's "…block creatures with flying…"
+// reminder does not masquerade as flying.
 func isEvasiveCreature(card cardcatalog.Card, text, typeLine string) bool {
 	if !strings.Contains(typeLine, "creature") {
 		return false
 	}
-	for _, keyword := range evasionKeywords {
-		if strings.Contains(text, keyword) {
-			return true
-		}
-	}
-	if strings.Contains(text, "can't be blocked") {
+	clean := stripReminder(text)
+	if hasEvasionPhrase(clean) {
 		return true
 	}
 	for _, face := range card.Faces {
-		faceText := strings.ToLower(face.OracleText)
-		for _, keyword := range evasionKeywords {
-			if strings.Contains(faceText, keyword) {
-				return true
-			}
-		}
-		if strings.Contains(faceText, "can't be blocked") {
+		if hasEvasionPhrase(stripReminder(face.OracleText)) {
 			return true
 		}
 	}
 	return false
+}
+
+// isEvasionGranter reports whether a non-creature permanent keeps granting
+// evasion: auras and equipment that make their creature unblockable/flying/
+// trample/etc., and lands with repeatable "can't be blocked" activations
+// (Rogue's Passage). One-shot spells (Artful Dodge) are combat tricks and
+// deliberately do not count.
+func isEvasionGranter(text, typeLine string) bool {
+	if strings.Contains(typeLine, "creature") {
+		return false
+	}
+	if !(strings.Contains(typeLine, "aura") || strings.Contains(typeLine, "equipment") || strings.Contains(typeLine, "land")) {
+		return false
+	}
+	return hasEvasionPhrase(stripReminder(text))
+}
+
+// hasEvasionPhrase matches the shared evasion vocabulary on cleaned text:
+// any evasion keyword, a "can't be blocked" line, "can only be blocked by …"
+// restrictions, or protection from creatures (effectively unblockable).
+func hasEvasionPhrase(clean string) bool {
+	for _, keyword := range evasionKeywords {
+		if strings.Contains(clean, keyword) {
+			return true
+		}
+	}
+	return strings.Contains(clean, "can't be blocked") ||
+		strings.Contains(clean, "can only be blocked") ||
+		strings.Contains(clean, "protection from creatures")
 }
 
 // winconTextPhrases："硬结束对局"短语表。命中即计为胜负手——

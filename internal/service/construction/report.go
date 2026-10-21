@@ -334,9 +334,14 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 			return true, "Haymaker buff for all your creatures"
 		}
 	case "evasive":
-		// 穿透：关键字或"不能被阻挡"（trample 只算穿透，不算终结者的"大威胁"）。
+		// 穿透：带穿透关键词/不可阻挡文本的生物（isEvasiveCreature），
+		// 或持续赋予穿透的非生物永久物——武具/灵气/地（isEvasionGranter）。
+		// 一次性欺敌咒语（Artful Dodge 类）是战斗技，不算持续穿透。
 		if isEvasiveCreature(card, text, typeLine) {
 			return true, "Has evasion keywords or can't be blocked"
+		}
+		if isEvasionGranter(text, typeLine) {
+			return true, "Grants evasion to a creature (equipment/aura/land)"
 		}
 	case "board_wipe":
 		// 清场：破坏/放逐全部生物、对每个生物造成伤害、或让所有生物变弱。

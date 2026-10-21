@@ -99,3 +99,26 @@ func TestLandsCountsZeroCostManaArtifact(t *testing.T) {
 		t.Fatalf("Sol Ring should count as ramp, got %d", metrics["ramp"].Actual)
 	}
 }
+
+func TestEvasiveCountsGrantersButNotCombatTricks(t *testing.T) {
+	cases := []struct {
+		name    string
+		card    cardcatalog.Card
+		evasive bool
+		note    string
+	}{
+		{"aura-unblockable", cardcatalog.Card{TypeLine: "Enchantment — Aura", OracleText: "Enchant creature\nEnchanted creature can't be blocked."}, true, "灵气持续赋予不可阻挡"},
+		{"equipment-trample", cardcatalog.Card{TypeLine: "Artifact — Equipment", OracleText: "Equipped creature has vigilance, trample, and haste.\nEquip {1}"}, true, "武具赋予践踏"},
+		{"land-repeatable-unblockable", cardcatalog.Card{TypeLine: "Land", OracleText: "{T}: Add {C}.\n{4}, {T}: Target creature can't be blocked this turn."}, true, "地的可重复启动"},
+		{"one-shot-trick", cardcatalog.Card{TypeLine: "Sorcery", OracleText: "Target creature can't be blocked this turn."}, false, "一次性欺敌咒语不计"},
+		{"reach-reminder-not-flying", cardcatalog.Card{TypeLine: "Creature — Spider", OracleText: "Reach (This creature can block creatures with flying.)"}, false, "reach 的规则提醒不算飞行"},
+		{"landwalk-no-reminder", cardcatalog.Card{TypeLine: "Creature — Wraith", OracleText: "Swampwalk"}, true, "无提醒文本的地行者认关键词"},
+		{"protection-from-creatures", cardcatalog.Card{TypeLine: "Creature — Human Cleric", OracleText: "Protection from creatures"}, true, "反生物保护事实不可阻挡"},
+	}
+	for _, tc := range cases {
+		matched, _ := classify("evasive", tc.card)
+		if matched != tc.evasive {
+			t.Errorf("%s: evasive = %v, want %v (%s)", tc.name, matched, tc.evasive, tc.note)
+		}
+	}
+}

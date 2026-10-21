@@ -124,6 +124,15 @@ func classify(entries []ClassifyEntry) ManabaseDeck {
 			deck.FastMana += card.Quantity
 		}
 
+		// An MDFC whose back face is a land (Fell the Profane // Fell Mire) is a
+		// land slot in roughly half the games it matters: credit half a source
+		// in the land face's colors. The spell face above still counts toward
+		// the curve, so both halves of the card are honored — without this the
+		// Karsten land count under-reports every spell//land MDFC to zero.
+		if card.HasLandFace {
+			addLandFaceSource(&deck, card)
+		}
+
 		addPartialSources(&deck, card)
 
 		// Non-land cards feed both stats series: the curve series (non-land only) and
@@ -390,6 +399,26 @@ func addLandCopies(deck *ManabaseDeck, card CardFact, deckColorCount int, fetchT
 	}
 }
 
+// addLandFaceSource credits a spell//land MDFC as half a land source in the
+// land face's colors. Card-level produced_mana is the union across faces, and
+// the spell face produces none, so it carries exactly the land face's colors.
+func addLandFaceSource(deck *ManabaseDeck, card CardFact) {
+	produces := mapColors(card.ProducedMana)
+	untapped := !textEntersTapped(card.OracleText)
+	for i := 0; i < card.Quantity; i++ {
+		deck.Sources = append(deck.Sources, ManaSource{
+			Name:           card.Name,
+			Produces:       produces,
+			Weight:         0.5,
+			IsLand:         true,
+			EntersUntapped: untapped,
+			ManaAmount:     1,
+			IsCommander:    card.IsCommander,
+		})
+	}
+}
+
+// addPartialSources classifies mana rocks and dorks into partial sources.
 func addPartialSources(deck *ManabaseDeck, card CardFact) {
 	if !isRockOrDork(card) {
 		return
