@@ -50,7 +50,7 @@ var targets = []struct {
 	{"mass_interaction", "群体干扰", 6, "interaction", "影响多个对手或全场永久物"},
 	{"board_wipe", "清场", 4, "interaction", "清除全场生物或大幅削弱场面"},
 	// 牌组主线
-	{"plan", "计划相关", 30, "plan", "token、增殖、\"每当\"触发等与主将协同的核心牌"},
+	{"plan", "计划相关", 30, "plan", "跟随主将能力提取主题：命中主题关键词（衍生物/牺牲/武具等）或\"每当\"触发的协同牌"},
 }
 
 // evasionKeywords：让生物打穿阻挡的关键词。只影响 evasive/finisher 判定。

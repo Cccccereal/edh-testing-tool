@@ -122,3 +122,34 @@ func TestEvasiveCountsGrantersButNotCombatTricks(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildWithContextPlanFollowsCommander(t *testing.T) {
+	// 同一张武具，在武具主将麾下计计划相关，在无主题主将麾下不计——
+	// 报告的计划口径必须随主将变化，而不是一套静态启发式。
+	equipment := InputCard{Name: "Trusty Machete", Quantity: 1, Card: cardcatalog.Card{
+		TypeLine:   "Artifact — Equipment",
+		OracleText: "Equipped creature gets +1/+1. Equip {2}",
+	}}
+	voltronTheme := ExtractTheme([]cardcatalog.Card{{
+		Name: "Kemba, Kha Regent", TypeLine: "Legendary Creature — Cat Cleric",
+		OracleText: "At the beginning of your upkeep, create a 2/2 green Cat creature token for each Equipment attached to Kemba, Kha Regent.",
+	}})
+	voltronReport := BuildWithContext([]InputCard{equipment}, ClassifyContext{CommanderTheme: &voltronTheme})
+	plainReport := BuildWithContext([]InputCard{equipment}, ClassifyContext{})
+
+	planOf := func(r Report) Metric {
+		for _, m := range r.Metrics {
+			if m.ID == "plan" {
+				return m
+			}
+		}
+		t.Fatal("no plan metric")
+		return Metric{}
+	}
+	if planOf(voltronReport).Actual != 1 {
+		t.Fatalf("equipment must count as plan under an equipment commander: %d", planOf(voltronReport).Actual)
+	}
+	if planOf(plainReport).Actual != 0 {
+		t.Fatalf("equipment is not plan without a commander theme: %d", planOf(plainReport).Actual)
+	}
+}

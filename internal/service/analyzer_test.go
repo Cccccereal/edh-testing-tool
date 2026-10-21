@@ -140,7 +140,7 @@ func TestAttachRolesStampsConstructionRoleIDs(t *testing.T) {
 		{Card: cardcatalog.Card{Name: "Birds", TypeLine: "Creature — Bird", OracleText: "Flying", Power: "2"}},
 		{Card: cardcatalog.Card{Name: "Plains", TypeLine: "Basic Land — Plains", OracleText: "{T}: Add {W}."}},
 	}
-	got := attachRoles(cards)
+	got := attachRoles(cards, construction.ClassifyContext{})
 	if !containsString(got[0].Roles, "board_wipe") || !containsString(got[0].Roles, "mass_interaction") {
 		t.Fatalf("wrath roles = %v, want board_wipe + mass_interaction", got[0].Roles)
 	}

@@ -343,13 +343,27 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 			catalogCMC = catalogCMCs(target, catalog, nil)
 		} else {
 			analysis.DeckCards = buildDisplayCards(target, catalog)
+			// 主将主题先行提取：构筑报告的"计划相关"用主题感知匹配
+			// （与组牌器同一套 ClassifyWithContext），跟随主将变化而不是
+			// 一套静态启发式打天下；无主将数据时退回静态口径。
+			var commanderCards []cardcatalog.Card
+			for _, item := range analysis.DeckCards {
+				if item.Commander {
+					commanderCards = append(commanderCards, item.Card)
+				}
+			}
+			classifyCtx := construction.ClassifyContext{}
+			if len(commanderCards) > 0 {
+				theme := construction.ExtractTheme(commanderCards)
+				classifyCtx.CommanderTheme = &theme
+			}
 			inputs := make([]construction.InputCard, 0, len(analysis.DeckCards))
 			for _, item := range analysis.DeckCards {
 				inputs = append(inputs, construction.InputCard{Name: item.Card.Name, Quantity: item.Quantity, Card: item.Card})
 			}
-			report := construction.Build(inputs)
+			report := construction.BuildWithContext(inputs, classifyCtx)
 			analysis.ConstructionReport = &report
-			analysis.DeckCards = attachRoles(analysis.DeckCards)
+			analysis.DeckCards = attachRoles(analysis.DeckCards, classifyCtx)
 			analysis.Manabase = manabaseReport(target, analysis.DeckCards)
 			catalogCMC = catalogCMCs(target, catalog, nil)
 		}
@@ -416,7 +430,6 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 		healthResult := health.Compute(analysis.ConstructionReport, analysis.Manabase, commanderNames(target), construction.ExtractTheme(commanderCards))
 		analysis.Health = &healthResult
 	}
-
 	edhCtx, cancelEDH := context.WithTimeout(ctx, a.providerTimeout)
 	var edhMetrics map[string]any
 	var edhErr error
@@ -629,7 +642,9 @@ func colorsAllowed(colors []string, allowed map[string]struct{}) bool {
 // serving pre-tuning results until their TTL expires.
 // v2: 穿透认持续赋予者（武具/灵气/地）并剥离提醒文本；manabase 给
 // spell//land MDFC 记半个人源地——构筑计数与健康分口径随之变化。
-const ScoringVersion = 2
+// v3: 计划相关改为主题感知——结果页报告与组牌器共用 ClassifyWithContext，
+// 指标随主将的主题关键词变化，不再是一套静态启发式。
+const ScoringVersion = 3
 
 // dedupeComboLines collapses Spellbook variant entries that share the same
 // component set: one combo often ships as multiple lines (extra features,
@@ -868,9 +883,11 @@ func buildDisplayCards(target deck.Deck, catalog map[string]cardcatalog.Card) []
 // attachRoles stamps each display card with the construction role IDs it was
 // classified into, so the frontend can group and explain cards by role (swap
 // candidates, deck list badges) without re-deriving classification client-side.
-func attachRoles(cards []DisplayCard) []DisplayCard {
+// It shares the report's classify context so the 计划相关 role follows the
+// commander theme exactly like the metric it mirrors.
+func attachRoles(cards []DisplayCard, ctx construction.ClassifyContext) []DisplayCard {
 	for i := range cards {
-		matches := construction.Classify(cards[i].Card)
+		matches := construction.ClassifyWithContext(cards[i].Card, ctx)
 		roles := make([]string, 0, len(matches))
 		for _, match := range matches {
 			roles = append(roles, match.ID)

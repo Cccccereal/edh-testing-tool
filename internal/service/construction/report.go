@@ -135,24 +135,48 @@ func Targets() map[string]int {
 }
 
 func Build(cards []InputCard) Report {
+	return BuildWithContext(cards, ClassifyContext{})
+}
+
+// BuildWithContext is Build with optional commander-theme context: the 计划相关
+// metric switches to the theme-aware matcher (Theme.MatchesPlan), so the report
+// follows the deck's commander — a token commander's deck counts token/sacrifice
+// payoffs, a voltron commander's deck counts equipment/aura payoffs — instead of
+// one static heuristic for every deck. Empty context keeps the legacy behavior.
+func BuildWithContext(cards []InputCard, ctx ClassifyContext) Report {
 	result := Report{Metrics: make([]Metric, 0, len(targets))}
 	for _, group := range metricGroups {
 		result.Groups = append(result.Groups, MetricGroup{ID: group.id, Label: group.label, Note: group.note})
 	}
 	incomplete := false
+	// Compute every card's matches once (ClassifyWithContext walks all targets
+	// in one pass) and bucket them per metric below.
+	type classifiedCard struct {
+		item    InputCard
+		matches []Match
+	}
+	computed := make([]classifiedCard, 0, len(cards))
 	for _, item := range cards {
 		if !hasCatalogData(item.Card) {
 			incomplete = true
-			break
 		}
+		computed = append(computed, classifiedCard{item: item, matches: ClassifyWithContext(item.Card, ctx)})
 	}
 	for _, target := range targets {
 		metric := Metric{ID: target.id, Label: target.label, Target: target.target, Incomplete: incomplete, Group: target.group, Hint: target.hint}
-		for _, item := range cards {
-			matched, reason := classify(target.id, item.Card)
+		for _, entry := range computed {
+			var reason string
+			matched := false
+			for _, match := range entry.matches {
+				if match.ID == target.id {
+					matched, reason = true, match.Reason
+					break
+				}
+			}
 			if !matched {
 				continue
 			}
+			item := entry.item
 			metric.Actual += item.Quantity
 			// The lands metric's counts split true lands from 0-cost fast mana so
 			// the health score (and the UI) can tell "you're short real lands"
