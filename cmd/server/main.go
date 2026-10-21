@@ -30,6 +30,16 @@ import (
 //go:embed web/*
 var embeddedWeb embed.FS
 
+// noCacheFiles wraps the static file server with Cache-Control: no-cache so
+// browsers always revalidate (304 when unchanged) instead of serving stale
+// scripts after a deploy or during DEV-mode edits.
+func noCacheFiles(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	cfg := config.Load()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -70,7 +80,7 @@ func main() {
 	commanderSaltClient := commandersalt.New(cfg.CommanderSaltAPIURL, httpClient)
 	moxfieldClient := moxfield.New(cfg.MoxfieldAPIURL, moxfieldHTTPClient)
 	cardCatalogClient := cardcatalog.New(cfg.ScryfallAPIURL, httpClient, cfg.CardCatalogTTL, cfg.CacheDir)
-	spellbookClient := spellbook.New(cfg.SpellbookAPIURL, httpClient)
+	spellbookClient := spellbook.NewWithPacing(cfg.SpellbookAPIURL, httpClient, cfg.SpellbookMinNameDelay)
 	edhrecClient := edhrec.New(cfg.EDHRECJSONURL, httpClient)
 	analyzer := service.NewAnalyzer(
 		moxfieldClient,
@@ -87,6 +97,7 @@ func main() {
 		cfg.CacheMaxEntries,
 	)
 	analyzer.SetEDHCacheDir(cfg.CacheDir)
+	analyzer.SetEDHGetcardsURL(cfg.GetcardsURL)
 
 	// Development mode: set DEV=1 to serve frontend files from disk for hot reload
 	var webRoot fs.FS
@@ -102,8 +113,11 @@ func main() {
 		}
 	}
 	server := &http.Server{
-		Addr:              cfg.Address,
-		Handler:           api.NewHandler(analyzer, logger, cfg.RequestTimeout, http.FileServer(http.FS(webRoot)), api.NewImageProxy(cfg.ScryfallImageURL, httpClient, cfg.CacheDir), update.NewChecker(httpClient)),
+		Addr: cfg.Address,
+		// noCacheFiles 强制浏览器对静态资源走条件请求（未变时 304）：嵌入式 webview
+		// （如 IAB）会对无缓存头的 app.js 强缓存，发版后页面拿到旧脚本渲染新数据，
+		// 曾导致分组渲染"看起来没生效"；no-cache 保留协商缓存，不损失性能。
+		Handler:           api.NewHandler(analyzer, logger, cfg.RequestTimeout, noCacheFiles(http.FileServer(http.FS(webRoot))), api.NewImageProxy(cfg.ScryfallImageURL, httpClient, cfg.CacheDir), update.NewChecker(httpClient)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      cfg.RequestTimeout + 5*time.Second,

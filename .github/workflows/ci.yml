@@ -32,6 +32,10 @@ jobs:
       - name: Go tests (unit + fuzz seeds + web mirror + route contract)
         run: go test ./...
 
+      # 静态分析闸门（本地构建脚本一直在跑，进 CI 补全）
+      - name: go vet
+        run: go vet ./...
+
       # 契约类型再生成防漂移：api-types.d.ts 必须与 docs/api/openapi.yaml 一致
       # （改接口只改生成文件不改 spec 的话，这里会红）
       - name: Setup Node
@@ -50,9 +54,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install pytest
-        run: pip install pytest requests pyyaml jsonschema
+      - name: Install test deps (pytest + Playwright)
+        run: |
+          pip install pytest requests pyyaml jsonschema playwright
+          python -m playwright install --with-deps chromium
 
-      # 离线黑盒测试：含契约测试（录制 fixtures 对 spec 校验 + 错误信封活校验）
-      - name: API black-box tests (offline)
+      # 离线黑盒测试：契约测试 + route 拦截型 UI 冒烟 + 全栈 E2E 旅程
+      # （tests/e2e：六源指向本地 stub 的真实 Go 服务 + Chromium，不触第三方）
+      - name: API black-box + UI + E2E tests (offline)
         run: pytest -q

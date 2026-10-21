@@ -104,16 +104,25 @@ type variant struct {
 	} `json:"requires"`
 }
 
-func New(baseURL string, httpClient *http.Client) *Client {
+// NewWithPacing builds a client whose per-name request spacing is configurable.
+// Production keeps the 1.5s default (Spellbook burst-throttles), while test rigs
+// pointed at a local stub can drop it to milliseconds so cold analyzes don't
+// spend 12×1.5s pacing against an upstream that cannot throttle.
+func NewWithPacing(baseURL string, httpClient *http.Client, minNameDelay time.Duration) *Client {
+	if minNameDelay <= 0 {
+		minNameDelay = 1500 * time.Millisecond
+	}
 	return &Client{
-		baseURL:    strings.TrimRight(baseURL, "/"),
-		httpClient: httpClient,
-		// Spellbook is per-card-name, so a generous TTL is safe: combo data does
-		// not change minute-to-minute, and it only shrinks the request volume.
+		baseURL:      strings.TrimRight(baseURL, "/"),
+		httpClient:   httpClient,
 		cache:        make(map[string]cacheEntry),
 		ttl:          10 * time.Minute,
-		minNameDelay: 1500 * time.Millisecond,
+		minNameDelay: minNameDelay,
 	}
+}
+
+func New(baseURL string, httpClient *http.Client) *Client {
+	return NewWithPacing(baseURL, httpClient, 1500*time.Millisecond)
 }
 
 func (c *Client) Search(ctx context.Context, names []string, limit int) ([]Combo, error) {
@@ -164,15 +173,18 @@ func (c *Client) Search(ctx context.Context, names []string, limit int) ([]Combo
 }
 
 // fetchName queries Spellbook for one card name and re-fetches pages until the
-// caller's limit is reached or the API stops returning new 2-card combos.
+// caller's limit is reached, the API stops returning results, or the page cap
+// is hit. The cap matters because q is a substring search: a name whose only
+// matches are noise (q=silence → Deafening Silence, Stony Silence, …) would
+// otherwise page through the API's entire noise set looking for exact matches.
 func (c *Client) fetchName(ctx context.Context, name string, limit int) ([]Combo, error) {
 	var combos []Combo
-	for offset := 0; ; offset += pageSize {
-		page, more, err := c.fetchPage(ctx, name, limit, offset)
+	for page := 0; page < maxPagesPerName; page++ {
+		pageCombos, more, err := c.fetchPage(ctx, name, limit, page*pageSize)
 		if err != nil {
 			return combos, err
 		}
-		combos = append(combos, page...)
+		combos = append(combos, pageCombos...)
 		if len(combos) >= limit || !more {
 			break
 		}
@@ -180,8 +192,14 @@ func (c *Client) fetchName(ctx context.Context, name string, limit int) ([]Combo
 	return combos, nil
 }
 
+// maxPagesPerName bounds pagination for one card-name query. Exact-name matches
+// dominate the first page or two of Spellbook's ranking, so four pages cover
+// prolific combo cards while capping noise paging at ~6 paced requests.
+const maxPagesPerName = 4
+
 // fetchPage fetches one offset page of variants for a name and returns the
-// 2-card combos found on it (3+ card combos are skipped — see fetchName).
+// 2-card combos found on it that actually use the queried card (3+ card combos
+// are skipped, and so is substring-search noise — see variantUsesCard).
 // more reports whether the page was full, i.e. the API likely has more results
 // worth fetching.
 func (c *Client) fetchPage(ctx context.Context, name string, limit, offset int) ([]Combo, bool, error) {
@@ -219,6 +237,13 @@ func (c *Client) fetchPage(ctx context.Context, name string, limit, offset int) 
 			break
 		}
 		if len(item.Uses) > 2 {
+			continue
+		}
+		// q is a substring search over card names, not an exact lookup:
+		// querying a deck's "Silence" returns Deafening Silence and Stony
+		// Silence combos whose components are all absent from the deck. Only
+		// variants that use the queried card itself are this deck's combos.
+		if !variantUsesCard(item, name) {
 			continue
 		}
 		combo := Combo{ID: item.ID, SourceURL: "https://commanderspellbook.com/combo/" + item.ID, ManaValueNeeded: item.ManaValueNeeded, BracketTag: item.BracketTag}
@@ -330,6 +355,20 @@ func prioritizeNames(names []string) []string {
 	return priority
 }
 
+// variantUsesCard reports whether one of the variant's components is the
+// queried card (front-face, case-insensitive). It is what turns Spellbook's
+// substring q search into an exact per-card lookup.
+func variantUsesCard(item variant, key string) bool {
+	for _, use := range item.Uses {
+		if normalizeSpellbookName(use.Card.Name) == key {
+			return true
+		}
+	}
+	return false
+}
+
+// allComponentsInDeck reports whether every component of the variant is in the
+// deck-name list (front-face, case-insensitive).
 func allComponentsInDeck(item variant, deckNames []string) bool {
 	set := make(map[string]struct{}, len(deckNames))
 	for _, name := range deckNames {

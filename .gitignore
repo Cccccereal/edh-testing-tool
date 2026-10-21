@@ -39,3 +39,6 @@ __pycache__/
 
 # 前端开发工具（契约类型生成）
 node_modules/
+
+# k6 perf run outputs（基线 perf/baseline.json 需要提交，results 不提交）
+perf/results/

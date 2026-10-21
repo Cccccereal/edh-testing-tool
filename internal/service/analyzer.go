@@ -86,6 +86,7 @@ type Analyzer struct {
 	edh             EDHAnalyzer
 	edhHTTP         *http.Client
 	edhDiskDir      string
+	edhGetcardsURL  string
 	cards           CardCatalog
 	spellbook       Spellbook
 	edhrec          EDHRecommender
@@ -105,6 +106,13 @@ type Analyzer struct {
 // for the many test constructors; empty string disables the disk tier.
 func (a *Analyzer) SetEDHCacheDir(dir string) {
 	a.edhDiskDir = dir
+}
+
+// SetEDHGetcardsURL overrides the getcards Cloud Function endpoint (config
+// GetcardsURL); empty keeps the built-in production endpoint. Test rigs point
+// it at a local stub so scoring never touches the real function.
+func (a *Analyzer) SetEDHGetcardsURL(url string) {
+	a.edhGetcardsURL = url
 }
 
 func NewAnalyzer(
@@ -149,11 +157,21 @@ func (a *Analyzer) Analyze(ctx context.Context, sourceURL, sourceID string, supp
 	// 旧分析缓存立即失效，不必等 TTL 过期才看到新参数的效果。
 	requestKey += fmt.Sprintf(":scoring-v%d", ScoringVersion)
 	if cached, ok := a.cache.get(requestKey, time.Now()); ok {
+		cached.CacheState = CacheStateHit
 		return cached, nil
 	}
 
+	// executed/servedFromCache distinguish the caller whose closure actually
+	// ran (miss, or hit when the cache was filled while this flight waited)
+	// from callers that joined an in-flight singleflight request (coalesce).
+	// The closure writes them before the result channel send, so reading them
+	// after the receive below is race-free.
+	executed := false
+	servedFromCache := false
 	resultChannel := a.requests.DoChan(requestKey, func() (any, error) {
+		executed = true
 		if cached, ok := a.cache.get(requestKey, time.Now()); ok {
+			servedFromCache = true
 			return cached, nil
 		}
 		sharedCtx, cancel := context.WithTimeout(context.Background(), a.requestTimeout)
@@ -179,7 +197,16 @@ func (a *Analyzer) Analyze(ctx context.Context, sourceURL, sourceID string, supp
 		if result.Err != nil {
 			return Analysis{}, result.Err
 		}
-		return cloneAnalysis(result.Val.(Analysis)), nil
+		analysis := cloneAnalysis(result.Val.(Analysis))
+		switch {
+		case servedFromCache:
+			analysis.CacheState = CacheStateHit
+		case executed:
+			analysis.CacheState = CacheStateMiss
+		default:
+			analysis.CacheState = CacheStateCoalesce
+		}
+		return analysis, nil
 	}
 }
 
@@ -401,7 +428,7 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 	if edhErr != nil || edhMetrics == nil {
 		// The chromedp path is gone; always score via the pure-HTTP getcards + formula
 		// implementation, which no longer depends on a browser.
-		edhMetrics, edhErr = edhpowerlevel.ScoreWithCombos(edhCtx, target, a.edhHTTP, combos, catalogCMC, deckGameChangerNames(target, catalog), a.edhDiskDir)
+		edhMetrics, edhErr = edhpowerlevel.ScoreWithCombos(edhCtx, target, a.edhHTTP, combos, catalogCMC, deckGameChangerNames(target, catalog), a.edhDiskDir, a.edhGetcardsURL)
 	}
 	cancelEDH()
 	if edhErr != nil {

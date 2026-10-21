@@ -1,6 +1,70 @@
 """测试用的轻量 API 客户端与断言辅助。"""
 
+import pathlib
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+
 import requests
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def wait_ready(base_url: str, *, timeout: float = 60.0) -> None:
+    """轮询 /healthz 直到被测服务就绪。"""
+    deadline = time.monotonic() + timeout
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            resp = requests.get(base_url + "/healthz", timeout=2)
+            if resp.status_code == 200:
+                return
+        except requests.RequestException as exc:
+            last_error = exc
+        time.sleep(0.2)
+    raise RuntimeError(f"服务 {base_url} 在 {timeout:.0f}s 内未就绪（最后错误：{last_error}）")
+
+
+def build_server_binary() -> pathlib.Path | None:
+    """优先编译当前源码，返回可执行文件路径；失败则返回 None 并打印编译错误。"""
+    go = shutil.which("go")
+    if not go:
+        return None
+    out_dir = pathlib.Path(tempfile.gettempdir()) / "edh-powerlevel-pytest"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    binary = out_dir / "edh-test-server.exe"
+    result = subprocess.run(
+        [go, "build", "-o", str(binary), "./cmd/server"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    if result.returncode != 0:
+        print(result.stderr, file=sys.stderr)
+        return None
+    return binary
+
+
+def stop_process(proc: subprocess.Popen) -> None:
+    if sys.platform == "win32":
+        # server 可能带子进程，用 taskkill 连树一起杀
+        subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True)
+    else:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
 
 class Api:

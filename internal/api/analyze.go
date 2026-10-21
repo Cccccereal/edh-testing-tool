@@ -63,6 +63,12 @@ func (h *Handler) analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// X-Cache documents how this response was served (miss / coalesce / hit);
+	// E2E and k6 load tests key off it to measure cache benefit and
+	// singleflight dedup without guessing from latency alone.
+	if analysis.CacheState != "" {
+		w.Header().Set("X-Cache", analysis.CacheState)
+	}
 	writeJSON(w, http.StatusOK, analysis)
 }
 

@@ -332,3 +332,56 @@ func TestAnalyzeFetchesIndependentProvidersConcurrently(t *testing.T) {
 		t.Fatalf("unexpected warnings: %v", analysis.Warnings)
 	}
 }
+
+// TestAnalyzeReportsCacheState pins the X-Cache taxonomy surfaced by the API
+// layer: the caller whose closure executes the upstream orchestration reports
+// "miss", callers that join the in-flight singleflight request report
+// "coalesce", and calls answered by the TTL/LRU cache report "hit".
+func TestAnalyzeReportsCacheState(t *testing.T) {
+	edh := &blockingEDH{started: make(chan struct{}), release: make(chan struct{})}
+	analyzer := NewAnalyzer(nil, nil, edh, nil, nil, nil, nil,
+		5*time.Second, 15*time.Second, time.Minute, time.Second, 10)
+
+	target := &deck.Deck{SourceID: "cachestate1", Name: "Cache State",
+		Commanders: []deck.Card{{Name: "Commander", Quantity: 1, Commander: true}},
+		Mainboard:  []deck.Card{{Name: "Island", Quantity: 99}}}
+
+	const callers = 5
+	entered := make(chan struct{}, callers)
+	results := make(chan Analysis, callers)
+	for i := 0; i < callers; i++ {
+		go func() {
+			entered <- struct{}{}
+			analysis, err := analyzer.Analyze(context.Background(), "", "cachestate1", target)
+			if err != nil {
+				t.Errorf("analyze: %v", err)
+			}
+			results <- analysis
+		}()
+	}
+
+	// Park the winning closure inside EDH scoring, let every caller reach
+	// DoChan, then release: the burst must collapse to one upstream run.
+	<-edh.started
+	for i := 0; i < callers; i++ {
+		<-entered
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(edh.release)
+
+	states := make(map[string]int)
+	for i := 0; i < callers; i++ {
+		states[(<-results).CacheState]++
+	}
+	if states[CacheStateMiss] != 1 || states[CacheStateCoalesce] != callers-1 {
+		t.Fatalf("in-flight burst should be 1 miss + %d coalesce, got %v", callers-1, states)
+	}
+
+	again, err := analyzer.Analyze(context.Background(), "", "cachestate1", target)
+	if err != nil {
+		t.Fatalf("cached analyze: %v", err)
+	}
+	if again.CacheState != CacheStateHit {
+		t.Fatalf("second call cache state = %q, want %q", again.CacheState, CacheStateHit)
+	}
+}

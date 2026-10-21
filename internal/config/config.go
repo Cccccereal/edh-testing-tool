@@ -11,19 +11,26 @@ import (
 )
 
 type Config struct {
-	Address             string
-	RequestTimeout      time.Duration
-	ProviderTimeout     time.Duration
-	CacheTTL            time.Duration
-	PartialCacheTTL     time.Duration
-	CacheMaxEntries     int
-	ScryfallAPIURL      string
-	ScryfallImageURL    string
-	CardCatalogTTL      time.Duration
-	SpellbookAPIURL     string
-	EDHRECJSONURL       string
-	MoxfieldAPIURL      string
-	CommanderSaltAPIURL string
+	Address          string
+	RequestTimeout   time.Duration
+	ProviderTimeout  time.Duration
+	CacheTTL         time.Duration
+	PartialCacheTTL  time.Duration
+	CacheMaxEntries  int
+	ScryfallAPIURL   string
+	ScryfallImageURL string
+	CardCatalogTTL   time.Duration
+	SpellbookAPIURL  string
+	// SpellbookMinNameDelay spaces the client's per-card-name requests
+	// (Spellbook burst-throttles). Test rigs on a local stub drop it to
+	// milliseconds so a cold analyze is not dominated by pacing.
+	SpellbookMinNameDelay time.Duration
+	EDHRECJSONURL         string
+	MoxfieldAPIURL        string
+	CommanderSaltAPIURL   string
+	// GetcardsURL optionally overrides the EDH Power Level getcards endpoint
+	// (empty keeps the built-in production URL); test rigs point it at a stub.
+	GetcardsURL string
 	// CacheDir is the on-disk home for the persistent caches (card catalog,
 	// proxied card images). It is what makes restarts warm and lets the app
 	// ride out upstream outages with slightly-old data.
@@ -36,21 +43,23 @@ type Config struct {
 
 func Load() Config {
 	return Config{
-		Address:             env("APP_ADDRESS", ":18781"),
-		RequestTimeout:      durationEnv("REQUEST_TIMEOUT", 90*time.Second),
-		ProviderTimeout:     durationEnv("PROVIDER_TIMEOUT", 60*time.Second),
-		CacheTTL:            durationEnv("CACHE_TTL", 30*time.Minute),
-		PartialCacheTTL:     durationEnv("PARTIAL_CACHE_TTL", 45*time.Second),
-		CacheMaxEntries:     intEnv("CACHE_MAX_ENTRIES", 500, 1),
-		ScryfallAPIURL:      env("SCRYFALL_API_URL", "https://api.scryfall.com"),
-		ScryfallImageURL:    env("SCRYFALL_IMAGE_URL", "https://cards.scryfall.io"),
-		CardCatalogTTL:      durationEnv("CARD_CATALOG_TTL", 24*time.Hour),
-		SpellbookAPIURL:     env("SPELLBOOK_API_URL", "https://backend.commanderspellbook.com"),
-		EDHRECJSONURL:       env("EDHREC_JSON_URL", "https://json.edhrec.com"),
-		MoxfieldAPIURL:      env("MOXFIELD_API_URL", "https://api2.moxfield.com"),
-		CommanderSaltAPIURL: env("COMMANDERSALT_API_URL", "https://api.commandersalt.com"),
-		CacheDir:            env("CACHE_DIR", defaultCacheDir()),
-		UpstreamProxy:       env("UPSTREAM_PROXY", ""),
+		Address:               env("APP_ADDRESS", ":18781"),
+		RequestTimeout:        durationEnv("REQUEST_TIMEOUT", 90*time.Second),
+		ProviderTimeout:       durationEnv("PROVIDER_TIMEOUT", 60*time.Second),
+		CacheTTL:              durationEnv("CACHE_TTL", 30*time.Minute),
+		PartialCacheTTL:       durationEnv("PARTIAL_CACHE_TTL", 45*time.Second),
+		CacheMaxEntries:       intEnv("CACHE_MAX_ENTRIES", 500, 1),
+		ScryfallAPIURL:        env("SCRYFALL_API_URL", "https://api.scryfall.com"),
+		ScryfallImageURL:      env("SCRYFALL_IMAGE_URL", "https://cards.scryfall.io"),
+		CardCatalogTTL:        durationEnv("CARD_CATALOG_TTL", 24*time.Hour),
+		SpellbookAPIURL:       env("SPELLBOOK_API_URL", "https://backend.commanderspellbook.com"),
+		SpellbookMinNameDelay: durationEnv("SPELLBOOK_MIN_NAME_DELAY", 1500*time.Millisecond),
+		EDHRECJSONURL:         env("EDHREC_JSON_URL", "https://json.edhrec.com"),
+		MoxfieldAPIURL:        env("MOXFIELD_API_URL", "https://api2.moxfield.com"),
+		CommanderSaltAPIURL:   env("COMMANDERSALT_API_URL", "https://api.commandersalt.com"),
+		GetcardsURL:           env("GETCARDS_URL", ""),
+		CacheDir:              env("CACHE_DIR", defaultCacheDir()),
+		UpstreamProxy:         env("UPSTREAM_PROXY", ""),
 	}
 }
 

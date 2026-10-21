@@ -452,8 +452,17 @@ export interface components {
         };
         ConstructionReport: {
             metrics: components["schemas"]["Metric"][];
+            groups?: components["schemas"]["MetricGroup"][];
             /** @description Spellbook 制胜组合数，参与胜负手指标 */
             wincon_combo_count: number;
+        };
+        MetricGroup: {
+            /** @description 分组 id（win / engine / interaction / plan） */
+            id: string;
+            /** @description 分组标题（靠什么赢 等） */
+            label: string;
+            /** @description 分组一句话说明 */
+            note: string;
         };
         Metric: {
             id: string;
@@ -464,6 +473,10 @@ export interface components {
             status: string;
             coverage: number;
             incomplete: boolean;
+            /** @description 所属分组 id，对应 MetricGroup.id */
+            group?: string;
+            /** @description 口径说明（这条指标数的是什么） */
+            hint?: string;
             cards: components["schemas"]["ClassifiedCard"][];
         };
         ClassifiedCard: {
@@ -706,6 +719,8 @@ export interface operations {
             /** @description 完整分析结果 */
             200: {
                 headers: {
+                    /** @description 本响应的服务来源——miss（本次调用执行了上游编排）、coalesce（合并进在途 singleflight 请求）、hit（TTL/LRU 缓存直接返回）。E2E 与压测脚本以此度量缓存收益与并发去重。 */
+                    "X-Cache"?: "miss" | "coalesce" | "hit";
                     [name: string]: unknown;
                 };
                 content: {

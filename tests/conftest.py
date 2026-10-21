@@ -8,15 +8,12 @@
 
 import os
 import pathlib
-import shutil
-import socket
 import subprocess
-import sys
-import tempfile
-import time
 
 import pytest
 import requests
+
+from helpers import build_server_binary, free_port, stop_process, wait_ready
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 STARTUP_TIMEOUT = 60.0
@@ -58,68 +55,15 @@ def spec_validator(spec):
         return make
 
 
-def _free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
-def _wait_ready(base_url: str, *, timeout: float) -> None:
-    deadline = time.monotonic() + timeout
-    last_error: Exception | None = None
-    while time.monotonic() < deadline:
-        try:
-            resp = requests.get(base_url + "/healthz", timeout=2)
-            if resp.status_code == 200:
-                return
-        except requests.RequestException as exc:
-            last_error = exc
-        time.sleep(0.2)
-    raise RuntimeError(f"服务 {base_url} 在 {timeout:.0f}s 内未就绪（最后错误：{last_error}）")
-
-
-def _build_binary() -> pathlib.Path | None:
-    """优先编译当前源码，返回可执行文件路径；失败则返回 None 并打印编译错误。"""
-    go = shutil.which("go")
-    if not go:
-        return None
-    out_dir = pathlib.Path(tempfile.gettempdir()) / "edh-powerlevel-pytest"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    binary = out_dir / "edh-test-server.exe"
-    result = subprocess.run(
-        [go, "build", "-o", str(binary), "./cmd/server"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=180,
-    )
-    if result.returncode != 0:
-        print(result.stderr, file=sys.stderr)
-        return None
-    return binary
-
-
-def _stop(proc: subprocess.Popen) -> None:
-    if sys.platform == "win32":
-        # server 可能带子进程，用 taskkill 连树一起杀
-        subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True)
-    else:
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-
-
 @pytest.fixture(scope="session")
 def base_url():
     external = os.environ.get("EDH_BASE_URL", "").strip().rstrip("/")
     if external:
-        _wait_ready(external, timeout=10)
+        wait_ready(external, timeout=10)
         yield external
         return
 
-    binary = _build_binary()
+    binary = build_server_binary()
     if binary is None:
         fallback = REPO_ROOT / "server.exe"
         if fallback.exists():
@@ -127,7 +71,7 @@ def base_url():
         else:
             pytest.fail("既没有可用的 go 工具链，也没找到仓库里的 server.exe，无法启动被测服务")
 
-    port = _free_port()
+    port = free_port()
     address = f"http://127.0.0.1:{port}"
     env = os.environ.copy()
     env["APP_ADDRESS"] = f"127.0.0.1:{port}"
@@ -140,10 +84,10 @@ def base_url():
         stderr=subprocess.DEVNULL,
     )
     try:
-        _wait_ready(address, timeout=STARTUP_TIMEOUT)
+        wait_ready(address, timeout=STARTUP_TIMEOUT)
         yield address
     finally:
-        _stop(proc)
+        stop_process(proc)
 
 
 @pytest.fixture(scope="session")

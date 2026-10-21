@@ -24,21 +24,6 @@ const comboResponse = `{"results":[{
 	"requires":[]
 }]}`
 
-// comboResponseMulti returns two combos for a search hit (used to verify the
-// per-name limit is respected across cached entries).
-func comboResponseMulti() string {
-	return `{"results":[
-		{"id":"1-2","description":"a","manaValueNeeded":1,"uses":[
-			{"card":{"name":"Card A","oracleId":"oa","imageUriFrontNormal":"n","imageUriFrontSmall":"s"},"zoneLocations":["H"]},
-			{"card":{"name":"Card B","oracleId":"ob","imageUriFrontNormal":"n","imageUriFrontSmall":"s"},"zoneLocations":["B"]}],
-		 "produces":[{"feature":{"id":7,"name":"Win the game"}}],"requires":[]},
-		{"id":"3-4","description":"b","manaValueNeeded":1,"uses":[
-			{"card":{"name":"Card C","oracleId":"oc","imageUriFrontNormal":"n","imageUriFrontSmall":"s"},"zoneLocations":["H"]},
-			{"card":{"name":"Card D","oracleId":"od","imageUriFrontNormal":"n","imageUriFrontSmall":"s"},"zoneLocations":["B"]}],
-		 "produces":[{"feature":{"id":8,"name":"Infinite mana"}}],"requires":[]}
-	]}`
-}
-
 func TestSearchCachesPerName(t *testing.T) {
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -93,27 +78,63 @@ func TestSearchSkipsRateLimitedNameAndContinues(t *testing.T) {
 
 func TestSearchRespectsLimitAcrossCachedNames(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Distinct per-name payloads so dedup does not mask the limit: each of the
-		// two names yields 2 combos with different IDs.
-		if r.URL.Query().Get("q") == "card c" {
-			body := strings.ReplaceAll(comboResponseMulti(), "1-2", "5-6")
-			body = strings.ReplaceAll(body, "3-4", "7-8")
-			_, _ = w.Write([]byte(body))
-			return
-		}
-		_, _ = w.Write([]byte(comboResponseMulti()))
+		// Per-name payloads whose combos all use the queried card (the client
+		// now filters substring noise): each name yields 2 exact combos with
+		// distinct IDs, so dedup cannot mask the combined limit. The card name
+		// uses the raw lowercase q because matching normalizes case.
+		q := r.URL.Query().Get("q")
+		body := `{"results":[
+			{"id":"` + q + `-1","description":"a","manaValueNeeded":1,"uses":[
+				{"card":{"name":"` + q + `","oracleId":"o1","imageUriFrontNormal":"n","imageUriFrontSmall":"s"},"zoneLocations":["H"]},
+				{"card":{"name":"Partner X","oracleId":"o2","imageUriFrontNormal":"n","imageUriFrontSmall":"s"},"zoneLocations":["B"]}],
+			 "produces":[{"feature":{"id":7,"name":"Win the game"}}],"requires":[]},
+			{"id":"` + q + `-2","description":"b","manaValueNeeded":1,"uses":[
+				{"card":{"name":"` + q + `","oracleId":"o1","imageUriFrontNormal":"n","imageUriFrontSmall":"s"},"zoneLocations":["H"]},
+				{"card":{"name":"Partner Y","oracleId":"o3","imageUriFrontNormal":"n","imageUriFrontSmall":"s"},"zoneLocations":["B"]}],
+			 "produces":[{"feature":{"id":8,"name":"Infinite mana"}}],"requires":[]}
+		]}`
+		_, _ = w.Write([]byte(body))
 	}))
 	defer server.Close()
 	client := New(server.URL, server.Client())
 
-	// Both names return 2 combos each; the 3-combo limit must cut the combined
-	// list short rather than overflowing.
+	// Every name returns 2 exact combos; the 3-combo limit must cut the
+	// combined list short rather than overflowing.
 	combos, err := client.Search(context.Background(), []string{"Card A", "Card C", "Card E", "Card F"}, 3)
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}
 	if len(combos) != 3 {
 		t.Fatalf("expected 3 combos (limit), got %d", len(combos))
+	}
+}
+
+// TestSearchFiltersSubstringNoise reproduces the q=silence regression: the API
+// matches card names by substring, so querying a deck's Silence returned
+// Deafening Silence / Stony Silence combos whose components are all absent
+// from the deck. Only variants that use the queried card may come back.
+func TestSearchFiltersSubstringNoise(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"results":[
+			{"id":"n1","description":"noise","manaValueNeeded":1,"uses":[
+				{"card":{"name":"Deafening Silence","oracleId":"o1","imageUriFrontNormal":"n","imageUriFrontSmall":"s"},"zoneLocations":["H"]},
+				{"card":{"name":"Knowledge Pool","oracleId":"o2","imageUriFrontNormal":"n","imageUriFrontSmall":"s"},"zoneLocations":["B"]}],
+			 "produces":[{"feature":{"id":7,"name":"Lockout"}}],"requires":[]},
+			{"id":"e1","description":"exact","manaValueNeeded":1,"uses":[
+				{"card":{"name":"Silence","oracleId":"o3","imageUriFrontNormal":"n","imageUriFrontSmall":"s"},"zoneLocations":["H"]},
+				{"card":{"name":"Knowledge Pool","oracleId":"o2","imageUriFrontNormal":"n","imageUriFrontSmall":"s"},"zoneLocations":["B"]}],
+			 "produces":[{"feature":{"id":8,"name":"Win the game"}}],"requires":[]}
+		]}`))
+	}))
+	defer server.Close()
+	client := New(server.URL, server.Client())
+
+	combos, err := client.Search(context.Background(), []string{"Silence"}, 12)
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if len(combos) != 1 || combos[0].ID != "e1" {
+		t.Fatalf("expected only the exact Silence combo, got %+v", combos)
 	}
 }
 

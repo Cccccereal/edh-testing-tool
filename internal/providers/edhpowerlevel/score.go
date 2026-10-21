@@ -613,7 +613,7 @@ type scoreResult struct {
 // in the same shape the chromedp pipeline produced, so the rest of the app is unchanged.
 // comboCategories, when non-nil, feeds the 2-card-combo bracket rule (early vs late).
 func Score(ctx context.Context, target deck.Deck, httpClient *http.Client, diskDir string) (map[string]any, error) {
-	return ScoreWithCombos(ctx, target, httpClient, nil, nil, nil, diskDir)
+	return ScoreWithCombos(ctx, target, httpClient, nil, nil, nil, diskDir, "")
 }
 
 // ScoreWithCombos is Score plus Commander Spellbook combo results, which the site's
@@ -622,9 +622,14 @@ func Score(ctx context.Context, target deck.Deck, httpClient *http.Client, diskD
 // battlefield-cost sum; getcards CMCs fill any gaps. extraGameChangers carries
 // Game Changer names from the app's own sources (Scryfall flag + snapshot) so the
 // bracket counter does not depend on getcards' copy of the list alone.
-func ScoreWithCombos(ctx context.Context, target deck.Deck, httpClient *http.Client, combos []spellbook.Combo, cardCMCByName map[string]int, extraGameChangers map[string]struct{}, diskDir string) (map[string]any, error) {
+// getcardsEndpoint overrides the Cloud Function base URL (empty keeps the
+// production endpoint), which lets test rigs point scoring at a local stub.
+func ScoreWithCombos(ctx context.Context, target deck.Deck, httpClient *http.Client, combos []spellbook.Combo, cardCMCByName map[string]int, extraGameChangers map[string]struct{}, diskDir, getcardsEndpoint string) (map[string]any, error) {
+	if getcardsEndpoint == "" {
+		getcardsEndpoint = getcardsURL
+	}
 	all := append(append([]deck.Card{}, target.Commanders...), target.Mainboard...)
-	cards, err := newGetcardsClient(httpClient, getcardsURL, diskDir).fetch(ctx, all)
+	cards, err := newGetcardsClient(httpClient, getcardsEndpoint, diskDir).fetch(ctx, all)
 	if err != nil {
 		return nil, err
 	}

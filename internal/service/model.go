@@ -70,6 +70,13 @@ type RecommendationGroup struct {
 	Cards  []RecommendedCard `json:"cards"`
 }
 
+// Cache states reported via the X-Cache response header (see Analysis.CacheState).
+const (
+	CacheStateMiss     = "miss"
+	CacheStateCoalesce = "coalesce"
+	CacheStateHit      = "hit"
+)
+
 type Analysis struct {
 	Status                 string                    `json:"status"`
 	Deck                   DeckSummary               `json:"deck"`
@@ -86,6 +93,12 @@ type Analysis struct {
 	CanonicalDecklist      string                    `json:"canonical_decklist"`
 	DeckRevision           string                    `json:"deck_revision"`
 	Warnings               []string                  `json:"warnings,omitempty"`
+	// CacheState records how this response was served: "miss" means this call
+	// executed the upstream orchestration, "coalesce" means it joined an
+	// in-flight singleflight request, "hit" means the TTL/LRU cache answered.
+	// It is transport metadata, never serialized into the JSON body; the API
+	// layer surfaces it as the X-Cache response header for E2E and load tests.
+	CacheState string `json:"-"`
 }
 
 type Provider interface {

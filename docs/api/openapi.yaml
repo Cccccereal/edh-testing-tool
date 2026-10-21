@@ -91,6 +91,12 @@ paths:
       responses:
         "200":
           description: 完整分析结果
+          headers:
+            X-Cache:
+              description: 本响应的服务来源——miss（本次调用执行了上游编排）、coalesce（合并进在途 singleflight 请求）、hit（TTL/LRU 缓存直接返回）。E2E 与压测脚本以此度量缓存收益与并发去重。
+              schema:
+                type: string
+                enum: [miss, coalesce, hit]
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Analysis" }
@@ -649,10 +655,20 @@ components:
     # ---- 构筑报告 ----
     ConstructionReport:
       type: object
+      # groups 不进 required：离线契约测试校验的是联网录制的旧快照，重录需外网；
+      # 新实现始终下发 groups，快照下次 --update-fixtures 时会带上。
       required: [metrics, wincon_combo_count]
       properties:
         metrics: { type: array, items: { $ref: "#/components/schemas/Metric" } }
+        groups: { type: array, items: { $ref: "#/components/schemas/MetricGroup" } }
         wincon_combo_count: { type: integer, description: Spellbook 制胜组合数，参与胜负手指标 }
+    MetricGroup:
+      type: object
+      required: [id, label, note]
+      properties:
+        id: { type: string, description: 分组 id（win / engine / interaction / plan） }
+        label: { type: string, description: 分组标题（靠什么赢 等） }
+        note: { type: string, description: 分组一句话说明 }
     Metric:
       type: object
       required: [id, label, target, actual, gap, status, coverage, incomplete, cards]
@@ -665,6 +681,8 @@ components:
         status: { type: string }
         coverage: { type: number }
         incomplete: { type: boolean }
+        group: { type: string, description: 所属分组 id，对应 MetricGroup.id }
+        hint: { type: string, description: 口径说明（这条指标数的是什么） }
         cards: { type: array, items: { $ref: "#/components/schemas/ClassifiedCard" } }
     ClassifiedCard:
       type: object

@@ -1,0 +1,71 @@
+name: Nightly
+
+# 夜间回归（北京时间凌晨 3 点）：E2E 冒烟 + k6 压测基线对比。
+# 规划书第四节「nightly 跑 E2E 冒烟与压测基线对比（P95 回归超过阈值报警）」的落地。
+
+on:
+  schedule:
+    - cron: "0 19 * * *" # UTC 19:00 = 北京时间 03:00
+  workflow_dispatch:
+
+jobs:
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test deps (pytest + Playwright)
+        run: |
+          pip install pytest requests pyyaml jsonschema playwright
+          python -m playwright install --with-deps chromium
+
+      - name: E2E journey smoke (stubbed upstreams, offline)
+        run: pytest tests/e2e -q
+
+  perf-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install harness deps
+        run: pip install requests
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      # 三场景（冷启动/缓存/去重）+ 基线回归闸门：P95 比基线回归超 25% 即红。
+      # 共享 runner 噪声大，结果 artifact 一并上传供人工复核。
+      - name: k6 scenarios vs baseline
+        run: python perf/harness.py --duration 20s
+
+      - name: Upload perf results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results
+          path: perf/results/
+          retention-days: 30
