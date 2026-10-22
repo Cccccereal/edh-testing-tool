@@ -130,7 +130,7 @@ func (a *Analyzer) buildRecommendationViews(ctx context.Context, groups []edhrec
 			}
 			recommended := RecommendedCard{
 				Card: card, Synergy: item.Synergy, InclusionRate: item.InclusionRate,
-				Reason: "Recommended by EDHREC in " + group.Header, SourceURL: item.SourceURL,
+				Reason: "常见搭配：" + group.Header, SourceURL: item.SourceURL,
 				Keywords: keywords, Fills: fills, Source: "edhrec",
 			}
 			output.Cards = append(output.Cards, recommended)
@@ -244,7 +244,7 @@ func (a *Analyzer) gapBackfill(ctx context.Context, shortfallOrder []string, sho
 				collected[key] = struct{}{}
 				kept = append(kept, RecommendedCard{
 					Card:      card,
-					Reason:    "Found on Scryfall for " + metric.Label + " gap",
+					Reason:    "按「" + metric.Label + "」词条检索补足",
 					SourceURL: scryfallCardURL(card.Name),
 					Fills:     []RecommendationFill{{ID: metric.ID, Label: metric.Label, Gap: metric.Gap}},
 					Source:    "scryfall",

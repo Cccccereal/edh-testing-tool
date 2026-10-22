@@ -373,7 +373,7 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 
 	if runEDHREC {
 		if recErr != nil {
-			analysis.Warnings = append(analysis.Warnings, "EDHREC 主将推荐暂时无法加载。")
+			analysis.Warnings = append(analysis.Warnings, "常见搭配推荐暂时无法加载。")
 		} else {
 			analysis.RecommendationKeywords = recKeywords
 			// A failed candidate lookup only drops the recommendations; the

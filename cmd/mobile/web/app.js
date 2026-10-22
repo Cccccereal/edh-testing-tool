@@ -763,10 +763,31 @@ function applyBuildCandidates(candidates) {
           <div class="builder-candidate-title">${gcBadge}<strong>${escapeHTML(card.name)}</strong></div>
           <span class="builder-synergy">Synergy ${(Number(card.synergy) || 0).toFixed(2)}%</span>
           ${fills ? `<small>补足：${escapeHTML(fills)}</small>` : ''}
+          <p class="builder-oracle">${escapeHTML(cardText)}</p>
         </div>
         <button type="button" class="card-zoom-button" data-zoom-src="${escapeHTML(preview)}" data-preview-name="${escapeHTML(card.name)}" data-card-text="${escapeHTML(cardText)}" aria-label="查看 ${escapeHTML(card.name)} 大图">大</button>
       </div>`;
   }).join('') || '<p class="editor-empty">暂时没有更多建议，可快速加基本地或直接完成。</p>';
+  localizeBuilderCandidates();
+}
+
+// 三选一的异能直接铺在卡片行里（手机上缩略图读不了字、每张都点"大"太费劲）。
+// 中文可用时整段替换英文——与 hover 预览同一口径、共用页面级缓存；无简中的
+// 卡保持英文，同时把行内 dataset 一并换成中文，让"大"图层同步。
+function localizeBuilderCandidates() {
+  builderCandidates.querySelectorAll('.builder-candidate').forEach((row) => {
+    const name = row.dataset.previewName;
+    const oracle = row.querySelector('.builder-oracle');
+    if (!name || !oracle) return;
+    fetchChineseCard(name).then((zh) => {
+      const block = zh ? chineseTextBlock(zh) : '';
+      if (!block) return;
+      oracle.textContent = block;
+      row.dataset.cardText = block;
+      row.dataset.zhLoaded = '1';
+      row.querySelector('.card-zoom-button')?.setAttribute('data-card-text', block);
+    });
+  });
 }
 
 // Route card art through the server's /img cache proxy instead of hitting
@@ -1717,9 +1738,9 @@ function renderCombos(combos, suggestions) {
 }
 
 // 推荐区双视图：「缺口词条」按构筑指标分桶（回答"我缺什么、补什么"），
-// 「EDHREC 类别」保留 EDHREC 原生分组（回答"这个主将大家都带什么"）。
-// 缺口桶里混两路来源——EDHREC 池（带 Synergy/Inclusion）和 Scryfall 语义
-// 兜底（带 EDHREC Rank，卡面打来源徽章）。旧缓存响应没有 gap_recommendations
+// 「常见搭配」保留推荐池的原生分组（回答"这个主将大家都带什么"）。
+// 缺口桶里混两路来源——推荐池（带 Synergy/Inclusion）和按词条语义检索的
+// 兜底（带热度排名，卡面打"词条检索"徽章）。旧缓存响应没有 gap_recommendations
 // 时回退类别视图单 Tab。
 let recommendationGroupsData = [];
 let gapRecommendationData = [];
@@ -1731,7 +1752,7 @@ function renderRecommendations(recommendations, gapRecommendations, keywords) {
   gapRecommendationData = Array.isArray(gapRecommendations) ? gapRecommendations : [];
   recommendationTab = gapRecommendationData.length ? 'gap' : 'category';
   section.hidden = !(recommendationGroupsData.length || gapRecommendationData.length);
-  document.querySelector('#recommendation-keywords').textContent = keywords.length ? `EDHREC 主题：${keywords.join(' · ')}` : '';
+  document.querySelector('#recommendation-keywords').textContent = keywords.length ? `常见主题：${keywords.join(' · ')}` : '';
   renderRecommendationTabs();
   renderRecommendationView();
 }
@@ -1742,7 +1763,7 @@ function renderRecommendationTabs() {
   bar.hidden = !both;
   const tabs = [
     ['gap', `缺口词条 · ${gapRecommendationData.length}`],
-    ['category', `EDHREC 类别 · ${recommendationGroupsData.length}`],
+    ['category', `常见搭配 · ${recommendationGroupsData.length}`],
   ];
   bar.innerHTML = both ? tabs.map(([id, label]) => `<button type="button" class="recommendation-tab${recommendationTab === id ? ' is-active' : ''}" role="tab" aria-selected="${recommendationTab === id}" data-rec-tab="${id}">${escapeHTML(label)}</button>`).join('') : '';
   bar.querySelectorAll('[data-rec-tab]').forEach((tab) => {
@@ -1758,15 +1779,15 @@ function renderRecommendedCard(item) {
   const fills = (item.fills || []).map((fill) => `<li><strong>${escapeHTML(fill.label)} · 还缺 ${Number(fill.gap) || 0}</strong><span>${escapeHTML(fill.reason || '')}</span></li>`).join('');
   const fromScryfall = item.source === 'scryfall';
   const rank = Number(item.card?.edhrec_rank);
+  // 用户可见文案不带数据源品牌名：兜底卡用"热度排名/语义检索"表述，
+  // 外链统一"查看详情"。
   const meta = fromScryfall
-    ? `<div><span>EDHREC Rank</span><strong>${rank > 0 ? '#' + rank : '—'}</strong></div><div><span>来源</span><strong>Scryfall</strong></div>`
+    ? `<div><span>热度排名</span><strong>${rank > 0 ? '#' + rank : '—'}</strong></div><div><span>来源</span><strong>语义检索</strong></div>`
     : `<div><span>Synergy</span><strong>${(Number(item.synergy || 0) * 100).toFixed(1)}%</strong></div><div><span>Inclusion</span><strong>${(Number(item.inclusion_rate || 0) * 100).toFixed(1)}%</strong></div>`;
-  const link = fromScryfall
-    ? `<a href="${escapeHTML(item.source_url || 'https://scryfall.com/')}" target="_blank" rel="noopener noreferrer">在 Scryfall 查看 ↗</a>`
-    : `<a href="${escapeHTML(item.source_url || 'https://edhrec.com/')}" target="_blank" rel="noopener noreferrer">在 EDHREC 查看 ↗</a>`;
+  const link = `<a href="${escapeHTML(item.source_url || (fromScryfall ? 'https://scryfall.com/' : 'https://edhrec.com/'))}" target="_blank" rel="noopener noreferrer">查看详情 ↗</a>`;
   return `<article class="recommendation-card${fromScryfall ? ' is-scryfall' : ''}">
     ${renderCard({ card: item.card, quantity: 1, editor: false })}
-    ${fromScryfall ? '<span class="recommendation-source">Scryfall 兜底</span>' : ''}
+    ${fromScryfall ? '<span class="recommendation-source">词条检索</span>' : ''}
     <div class="recommendation-meta">${meta}</div>
     ${fills ? `<ul class="recommendation-fills">${fills}</ul>` : ''}
     <button class="recommend-add ghost-button" type="button" data-add-name="${escapeHTML(item.card?.name || '')}">直接加入构筑</button>
