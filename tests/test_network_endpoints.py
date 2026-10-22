@@ -44,6 +44,7 @@ CAPTURES = [
         180,
     ),
     ("card.json", "GET", "/api/v1/card", {"params": {"name": "Sol Ring"}}, 60),
+    ("card_zh.json", "GET", "/api/v1/card-zh", {"params": {"name": "Sol Ring"}}, 60),
     (
         "build_suggest.json",
         "POST",

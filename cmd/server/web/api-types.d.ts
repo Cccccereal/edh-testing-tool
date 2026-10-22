@@ -94,6 +94,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/card-zh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 按名称查单卡的简体中文印刷（悬停翻译按需加载）
+         * @description 返回 zhs 印刷的 printed_name / printed_type_line / printed_oracle_text，
+         *     多面卡逐面下发。服务端双层缓存（内存 + 磁盘），同一卡同一 TTL 内只查
+         *     一次上游；没有简中印刷的卡会负缓存并返回 404，前端据此停止追问。
+         *     可能的错误 code：
+         *     - 400：CARD_NAME_REQUIRED
+         *     - 404：CARD_ZH_NOT_FOUND（该卡没有简体中文印刷）
+         *     - 501：CARD_ZH_UNSUPPORTED（当前卡牌目录不支持中文查询）
+         *     - 502：CARD_ZH_FAILED / CARD_DATA_UNAVAILABLE
+         */
+        get: operations["lookupCardChinese"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/build-suggest": {
         parameters: {
             query?: never;
@@ -329,6 +356,7 @@ export interface components {
             combo_suggestions: components["schemas"]["ComboSuggestion"][];
             recommendations: components["schemas"]["RecommendationGroup"][];
             recommendation_keywords: string[];
+            gap_recommendations?: components["schemas"]["GapRecommendation"][];
             /** @description 构筑分类失败时为 null */
             construction_report: components["schemas"]["ConstructionReport"] | null;
             /** @description 法术力基础分析失败时为 null */
@@ -380,6 +408,8 @@ export interface components {
             cmc: number;
             produced_mana: components["schemas"]["ManaColor"][];
             power: string;
+            /** @description EDHREC 热度排名（1 最热；0/缺省为未上榜）。Scryfall 兜底推荐按它排序 */
+            edhrec_rank?: number;
             /** @description 是否在 Commander Game Changers 名单（以 Scryfall 实时字段为准） */
             game_changer: boolean;
             chinese_name: string;
@@ -401,6 +431,24 @@ export interface components {
         };
         /** @enum {string} */
         ManaColor: "W" | "U" | "B" | "R" | "G" | "C";
+        /** @description 单卡的简体中文印刷（悬停翻译按需加载）。除 name 外字段均可缺省—— 没有对应中文内容的字段不下发（omitempty）。 */
+        CardChinese: {
+            /** @description 英文正名（调用方按它作键） */
+            name: string;
+            /** @description 简中印刷名（printed_name） */
+            chinese_name?: string;
+            /** @description 简中类别行（printed_type_line） */
+            chinese_type_line?: string;
+            /** @description 简中规则文本（printed_oracle_text） */
+            chinese_oracle_text?: string;
+            /** @description 多面卡的逐面中文 */
+            faces?: {
+                name: string;
+                printed_name?: string;
+                chinese_type_line?: string;
+                chinese_oracle_text?: string;
+            }[];
+        };
         DisplayCard: {
             card: components["schemas"]["Card"];
             quantity: number;
@@ -443,12 +491,26 @@ export interface components {
             source_url: string;
             keywords: string[];
             fills: components["schemas"]["RecommendationFill"][];
+            /**
+             * @description 推荐来源——edhrec 为主将页推荐池（带 synergy/inclusion），scryfall 为缺口语义兜底（带 edhrec_rank）。缺省视为 edhrec
+             * @enum {string}
+             */
+            source?: "edhrec" | "scryfall";
         };
         RecommendationFill: {
             id: string;
             label: string;
             gap: number;
             reason: string;
+        };
+        GapRecommendation: {
+            /** @description 构筑指标词条 id（finisher/ramp/mass_interaction…） */
+            id: string;
+            /** @description 词条中文名（终结者/加速/清场…） */
+            label: string;
+            /** @description 该词条还缺的张数 */
+            gap: number;
+            cards: components["schemas"]["RecommendedCard"][];
         };
         ConstructionReport: {
             metrics: components["schemas"]["Metric"][];
@@ -672,6 +734,15 @@ export interface components {
                 "application/json": components["schemas"]["ErrorEnvelope"];
             };
         };
+        /** @description 服务端装配的组件不支持该能力（如测试桩目录无中文查询） */
+        NotImplemented: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
     };
     parameters: never;
     requestBodies: never;
@@ -781,6 +852,32 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+        };
+    };
+    lookupCardChinese: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 简体中文印刷资料（仅本地化字段，name 为英文正名） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardChinese"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            501: components["responses"]["NotImplemented"];
             502: components["responses"]["BadGateway"];
         };
     };

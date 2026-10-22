@@ -249,7 +249,10 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 		isFastMana := card.Cmc == 0 && strings.Contains(typeLine, "artifact") && strings.Contains(text, "add ")
 		return isFastMana, "Net-positive mana source (0-cost artifact)"
 	case "mass_interaction":
-		if strings.Contains(text, "each player") || strings.Contains(text, "all creatures") || strings.Contains(text, "destroy all") || strings.Contains(text, "exile all") {
+		// 群体干扰吸收了旧"清场"指标的触发词：毁灭/放逐/削弱全场原本就
+		// 命中，伤害型清场（Blasphemous Act 形状）靠 "damage to each
+		// creature" 一并计入，删除清场独立配额后不再有漏网。
+		if strings.Contains(text, "each player") || strings.Contains(text, "all creatures") || strings.Contains(text, "destroy all") || strings.Contains(text, "exile all") || strings.Contains(text, "damage to each creature") {
 			return true, "Affects multiple players or permanents"
 		}
 	case "single_interaction":
@@ -366,11 +369,6 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 		}
 		if isEvasionGranter(text, typeLine) {
 			return true, "Grants evasion to a creature (equipment/aura/land)"
-		}
-	case "board_wipe":
-		// 清场：破坏/放逐全部生物、对每个生物造成伤害、或让所有生物变弱。
-		if strings.Contains(text, "destroy all") || strings.Contains(text, "exile all") || strings.Contains(text, "all creatures get -") || strings.Contains(text, "deals") && strings.Contains(text, "damage to each creature") {
-			return true, "Clears the board"
 		}
 	case "plan":
 		if strings.Contains(text, "token") || strings.Contains(text, "proliferate") || strings.Contains(text, "infect") || strings.Contains(text, "poison") || strings.Contains(text, "whenever") {

@@ -163,6 +163,40 @@ paths:
         "502":
           $ref: "#/components/responses/BadGateway"
 
+  /api/v1/card-zh:
+    get:
+      tags: [cards]
+      operationId: lookupCardChinese
+      summary: 按名称查单卡的简体中文印刷（悬停翻译按需加载）
+      description: |
+        返回 zhs 印刷的 printed_name / printed_type_line / printed_oracle_text，
+        多面卡逐面下发。服务端双层缓存（内存 + 磁盘），同一卡同一 TTL 内只查
+        一次上游；没有简中印刷的卡会负缓存并返回 404，前端据此停止追问。
+        可能的错误 code：
+        - 400：CARD_NAME_REQUIRED
+        - 404：CARD_ZH_NOT_FOUND（该卡没有简体中文印刷）
+        - 501：CARD_ZH_UNSUPPORTED（当前卡牌目录不支持中文查询）
+        - 502：CARD_ZH_FAILED / CARD_DATA_UNAVAILABLE
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: 简体中文印刷资料（仅本地化字段，name 为英文正名）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardChinese" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
   /api/v1/build-suggest:
     post:
       tags: [build]
@@ -383,6 +417,11 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    NotImplemented:
+      description: 服务端装配的组件不支持该能力（如测试桩目录无中文查询）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
   schemas:
     # 200 成功响应的通用规则：sanitize 反射编码会输出结构体全部字段，
@@ -483,6 +522,9 @@ components:
         combo_suggestions: { type: array, items: { $ref: "#/components/schemas/ComboSuggestion" } }
         recommendations: { type: array, items: { $ref: "#/components/schemas/RecommendationGroup" } }
         recommendation_keywords: { type: array, items: { type: string } }
+        # 按构筑缺口词条分桶的推荐视图（EDHREC 池 + Scryfall 语义兜底）。
+        # 不进 required：旧缓存命中时不带该字段，前端回退类别视图。
+        gap_recommendations: { type: array, items: { $ref: "#/components/schemas/GapRecommendation" } }
         construction_report:
           anyOf:
             - $ref: "#/components/schemas/ConstructionReport"
@@ -570,6 +612,9 @@ components:
         cmc: { type: number }
         produced_mana: { type: array, items: { $ref: "#/components/schemas/ManaColor" } }
         power: { type: string }
+        edhrec_rank:
+          type: integer
+          description: EDHREC 热度排名（1 最热；0/缺省为未上榜）。Scryfall 兜底推荐按它排序
         game_changer:
           type: boolean
           description: 是否在 Commander Game Changers 名单（以 Scryfall 实时字段为准）
@@ -592,6 +637,27 @@ components:
     ManaColor:
       type: string
       enum: [W, U, B, R, G, C]
+    CardChinese:
+      type: object
+      required: [name]
+      description: 单卡的简体中文印刷（悬停翻译按需加载）。除 name 外字段均可缺省——
+        没有对应中文内容的字段不下发（omitempty）。
+      properties:
+        name: { type: string, description: 英文正名（调用方按它作键） }
+        chinese_name: { type: string, description: 简中印刷名（printed_name） }
+        chinese_type_line: { type: string, description: 简中类别行（printed_type_line） }
+        chinese_oracle_text: { type: string, description: 简中规则文本（printed_oracle_text） }
+        faces:
+          type: array
+          description: 多面卡的逐面中文
+          items:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string }
+              printed_name: { type: string }
+              chinese_type_line: { type: string }
+              chinese_oracle_text: { type: string }
     DisplayCard:
       type: object
       required: [card, quantity, commander, land, roles]
@@ -643,6 +709,10 @@ components:
         source_url: { type: string, format: uri }
         keywords: { type: array, items: { type: string } }
         fills: { type: array, items: { $ref: "#/components/schemas/RecommendationFill" } }
+        source:
+          type: string
+          enum: [edhrec, scryfall]
+          description: 推荐来源——edhrec 为主将页推荐池（带 synergy/inclusion），scryfall 为缺口语义兜底（带 edhrec_rank）。缺省视为 edhrec
     RecommendationFill:
       type: object
       required: [id, label, gap, reason]
@@ -651,6 +721,15 @@ components:
         label: { type: string }
         gap: { type: integer }
         reason: { type: string }
+    GapRecommendation:
+      type: object
+      # 不进 Analysis.required：旧缓存/旧快照响应没有该字段，前端按缺省回退类别视图。
+      required: [id, label, gap, cards]
+      properties:
+        id: { type: string, description: 构筑指标词条 id（finisher/ramp/mass_interaction…） }
+        label: { type: string, description: 词条中文名（终结者/加速/清场…） }
+        gap: { type: integer, description: 该词条还缺的张数 }
+        cards: { type: array, items: { $ref: "#/components/schemas/RecommendedCard" } }
 
     # ---- 构筑报告 ----
     ConstructionReport:

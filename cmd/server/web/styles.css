@@ -279,9 +279,12 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .edh-card .provider-link:hover { background: var(--blue); }
 .edh-card .provider-link:focus-visible { outline-color: var(--blue); }
 .provider-link span { font-size: 20px; }
-.hero-metric { display: flex; align-items: baseline; gap: 10px; margin-bottom: 32px; }
-.hero-metric strong { font-size: 74px; line-height: .9; letter-spacing: -.06em; }
+.hero-metric { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 32px; }
+/* 评分数字绝不从中段换行（"8.35"拆成两行）：nowrap 让 flex 压不碎数字，
+   放不下时让后面的 "/ 10 Power Level" 整体折到下一行。 */
+.hero-metric strong { font-size: 74px; line-height: .9; letter-spacing: -.06em; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .hero-metric span { color: var(--muted); font-size: 17px; }
+@media (max-width: 560px) { .hero-metric strong { font-size: 54px; } }
 .bracket-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-bottom: 22px; border: 1px solid var(--line); background: var(--line); }
 .bracket-value { display: flex; align-items: center; gap: 14px; padding: 15px; background: #1c1e1a; }
 .bracket-value > div { min-width: 0; }
@@ -299,7 +302,7 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .metric-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
 .metric { background: var(--surface); padding: 15px; }
 .metric small { display: block; margin-bottom: 7px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
-.metric strong { font-size: 21px; }
+.metric strong { font-size: 21px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .suggestions { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }
 .suggestions-title { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
 .suggestions-title span { color: var(--acid); font: 700 11px var(--font-ui); letter-spacing: .13em; }
@@ -456,7 +459,7 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .construction-metric summary::-webkit-details-marker { display: none; }
 .construction-metric summary > div:first-child { display: flex; justify-content: space-between; gap: 12px; }
 .construction-metric summary span { color: var(--muted); font-size: 13px; }
-.construction-metric summary strong { font-size: 19px; }
+.construction-metric summary strong { font-size: 19px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* 口径说明行：紧跟标签与数字，回答"这条指标数的是什么"（如胜负手 vs 终结者）。 */
 .construction-hint { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; font-style: normal; line-height: 1.5; }
 .construction-metric summary small { display: block; margin-top: 8px; color: var(--orange); font-size: 12px; }
@@ -513,6 +516,18 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .recommendation-fills span { color: var(--muted); font-size: 10px; line-height: 1.4; }
 .recommendation-card > p { color: var(--muted); font-size: 12px; line-height: 1.45; }
 .recommendation-card > a { color: var(--blue); font-size: 12px; text-decoration: none; }
+
+/* 推荐区视图切换 Tab：缺口词条（按构筑指标分桶）｜ EDHREC 类别（原生分组）。
+   激活态沿用酸绿；缺口桶的标题用酸绿强调"还缺 N"。 */
+.recommendation-tabs { display: flex; gap: 8px; margin: 0 0 18px; }
+.recommendation-tabs[hidden] { display: none; }
+.recommendation-tab { border: 1px solid var(--line); background: transparent; color: var(--muted); font: 700 13px var(--font-ui); letter-spacing: .04em; padding: 8px 16px; cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
+.recommendation-tab:hover { border-color: var(--acid); color: var(--acid); }
+.recommendation-tab.is-active { border-color: var(--acid); background: rgba(200, 232, 74, .1); color: var(--acid); }
+.gap-recommendation-group h3 { color: var(--acid); }
+.gap-recommendation-group .recommendation-group-heading span { color: var(--orange); }
+/* Scryfall 兜底来源徽章：区别于 EDHREC 池的卡（后者无徽章）。 */
+.recommendation-source { display: inline-block; margin-top: 8px; padding: 3px 9px; border: 1px solid var(--blue); color: var(--blue); font: 700 10px var(--font-ui); letter-spacing: .08em; text-transform: uppercase; }
 
 /* 右侧滑出的牌表编辑抽屉：录入/删改牌表的操作区从底部整段挪到这里，方便在
    看分析结果时随时拉出来实时调牌。抽屉顶部低于静止导航栏，避免头部被盖住。 */
@@ -762,21 +777,28 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .mtg-card-face:focus-visible, .card-faces button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .mtg-card img, .card-placeholder { display: block; width: 100%; aspect-ratio: 488 / 680; object-fit: cover; background: #14150f; border-radius: 14px; }
 :root.light-mode .mtg-card img, :root.light-mode .card-placeholder { background: #f5f6f4; }
-.mtg-card-face > strong { display: block; padding: 10px; font-size: 13px; line-height: 1.35; }
+.mtg-card-face > strong { display: block; padding: 10px; font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
 .card-quantity { position: absolute; top: 7px; left: 7px; padding: 4px 7px; color: #11130d; background: var(--acid); font-size: 12px; font-weight: 800; }
 :root.light-mode .card-quantity { color: #fafbf9; background: var(--acid); }
 .card-faces { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); }
-.card-faces button { border: 0; padding: 7px; color: var(--muted); background: #20231d; font-size: 11px; }
+.card-faces button { border: 0; padding: 7px; color: var(--muted); background: #20231d; font-size: 11px; overflow-wrap: anywhere; }
 :root.light-mode .card-faces button { background: #d8dbd5; }
 .card-faces button:hover, .card-faces button.active { color: #11130d; background: var(--blue); }
 :root.light-mode .card-faces button:hover, :root.light-mode .card-faces button.active { color: #fafbf9; background: var(--blue); }
+/* 移动端长文本出框守卫：窄屏双列网格里最容易出框的是无空格长串——卡名、
+   组合名、EDHREC 分组标题、指标卡列表、悬停预览文本。允许在任意字符处
+   断行（overflow-wrap: anywhere），元素仍由各自的 min-width:0 网格约束。 */
+.combo-card h3, .suggestion-item-title strong, .bracket-enum li,
+.recommendation-group-heading h3, .construction-metric li strong,
+#card-preview-oracle, .deck-group h3 span { overflow-wrap: anywhere; }
+
 .card-preview { position: fixed; z-index: 1000; width: min(340px, calc(100vw - 24px)); padding: 8px; border: 1px solid #666b60; background: #0e100d; box-shadow: 0 18px 48px rgba(0,0,0,.55); pointer-events: none; opacity: 1; transform: translateY(0); transition: opacity .12s ease, transform .12s ease; border-radius: 14px; }
 :root.light-mode .card-preview { border-color: #a8ada2; background: #f9faf8; box-shadow: 0 18px 48px rgba(0,0,0,.25); }
 .card-preview[hidden] { display: none; }
 .card-preview img { display: block; width: 100%; aspect-ratio: 488 / 680; object-fit: contain; background: #14150f; border-radius: 10px; }
 :root.light-mode .card-preview img { background: #e8e9e7; }
 .card-preview span { display: block; padding: 8px 4px 2px; font-size: 14px; font-weight: 700; }
-#card-preview-oracle { padding-top: 2px; padding-bottom: 6px; max-height: 128px; overflow-y: auto; font-size: 12px; font-weight: 400; color: #c4c2bb; white-space: pre-line; line-height: 1.5; }
+#card-preview-oracle { padding-top: 2px; padding-bottom: 6px; max-height: 200px; overflow-y: auto; font-size: 12px; font-weight: 400; color: #c4c2bb; white-space: pre-line; line-height: 1.5; }
 :root.light-mode #card-preview-oracle { color: #3a3b33; }
 @media (hover: none), (pointer: coarse) { .card-preview { display: none !important; } }
 

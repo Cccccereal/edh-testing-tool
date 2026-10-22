@@ -30,8 +30,13 @@ type CardFace struct {
 	ManaCost    string `json:"mana_cost,omitempty"`
 	TypeLine    string `json:"type_line,omitempty"`
 	OracleText  string `json:"oracle_text,omitempty"`
-	ImageNormal string `json:"image_normal,omitempty"`
-	ImageSmall  string `json:"image_small,omitempty"`
+	// ChineseTypeLine / ChineseOracleText carry the printed (localized) type
+	// line and rules text of the zhs printing for multi-faced cards, so the
+	// hover preview can show both halves of a DFC in Chinese.
+	ChineseTypeLine   string `json:"chinese_type_line,omitempty"`
+	ChineseOracleText string `json:"chinese_oracle_text,omitempty"`
+	ImageNormal       string `json:"image_normal,omitempty"`
+	ImageSmall        string `json:"image_small,omitempty"`
 	// GameChanger mirrors Scryfall's per-face `game_changer` flag (some entries are
 	// flagged on an individual face of a multi-face card).
 	GameChanger bool `json:"game_changer,omitempty"`
@@ -56,6 +61,10 @@ type Card struct {
 	Cmc           float64           `json:"cmc,omitempty"`
 	ProducedMana  []string          `json:"produced_mana,omitempty"`
 	Power         string            `json:"power,omitempty"`
+	// Rank is Scryfall's edhrec_rank (1 = most popular). The Scryfall-backed
+	// gap backfill sorts by it so cold candidates still surface community-
+	// proven cards first; 0 means "not ranked" and sorts last.
+	Rank int `json:"edhrec_rank,omitempty"`
 	// GameChanger mirrors Scryfall's official `game_changer` field (the Commander
 	// Game Changers list). It is the live source of truth for bracket counting —
 	// the list changes every few months and a hardcoded snapshot has already gone
@@ -198,23 +207,29 @@ type scryfallCard struct {
 	Cmc           float64           `json:"cmc"`
 	ProducedMana  []string          `json:"produced_mana"`
 	Power         string            `json:"power"`
+	Rank          int               `json:"edhrec_rank"`
 	GameChanger   bool              `json:"game_changer"`
 	CardFaces     []struct {
-		Name        string            `json:"name"`
-		PrintedName string            `json:"printed_name"`
-		ManaCost    string            `json:"mana_cost"`
-		TypeLine    string            `json:"type_line"`
-		OracleText  string            `json:"oracle_text"`
-		ImageURIs   map[string]string `json:"image_uris"`
-		GameChanger bool              `json:"game_changer"`
-		Power       string            `json:"power"`
+		Name        string `json:"name"`
+		PrintedName string `json:"printed_name"`
+		ManaCost    string `json:"mana_cost"`
+		TypeLine    string `json:"type_line"`
+		OracleText  string `json:"oracle_text"`
+		// PrintedTypeLine / PrintedText carry the localized type line and
+		// rules text of a non-English face (Scryfall only populates them on
+		// prints in other languages).
+		PrintedTypeLine string            `json:"printed_type_line,omitempty"`
+		PrintedText     string            `json:"printed_text,omitempty"`
+		ImageURIs       map[string]string `json:"image_uris"`
+		GameChanger     bool              `json:"game_changer"`
+		Power           string            `json:"power"`
 	} `json:"card_faces"`
 	// Localized fields (Scryfall returns these only for non-English lang requests).
 	ChineseName     string `json:"-"`
 	ChineseTypeLine string `json:"-"`
 	ChineseOracle   string `json:"-"`
 	PrintedTypeLine string `json:"printed_type_line,omitempty"`
-	PrintedOracle   string `json:"printed_oracle_text,omitempty"`
+	PrintedText     string `json:"printed_text,omitempty"`
 }
 
 // Autocomplete returns a list of canonical card names whose beginnings match the
@@ -381,6 +396,122 @@ func (c *Client) Lookup(ctx context.Context, names []string) (map[string]Card, e
 	return result, nil
 }
 
+// LookupChinese resolves the Simplified Chinese (zhs) printing of a card by its
+// English name: printed_name / printed_type_line / printed_text are
+// copied into the Chinese* fields (per face for multi-faced cards). It backs
+// the on-demand hover translation, so cost matters: results are cached under
+// their own "zh:" namespace in both the memory and disk tiers, a card with no
+// zhs printing is negative-cached as a name-only Card (Scryfall answers such
+// searches with HTTP 404), and only real upstream failures are returned as
+// errors.
+func (c *Client) LookupChinese(ctx context.Context, name string) (Card, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Card{}, errors.New("card name is empty")
+	}
+	key := "zh:" + normalizeName(name)
+	now := time.Now()
+	c.mu.RLock()
+	entry, ok := c.cache[key]
+	c.mu.RUnlock()
+	if ok && now.Before(entry.expiresAt) {
+		return entry.card, nil
+	}
+	for _, candidate := range diskKeys(key) {
+		if card, fetchedAt, found := c.disk.get(candidate); found {
+			if now.Before(fetchedAt.Add(c.ttl)) {
+				c.mu.Lock()
+				c.cache[key] = cacheEntry{card: card, expiresAt: fetchedAt.Add(c.ttl)}
+				c.mu.Unlock()
+				return card, nil
+			}
+			break
+		}
+	}
+	values := url.Values{}
+	values.Set("q", `!"`+name+`" lang:zhs`)
+	values.Set("unique", "prints")
+	resp, err := c.doWithRetry(ctx, func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/cards/search?"+values.Encode(), nil)
+		if err != nil {
+			return nil, err
+		}
+		// Same headers as every other client request: Scryfall rejects
+		// headerless requests (observed as HTTP 400).
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", userAgent)
+		return req, nil
+	})
+	if err != nil {
+		return Card{}, fmt.Errorf("request Scryfall zhs search: %w", err)
+	}
+	defer drainAndClose(resp)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize+1))
+	if err != nil {
+		return Card{}, err
+	}
+	if len(body) > maxResponseSize {
+		return Card{}, errors.New("Scryfall zhs search response is too large")
+	}
+	card := Card{Name: name}
+	switch {
+	case resp.StatusCode == http.StatusOK:
+		var page struct {
+			Data []scryfallCard `json:"data"`
+		}
+		if err := json.Unmarshal(body, &page); err != nil {
+			return Card{}, fmt.Errorf("decode Scryfall zhs search: %w", err)
+		}
+		// The query returns every zhs print; they differ in how much got
+		// localized, so prefer the hit carrying the most translated fields.
+		bestScore := -1
+		for _, hit := range page.Data {
+			score := 0
+			for _, field := range []string{hit.PrintedName, hit.PrintedTypeLine, hit.PrintedText} {
+				if field != "" {
+					score++
+				}
+			}
+			if score > bestScore {
+				card = localizedFromPrint(hit)
+				bestScore = score
+			}
+			if score == 3 {
+				break
+			}
+		}
+	case resp.StatusCode == http.StatusNotFound:
+		// Zero results for this exact-name zhs query: no Simplified Chinese
+		// printing exists. Keep the name-only card as a negative cache entry.
+	default:
+		return Card{}, fmt.Errorf("Scryfall zhs search returned HTTP %d", resp.StatusCode)
+	}
+	expiresAt := now.Add(c.ttl)
+	c.mu.Lock()
+	c.cache[key] = cacheEntry{card: card, expiresAt: expiresAt}
+	c.mu.Unlock()
+	c.disk.put(key, card, now)
+	return card, nil
+}
+
+// localizedFromPrint copies only the localized (printed_*) fields off a zhs
+// search hit; Name stays the English canonical name so callers can key by it.
+func localizedFromPrint(raw scryfallCard) Card {
+	card := Card{
+		Name:              raw.Name,
+		ChineseName:       raw.PrintedName,
+		ChineseTypeLine:   raw.PrintedTypeLine,
+		ChineseOracleText: raw.PrintedText,
+	}
+	for _, face := range raw.CardFaces {
+		card.Faces = append(card.Faces, CardFace{
+			Name: face.Name, PrintedName: face.PrintedName,
+			ChineseTypeLine: face.PrintedTypeLine, ChineseOracleText: face.PrintedText,
+		})
+	}
+	return card
+}
+
 func (c *Client) fetchBatch(ctx context.Context, names []string) ([]Card, error) {
 	identifiers := make([]map[string]string, 0, len(names))
 	resolved := make([]string, 0, len(names))
@@ -536,7 +667,7 @@ func normalizeCard(raw scryfallCard) Card {
 		ManaCost: manaCost, TypeLine: typeLine, OracleText: oracleText,
 		ColorIdentity: raw.ColorIdentity, Keywords: raw.Keywords, Legalities: raw.Legalities,
 		ImageNormal: images["normal"], ImageSmall: images["small"], Layout: raw.Layout, Faces: faces,
-		Cmc: raw.Cmc, ProducedMana: raw.ProducedMana, Power: raw.Power, GameChanger: raw.GameChanger,
+		Cmc: raw.Cmc, ProducedMana: raw.ProducedMana, Power: raw.Power, Rank: raw.Rank, GameChanger: raw.GameChanger,
 		ChineseName: raw.ChineseName, ChineseTypeLine: raw.ChineseTypeLine, ChineseOracleText: raw.ChineseOracle,
 	}
 }

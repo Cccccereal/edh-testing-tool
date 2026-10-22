@@ -188,3 +188,45 @@ func TestThemeHintsDoNotChangeScore(t *testing.T) {
 		t.Errorf("token theme should annotate the interaction shortfall, got %+v", tokened.Reasons)
 	}
 }
+
+// 收尾三选一：穿透过线的 voltron 牌组不该再吃胜负手/终结者的缺口分；
+// 三条全未过线才作为一条缺口记 reason。
+func TestWinClusterAnyOnePassingSatisfies(t *testing.T) {
+	base := func(wincon, finisher, evasive int) *construction.Report {
+		return makeReport(
+			metric("lands", 38, 38, false),
+			metric("plan", 30, 30, false),
+			metric("mass_interaction", 6, 6, false),
+			metric("single_interaction", 12, 12, false),
+			metric("draw_discard", 12, 12, false),
+			metric("ramp", 10, 10, false),
+			metric("tutors", 5, 5, false),
+			metric("wincon", wincon, 4, false),
+			metric("finisher", finisher, 5, false),
+			metric("evasive", evasive, 6, false),
+			metric("board_wipe", 4, 4, false),
+		)
+	}
+	voltron := compute(base(0, 0, 6), nil, nil)
+	for _, reason := range voltron.Reasons {
+		if strings.Contains(reason.Detail, "胜负手") || strings.Contains(reason.Detail, "终结者") {
+			t.Fatalf("穿透过线后不应再扣胜负手/终结者: %+v", voltron.Reasons)
+		}
+	}
+
+	allShort := compute(base(0, 0, 0), nil, nil)
+	clusterReasons := 0
+	for _, reason := range allShort.Reasons {
+		if strings.Contains(reason.Detail, "收尾路线") {
+			clusterReasons++
+		}
+	}
+	if clusterReasons != 1 {
+		t.Fatalf("三条全短应恰好一条收尾缺口 reason: %+v", allShort.Reasons)
+	}
+
+	// 三选一生效：穿透补过线比没过线分数高。
+	if voltron.Score <= allShort.Score {
+		t.Fatalf("一条过线应高于全部未过线: %d vs %d", voltron.Score, allShort.Score)
+	}
+}

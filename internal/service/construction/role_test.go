@@ -95,7 +95,9 @@ func TestClassifyFinisherAndEvasive(t *testing.T) {
 	}
 }
 
-func TestClassifyBoardWipe(t *testing.T) {
+// 清场已并入群体干扰：毁灭/放逐/削弱/伤害全场的牌都必须命中 mass_interaction，
+// 伤害型清场（旧清场指标独有的触发词）尤其不能漏计。
+func TestClassifyMassInteractionAbsorbsWipes(t *testing.T) {
 	cases := []struct {
 		name   string
 		card   cardcatalog.Card
@@ -108,8 +110,11 @@ func TestClassifyBoardWipe(t *testing.T) {
 	}
 	for _, tc := range cases {
 		got := classifyMap(tc.card)
-		if (got["board_wipe"] != "") != tc.expect {
-			t.Fatalf("%s: board_wipe = %q, want match=%v (all: %+v)", tc.name, got["board_wipe"], tc.expect, got)
+		if _, hasWipe := got["board_wipe"]; hasWipe {
+			t.Fatalf("%s: board_wipe category must not exist anymore (all: %+v)", tc.name, got)
+		}
+		if (got["mass_interaction"] != "") != tc.expect {
+			t.Fatalf("%s: mass_interaction = %q, want match=%v (all: %+v)", tc.name, got["mass_interaction"], tc.expect, got)
 		}
 	}
 }

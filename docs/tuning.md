@@ -20,6 +20,7 @@
 | 早二卡组合法术力阈值 | `internal/providers/edhpowerlevel/score.go` `earlyComboManaThreshold`（当前 7） | bracket 4 的"早二卡组合"触发线 |
 | 组合终结向量词表 | `score.go` `gameEndingFeatureKeywords` | 命中才计入早/晚二卡组合；纯价值引擎（Redcap+Mimic）靠这个排除 |
 | 加速的 Scryfall 查询串 / 回填上限 | `internal/service/build.go` `gapTypeQueries`、`buildBackfillLimit` | 组牌池耗尽后的回源补卡行为 |
+| 推荐缺口语义查询 / 兜底阈值 | `internal/service/recommend.go` `recGapQueries`、`gapBackfillThreshold` 等 | 结果页"缺口词条"Tab 的 Scryfall 兜底：每词条 EDHREC 候选不足 3 张才触发，查询只生成候选、仍经 `Classify` 判定，结果按 `edhrec_rank` 排序（`cardcatalog.Card.Rank`）；plan 无语义查询不兜底 |
 | 常见单卡池（含色组） | `internal/service/staples.go` `staplePool` | 常见单卡面板；色组只是预过滤，真实色组会二次校验 |
 | getcards 缓存 TTL | `internal/providers/edhpowerlevel/score.go` `getcardsTTL`（7 天） | 评分数据的陈旧容忍度 |
 | 分析缓存 TTL | `internal/config/config.go`（env `CACHE_TTL` 等） | 结果缓存时长 |

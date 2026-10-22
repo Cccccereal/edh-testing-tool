@@ -96,3 +96,58 @@ def test_text_decklist_journey(page, stubbed_server):
 
     stats = stub.stats()
     assert stats["moxfield"] == 0, "文本模式不应请求 Moxfield"
+
+
+def test_card_zh_endpoint_journey(page, stubbed_server):
+    """悬停翻译端点：有简中印刷回 200 带译文，无简中回 404（前端据此负缓存）。"""
+    open_home(page)
+
+    ok = page.request.get("/api/v1/card-zh?name=Sol%20Ring")
+    assert ok.status == 200
+    body = ok.json()
+    assert body["name"] == "Sol Ring"
+    assert "简中" in body["chinese_name"]
+    assert body["chinese_type_line"] and body["chinese_oracle_text"]
+
+    missing = page.request.get("/api/v1/card-zh?name=Plains")
+    assert missing.status == 404
+    assert missing.json()["error"]["code"] == "CARD_ZH_NOT_FOUND"
+
+    bad = page.request.get("/api/v1/card-zh")
+    assert bad.status == 400
+
+
+def test_text_decklist_partner_commanders_journey(page, stubbed_server):
+    """文本录入拍档主将：空行后的两行主将都要进统率区（回归：从前只算末行一张）。"""
+    stub = stubbed_server["stub"]["control"]
+    stub.reset()
+
+    open_home(page)
+    page.click(".decklist-input-panel summary")
+    # 无 Commander 标题的裸牌表：主将块 = 空行后的两行拍档
+    decklist = (
+        "1 Sol Ring\n"
+        "1 Mentor of the Meek\n"
+        "36 Plains\n"
+        "\n"
+        "1 Akiri, Line-Slinger\n"
+        "1 Bruse Tarl, Boorish Herder\n"
+    )
+    response, payload = submit_analyze(page, decklist=decklist)
+    assert response.status == 200
+    assert payload["status"] == "success"
+
+    commanders = payload["deck"]["commanders"]
+    assert "Akiri, Line-Slinger" in commanders, f"拍档主将只识别出 {commanders}"
+    assert "Bruse Tarl, Boorish Herder" in commanders, f"拍档主将只识别出 {commanders}"
+
+    # 两张都带 commander 标记（在统率区，不在 99 里）
+    partner_entries = [
+        item for item in payload["deck_cards"]
+        if item["card"]["name"] in ("Akiri, Line-Slinger", "Bruse Tarl, Boorish Herder")
+    ]
+    assert len(partner_entries) == 2 and all(item["commander"] for item in partner_entries)
+
+    # 导出为规范的 Commander 段，两张主将各占一行
+    canonical = payload["canonical_decklist"]
+    assert canonical.startswith("Commander\n1 Akiri, Line-Slinger\n1 Bruse Tarl, Boorish Herder")

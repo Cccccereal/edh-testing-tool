@@ -93,7 +93,7 @@ func (b *blockingEDH) Analyze(ctx context.Context, _ deck.Deck) (map[string]any,
 	}
 }
 
-func TestFilterRecommendationGroupsUsesShortfallsAndDeduplicates(t *testing.T) {
+func TestBuildRecommendationViewsBucketsAndDeduplicates(t *testing.T) {
 	groups := []edhrec.Group{
 		{Header: "Top Cards", Cards: []edhrec.Recommendation{{Name: "Versatile Spell", Synergy: 0.2}, {Name: "Land Card"}}},
 		{Header: "Instants", Cards: []edhrec.Recommendation{{Name: "Versatile Spell", Synergy: 0.3}, {Name: "Ramp Spell"}, {Name: "Off Color"}}},
@@ -113,24 +113,45 @@ func TestFilterRecommendationGroupsUsesShortfallsAndDeduplicates(t *testing.T) {
 		{ID: "ramp", Label: "加速", Status: "short", Gap: 2},
 	}}
 
-	got := filterRecommendationGroups(groups, catalog, deckCards, nil, report, 8)
-	if len(got) != 2 || len(got[0].Cards) != 1 || len(got[1].Cards) != 1 {
-		t.Fatalf("unexpected groups: %+v", got)
+	// 无卡牌目录（Search 不可用）时只出 EDHREC 两个视图，兜底不触发。
+	a := &Analyzer{}
+	category, gaps := a.buildRecommendationViews(context.Background(), groups, catalog, deckCards, nil, report)
+
+	// 类别视图不再要求补缺口：Land Card（不补任何缺口）保留，重复的
+	// Versatile Spell 与超出色组的 Off Color 仍被过滤。
+	if len(category) != 2 || len(category[0].Cards) != 2 || len(category[1].Cards) != 1 {
+		t.Fatalf("unexpected category view: %+v", category)
 	}
-	if got[0].Cards[0].Card.Name != "Versatile Spell" || len(got[0].Cards[0].Fills) != 2 {
-		t.Fatalf("expected one multi-fill card: %+v", got[0].Cards[0])
+	if category[0].Cards[0].Card.Name != "Versatile Spell" || len(category[0].Cards[0].Fills) != 2 {
+		t.Fatalf("expected one multi-fill card: %+v", category[0].Cards[0])
 	}
-	if got[1].Cards[0].Card.Name != "Ramp Spell" || got[1].Cards[0].Fills[0].ID != "ramp" {
-		t.Fatalf("expected ramp card after duplicate: %+v", got[1])
+	if category[1].Cards[0].Card.Name != "Ramp Spell" || category[1].Cards[0].Fills[0].ID != "ramp" {
+		t.Fatalf("expected ramp card after duplicate: %+v", category[1])
+	}
+	if category[0].Cards[0].Source != "edhrec" {
+		t.Fatalf("edhrec cards should carry their source: %+v", category[0].Cards[0])
+	}
+
+	// 缺口视图按指标分桶、按报告顺序输出。
+	if len(gaps) != 3 {
+		t.Fatalf("expected 3 gap buckets, got %+v", gaps)
+	}
+	if gaps[0].ID != "single_interaction" || gaps[0].Gap != 4 || gaps[0].Cards[0].Card.Name != "Versatile Spell" {
+		t.Fatalf("unexpected first bucket: %+v", gaps[0])
+	}
+	if gaps[2].ID != "ramp" || gaps[2].Cards[0].Card.Name != "Ramp Spell" {
+		t.Fatalf("unexpected ramp bucket: %+v", gaps[2])
 	}
 }
 
-func TestFilterRecommendationGroupsRejectsIncompleteReport(t *testing.T) {
+func TestBuildRecommendationViewsRejectsIncompleteReport(t *testing.T) {
 	report := &construction.Report{Metrics: []construction.Metric{{ID: "ramp", Status: "short", Gap: 2, Incomplete: true}}}
 	groups := []edhrec.Group{{Header: "Mana", Cards: []edhrec.Recommendation{{Name: "Rock"}}}}
 	catalog := map[string]cardcatalog.Card{"rock": {Name: "Rock", TypeLine: "Artifact", OracleText: "{T}: Add {C}.", Legalities: map[string]string{"commander": "legal"}}}
-	if got := filterRecommendationGroups(groups, catalog, nil, nil, report, 8); len(got) != 0 {
-		t.Fatalf("incomplete report should not produce recommendations: %+v", got)
+	a := &Analyzer{}
+	category, gaps := a.buildRecommendationViews(context.Background(), groups, catalog, nil, nil, report)
+	if len(category) != 0 || len(gaps) != 0 {
+		t.Fatalf("incomplete report should not produce recommendations: %+v / %+v", category, gaps)
 	}
 }
 
@@ -141,8 +162,8 @@ func TestAttachRolesStampsConstructionRoleIDs(t *testing.T) {
 		{Card: cardcatalog.Card{Name: "Plains", TypeLine: "Basic Land — Plains", OracleText: "{T}: Add {W}."}},
 	}
 	got := attachRoles(cards, construction.ClassifyContext{})
-	if !containsString(got[0].Roles, "board_wipe") || !containsString(got[0].Roles, "mass_interaction") {
-		t.Fatalf("wrath roles = %v, want board_wipe + mass_interaction", got[0].Roles)
+	if !containsString(got[0].Roles, "mass_interaction") {
+		t.Fatalf("wrath roles = %v, want mass_interaction", got[0].Roles)
 	}
 	if !containsString(got[1].Roles, "evasive") {
 		t.Fatalf("birds roles = %v, want evasive", got[1].Roles)

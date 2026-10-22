@@ -62,12 +62,27 @@ type RecommendedCard struct {
 	SourceURL     string               `json:"source_url"`
 	Keywords      []string             `json:"keywords,omitempty"`
 	Fills         []RecommendationFill `json:"fills"`
+	// Source tells the two recommendation pipelines apart: "edhrec" cards come
+	// from the commander's EDHREC page (synergy/inclusion populated), while
+	// "scryfall" cards come from the gap-semantic Scryfall backfill (rank
+	// populated, synergy zero). Empty means "edhrec" for older cached payloads.
+	Source string `json:"source,omitempty"`
 }
 
 type RecommendationGroup struct {
 	Header string            `json:"header"`
 	Tag    string            `json:"tag"`
 	Cards  []RecommendedCard `json:"cards"`
+}
+
+// GapRecommendation is the by-metric view of the recommendation set: every
+// shortfall construction metric gets its own bucket of cards that fill it,
+// EDHREC candidates first, Scryfall backfill appended when EDHREC ran short.
+type GapRecommendation struct {
+	ID    string            `json:"id"`
+	Label string            `json:"label"`
+	Gap   int               `json:"gap"`
+	Cards []RecommendedCard `json:"cards"`
 }
 
 // Cache states reported via the X-Cache response header (see Analysis.CacheState).
@@ -87,6 +102,7 @@ type Analysis struct {
 	ComboSuggestions       []ComboSuggestion         `json:"combo_suggestions,omitempty"`
 	Recommendations        []RecommendationGroup     `json:"recommendations,omitempty"`
 	RecommendationKeywords []string                  `json:"recommendation_keywords,omitempty"`
+	GapRecommendations     []GapRecommendation       `json:"gap_recommendations,omitempty"`
 	ConstructionReport     *construction.Report      `json:"construction_report,omitempty"`
 	Manabase               *manabase.Report          `json:"manabase,omitempty"`
 	Health                 *health.Result            `json:"health,omitempty"`

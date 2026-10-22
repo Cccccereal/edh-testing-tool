@@ -1387,7 +1387,7 @@ function render(payload) {
   renderManabase(payload.manabase);
   renderConstructionReport(payload.construction_report);
   renderCombos(payload.combos || [], payload.combo_suggestions || []);
-  renderRecommendations(payload.recommendations || [], payload.recommendation_keywords || []);
+  renderRecommendations(payload.recommendations || [], payload.gap_recommendations || [], payload.recommendation_keywords || []);
   renderDeckCards(payload.deck_cards || []);
   currentDeckCards = payload.deck_cards || [];
   currentDeckText = payload.canonical_decklist || buildDeckText(currentDeckCards);
@@ -1716,34 +1716,89 @@ function renderCombos(combos, suggestions) {
     </article>`).join('');
 }
 
-function renderRecommendations(recommendations, keywords) {
+// 推荐区双视图：「缺口词条」按构筑指标分桶（回答"我缺什么、补什么"），
+// 「EDHREC 类别」保留 EDHREC 原生分组（回答"这个主将大家都带什么"）。
+// 缺口桶里混两路来源——EDHREC 池（带 Synergy/Inclusion）和 Scryfall 语义
+// 兜底（带 EDHREC Rank，卡面打来源徽章）。旧缓存响应没有 gap_recommendations
+// 时回退类别视图单 Tab。
+let recommendationGroupsData = [];
+let gapRecommendationData = [];
+let recommendationTab = 'gap';
+
+function renderRecommendations(recommendations, gapRecommendations, keywords) {
   const section = document.querySelector('#recommendation-section');
-  const container = document.querySelector('#recommendation-list');
-  section.hidden = !recommendations.length;
+  recommendationGroupsData = Array.isArray(recommendations) ? recommendations : [];
+  gapRecommendationData = Array.isArray(gapRecommendations) ? gapRecommendations : [];
+  recommendationTab = gapRecommendationData.length ? 'gap' : 'category';
+  section.hidden = !(recommendationGroupsData.length || gapRecommendationData.length);
   document.querySelector('#recommendation-keywords').textContent = keywords.length ? `EDHREC 主题：${keywords.join(' · ')}` : '';
-  container.innerHTML = recommendations.map((group, index) => `
-    <section class="recommendation-group is-collapsed" data-tag="${escapeHTML(group.tag || '')}" data-group-index="${index}">
-      <div class="recommendation-group-heading toggleable" role="button" tabindex="0" data-recommendation-toggle="${index}">
-        <div><h3>${escapeHTML(group.header || 'Recommendations')}</h3><span>${group.cards?.length || 0} 张推荐</span></div>
-        <button type="button" class="section-heading-toggle" aria-label="展开">展开</button>
-      </div>
-      <div class="recommendation-row">${(group.cards || []).map((item) => {
-        const fills = (item.fills || []).map((fill) => `<li><strong>${escapeHTML(fill.label)} · 还缺 ${Number(fill.gap) || 0}</strong><span>${escapeHTML(fill.reason || '')}</span></li>`).join('');
-        return `<article class="recommendation-card">
-          ${renderCard({ card: item.card, quantity: 1, editor: false })}
-          <div class="recommendation-meta">
-            <div><span>Synergy</span><strong>${(Number(item.synergy || 0) * 100).toFixed(1)}%</strong></div>
-            <div><span>Inclusion</span><strong>${(Number(item.inclusion_rate || 0) * 100).toFixed(1)}%</strong></div>
-          </div>
-          ${fills ? `<ul class="recommendation-fills">${fills}</ul>` : ''}
-          <button class="recommend-add ghost-button" type="button" data-add-name="${escapeHTML(item.card?.name || '')}">直接加入构筑</button>
-          <p>${escapeHTML(item.reason || '')}</p>
-          <a href="${escapeHTML(item.source_url || 'https://edhrec.com/')}" target="_blank" rel="noopener noreferrer">在 EDHREC 查看 ↗</a>
-        </article>`;
-      }).join('')}</div>
-    </section>`).join('');
-  
-  // Attach toggle handlers for each recommendation group
+  renderRecommendationTabs();
+  renderRecommendationView();
+}
+
+function renderRecommendationTabs() {
+  const bar = document.querySelector('#recommendation-tabs');
+  const both = gapRecommendationData.length && recommendationGroupsData.length;
+  bar.hidden = !both;
+  const tabs = [
+    ['gap', `缺口词条 · ${gapRecommendationData.length}`],
+    ['category', `EDHREC 类别 · ${recommendationGroupsData.length}`],
+  ];
+  bar.innerHTML = both ? tabs.map(([id, label]) => `<button type="button" class="recommendation-tab${recommendationTab === id ? ' is-active' : ''}" role="tab" aria-selected="${recommendationTab === id}" data-rec-tab="${id}">${escapeHTML(label)}</button>`).join('') : '';
+  bar.querySelectorAll('[data-rec-tab]').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      recommendationTab = tab.dataset.recTab;
+      renderRecommendationTabs();
+      renderRecommendationView();
+    });
+  });
+}
+
+function renderRecommendedCard(item) {
+  const fills = (item.fills || []).map((fill) => `<li><strong>${escapeHTML(fill.label)} · 还缺 ${Number(fill.gap) || 0}</strong><span>${escapeHTML(fill.reason || '')}</span></li>`).join('');
+  const fromScryfall = item.source === 'scryfall';
+  const rank = Number(item.card?.edhrec_rank);
+  const meta = fromScryfall
+    ? `<div><span>EDHREC Rank</span><strong>${rank > 0 ? '#' + rank : '—'}</strong></div><div><span>来源</span><strong>Scryfall</strong></div>`
+    : `<div><span>Synergy</span><strong>${(Number(item.synergy || 0) * 100).toFixed(1)}%</strong></div><div><span>Inclusion</span><strong>${(Number(item.inclusion_rate || 0) * 100).toFixed(1)}%</strong></div>`;
+  const link = fromScryfall
+    ? `<a href="${escapeHTML(item.source_url || 'https://scryfall.com/')}" target="_blank" rel="noopener noreferrer">在 Scryfall 查看 ↗</a>`
+    : `<a href="${escapeHTML(item.source_url || 'https://edhrec.com/')}" target="_blank" rel="noopener noreferrer">在 EDHREC 查看 ↗</a>`;
+  return `<article class="recommendation-card${fromScryfall ? ' is-scryfall' : ''}">
+    ${renderCard({ card: item.card, quantity: 1, editor: false })}
+    ${fromScryfall ? '<span class="recommendation-source">Scryfall 兜底</span>' : ''}
+    <div class="recommendation-meta">${meta}</div>
+    ${fills ? `<ul class="recommendation-fills">${fills}</ul>` : ''}
+    <button class="recommend-add ghost-button" type="button" data-add-name="${escapeHTML(item.card?.name || '')}">直接加入构筑</button>
+    <p>${escapeHTML(item.reason || '')}</p>
+    ${link}
+  </article>`;
+}
+
+function renderRecommendationView() {
+  const container = document.querySelector('#recommendation-list');
+  if (recommendationTab === 'gap') {
+    container.innerHTML = gapRecommendationData.map((metric, index) => `
+      <section class="recommendation-group gap-recommendation-group is-collapsed" data-gap-id="${escapeHTML(metric.id || '')}" data-group-index="gap-${index}">
+        <div class="recommendation-group-heading toggleable" role="button" tabindex="0" data-recommendation-toggle="gap-${index}">
+          <div><h3>${escapeHTML(metric.label || metric.id)}</h3><span>还缺 ${Number(metric.gap) || 0} · ${(metric.cards || []).length} 张推荐</span></div>
+          <button type="button" class="section-heading-toggle" aria-label="展开">展开</button>
+        </div>
+        <div class="recommendation-row">${(metric.cards || []).map(renderRecommendedCard).join('')}</div>
+      </section>`).join('');
+  } else {
+    container.innerHTML = recommendationGroupsData.map((group, index) => `
+      <section class="recommendation-group is-collapsed" data-tag="${escapeHTML(group.tag || '')}" data-group-index="${index}">
+        <div class="recommendation-group-heading toggleable" role="button" tabindex="0" data-recommendation-toggle="${index}">
+          <div><h3>${escapeHTML(group.header || 'Recommendations')}</h3><span>${(group.cards || []).length} 张推荐</span></div>
+          <button type="button" class="section-heading-toggle" aria-label="展开">展开</button>
+        </div>
+        <div class="recommendation-row">${(group.cards || []).map(renderRecommendedCard).join('')}</div>
+      </section>`).join('');
+  }
+
+  // Attach toggle handlers for each recommendation group (gap and category
+  // groups share the data-group-index mechanism, prefixed to stay unique).
   container.querySelectorAll('[data-recommendation-toggle]').forEach((toggle) => {
     toggle.addEventListener('click', handleRecommendationToggle);
     toggle.addEventListener('keydown', (e) => {
@@ -2225,6 +2280,9 @@ document.addEventListener('click', (event) => {
     item.classList.toggle('active', active);
     item.setAttribute('aria-pressed', String(active));
   });
+  // 切面重建了 cardText，之前拼进去的中文块随之丢失：清掉标记让下次悬停
+  // 重新拼接（页面缓存命中，不会再发请求）。
+  cardElement.dataset.zhLoaded = '';
   if (activePreviewCard === cardElement) showCardPreview(cardElement);
 });
 
@@ -2260,6 +2318,9 @@ function openCardZoom(trigger) {
   }
   zoomModal.hidden = false;
   document.body.style.overflow = 'hidden';
+  // 放大层同样按需补中文：本次打开仍是英文，译文回来后写进 dataset，
+  // 下次打开（或悬停）即带中文。
+  maybeLoadChinese(card);
 }
 function closeCardZoom() {
   zoomModal.hidden = true;
@@ -2322,6 +2383,62 @@ function builderPreviewTextFor(card) {
   return previewTextFor(card);
 }
 
+// --- hover 翻译（简中按需加载） ---------------------------------------------
+// API 的卡牌 payload 只在极少数情况下带中文字段；hover 预览的中文改为按需补齐：
+// 首次悬停某张卡时向 /api/v1/card-zh 要一次 zhs 印刷，把译文回写进该卡 DOM 的
+// dataset（同页再悬停零请求），404（无简中印刷）同样打标记不再追问；瞬时失败
+// 不记缓存，下次悬停可重试。页面级 Map 合并同一卡名的并发请求。
+const chineseCardCache = new Map();
+
+function fetchChineseCard(name) {
+  if (!chineseCardCache.has(name)) {
+    const pending = fetch(`/api/v1/card-zh?name=${encodeURIComponent(name)}`)
+      .then(async (response) => {
+        if (response.ok) return response.json();
+        if (response.status === 404) return null;
+        throw new Error(`card-zh HTTP ${response.status}`);
+      })
+      .catch(() => {
+        chineseCardCache.delete(name);
+        return null;
+      });
+    chineseCardCache.set(name, pending);
+  }
+  return chineseCardCache.get(name);
+}
+
+function chineseTextBlock(card) {
+  const lines = [];
+  const push = (type, oracle) => {
+    if (type) lines.push(type);
+    if (oracle) lines.push(oracle);
+  };
+  push(card.chinese_type_line, card.chinese_oracle_text);
+  for (const face of Array.isArray(card.faces) ? card.faces : []) {
+    push(face.chinese_type_line, face.chinese_oracle_text);
+  }
+  return lines.join('\n\n');
+}
+
+function maybeLoadChinese(card) {
+  const name = card?.dataset?.previewName;
+  if (!name || card.dataset.zhLoaded === '1') return;
+  fetchChineseCard(name).then((zh) => {
+    card.dataset.zhLoaded = '1';
+    if (!zh) return;
+    const block = chineseTextBlock(zh);
+    // 有中文就整段替换英文（异能本体用中文读）；没有中文的卡保持英文原文。
+    if (block) card.dataset.cardText = block;
+    if (zh.chinese_name) card.dataset.zhName = zh.chinese_name;
+    if (activePreviewCard !== card || preview.hidden) return;
+    if (block) {
+      previewOracle.textContent = card.dataset.cardText;
+      previewOracle.hidden = false;
+    }
+    if (card.dataset.zhName) previewName.textContent = `${name} · ${card.dataset.zhName}`;
+  });
+}
+
 function showCardPreview(trigger) {
   if (!canHover.matches || !trigger) return;
   const card = trigger.closest('[data-preview-src]');
@@ -2332,7 +2449,9 @@ function showCardPreview(trigger) {
   if (!source) return;
   activePreviewCard = card;
   previewImage.alt = card.dataset.previewName || '';
-  previewName.textContent = card.dataset.previewName || '';
+  previewName.textContent = card.dataset.zhName
+    ? `${card.dataset.previewName || ''} · ${card.dataset.zhName}`
+    : (card.dataset.previewName || '');
   // Show the oracle text (type line + rules) read from the hovered card's own
   // data, so a hover can answer "what does this card do" without a click.
   previewOracle.textContent = card.dataset.cardText || '';
@@ -2358,6 +2477,7 @@ function showCardPreview(trigger) {
   }
   preview.hidden = false;
   requestAnimationFrame(() => positionCardPreview(trigger));
+  maybeLoadChinese(card);
 }
 
 function positionCardPreview(trigger) {

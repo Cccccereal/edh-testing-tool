@@ -1,0 +1,28 @@
+{
+  "path": "/api/v1/card-zh",
+  "method": "get",
+  "status": 200,
+  "body": {
+    "chinese_name": "阳光戒",
+    "chinese_oracle_text": "",
+    "chinese_type_line": "神器",
+    "cmc": 0,
+    "color_identity": [],
+    "edhrec_rank": 0,
+    "faces": [],
+    "game_changer": false,
+    "image_normal": "",
+    "image_small": "",
+    "keywords": [],
+    "layout": "",
+    "legalities": {},
+    "mana_cost": "",
+    "name": "Sol Ring",
+    "oracle_id": "",
+    "oracle_text": "",
+    "power": "",
+    "printed_name": "",
+    "produced_mana": [],
+    "type_line": ""
+  }
+}

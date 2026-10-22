@@ -142,9 +142,9 @@
       ],
       "expect": {
         "single_interaction": 5,
-        "board_wipe": 1,
         "tutors": 1,
-        "wincon": 0
+        "wincon": 0,
+        "mass_interaction": 1
       }
     },
     {

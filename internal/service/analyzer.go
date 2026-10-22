@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math"
 	mathrand "math/rand"
 	"net/http"
 	"sort"
@@ -215,6 +214,9 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 	if supplied != nil {
 		target = *supplied
 		target.SourceURL, target.SourceID = sourceURL, sourceID
+		// 文本录入的拍档主将复核要在一切下游计算之前完成：EDHREC 池按主将
+		// 取数、色组与构筑输入都读 target，晚于此处就会带着错误主将跑完。
+		a.normalizeSuppliedCommanders(ctx, &target)
 	} else {
 		if a.deckSource == nil {
 			return Analysis{}, errors.New("no deck source is configured")
@@ -377,7 +379,7 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 			// A failed candidate lookup only drops the recommendations; the
 			// keywords stay, mirroring the pre-concurrency behavior.
 			if candidateErr == nil && analysis.ConstructionReport != nil {
-				analysis.Recommendations = filterRecommendationGroups(recGroups, candidateCatalog, analysis.DeckCards, recKeywords, analysis.ConstructionReport, 8)
+				analysis.Recommendations, analysis.GapRecommendations = a.buildRecommendationViews(ctx, recGroups, candidateCatalog, analysis.DeckCards, recKeywords, analysis.ConstructionReport)
 			}
 		}
 	}
@@ -527,81 +529,8 @@ func recommendationNames(groups []edhrec.Group) []string {
 	return names
 }
 
-func filterRecommendationGroups(groups []edhrec.Group, catalog map[string]cardcatalog.Card, deckCards []DisplayCard, keywords []string, report *construction.Report, limit int) []RecommendationGroup {
-	if report == nil || limit <= 0 {
-		return nil
-	}
-	shortfalls := make(map[string]construction.Metric)
-	for _, metric := range report.Metrics {
-		if metric.Incomplete {
-			return nil
-		}
-		if metric.Status == "short" && metric.Gap > 0 {
-			shortfalls[metric.ID] = metric
-		}
-	}
-	if len(shortfalls) == 0 {
-		return nil
-	}
-
-	existing := make(map[string]struct{}, len(deckCards))
-	commanderColors := make(map[string]struct{})
-	for _, item := range deckCards {
-		existing[strings.ToLower(item.Card.Name)] = struct{}{}
-		if item.Commander {
-			for _, color := range item.Card.ColorIdentity {
-				commanderColors[color] = struct{}{}
-			}
-		}
-	}
-	seen := make(map[string]struct{})
-	var result []RecommendationGroup
-	for _, group := range groups {
-		output := RecommendationGroup{Header: group.Header, Tag: group.Tag}
-		for _, item := range group.Cards {
-			if math.IsNaN(item.Synergy) || math.IsInf(item.Synergy, 0) {
-				item.Synergy = 0
-			}
-			if math.IsNaN(item.InclusionRate) || math.IsInf(item.InclusionRate, 0) {
-				item.InclusionRate = 0
-			}
-			card, ok := catalog[strings.ToLower(item.Name)]
-			if !ok {
-				continue
-			}
-			key := strings.ToLower(card.Name)
-			if _, exists := existing[key]; exists {
-				continue
-			}
-			if _, duplicate := seen[key]; duplicate {
-				continue
-			}
-			if card.Legalities["commander"] != "legal" || !colorsAllowed(card.ColorIdentity, commanderColors) {
-				continue
-			}
-			var fills []RecommendationFill
-			for _, match := range construction.Classify(card) {
-				metric, needed := shortfalls[match.ID]
-				if needed {
-					fills = append(fills, RecommendationFill{ID: match.ID, Label: match.Label, Gap: metric.Gap, Reason: match.Reason})
-				}
-			}
-			if len(fills) == 0 {
-				continue
-			}
-			seen[key] = struct{}{}
-			reason := "Recommended by EDHREC in " + group.Header
-			output.Cards = append(output.Cards, RecommendedCard{Card: card, Synergy: item.Synergy, InclusionRate: item.InclusionRate, Reason: reason, SourceURL: item.SourceURL, Keywords: keywords, Fills: fills})
-			if len(output.Cards) >= limit {
-				break
-			}
-		}
-		if len(output.Cards) > 0 {
-			result = append(result, output)
-		}
-	}
-	return result
-}
+// filterRecommendationGroups 的单视图口径已被 recommend.go 的双视图管线
+// （buildRecommendationViews：类别视图 + 按词条分桶的缺口视图）取代。
 
 func deckRevision(decklist string) string {
 	hash := sha256.Sum256([]byte(decklist))
@@ -642,9 +571,11 @@ func colorsAllowed(colors []string, allowed map[string]struct{}) bool {
 // serving pre-tuning results until their TTL expires.
 // v2: 穿透认持续赋予者（武具/灵气/地）并剥离提醒文本；manabase 给
 // spell//land MDFC 记半个人源地——构筑计数与健康分口径随之变化。
-// v3: 计划相关改为主题感知——结果页报告与组牌器共用 ClassifyWithContext，
-// 指标随主将的主题关键词变化，不再是一套静态启发式。
-const ScoringVersion = 3
+// v4: 健康分的收尾路线三选一——胜负手/终结者/穿透按簇取最优计分，
+// 一条过线即不重复扣另外两条的缺口。
+// v5: 撤销清场独立配额——清场并入群体干扰口径（含伤害型清场触发词），
+// 构筑指标与健康分的缺口维度随之变化。
+const ScoringVersion = 5
 
 // dedupeComboLines collapses Spellbook variant entries that share the same
 // component set: one combo often ships as multiple lines (extra features,

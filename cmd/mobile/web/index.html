@@ -55,7 +55,7 @@
         <details class="decklist-input-panel">
           <summary>或粘贴牌表文本</summary>
           <div class="decklist-label-row">
-            <label for="decklist-input">牌表必须包含 Commander 和 Deck 标题</label>
+            <label for="decklist-input">建议包含 Commander / Deck 标题；无标题时，空行后结尾的 1–2 行视为主将（拍档主将写两行即可）</label>
             <button id="clear-decklist" class="ghost-button clear-decklist" type="button" aria-label="清空文本输入框">一键清空</button>
           </div>
           <textarea id="decklist-input" rows="10" placeholder="Commander&#10;1 Ria Ivor, Bane of Bladehold&#10;&#10;Deck&#10;1 Sol Ring" aria-describedby="form-message"></textarea>
@@ -218,7 +218,8 @@
         </div>
       </section>
       <section id="recommendation-section" class="catalog-section" hidden>
-        <div class="section-heading toggleable" data-section-toggle data-section="recommendation-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">CONSTRUCTION RECOMMENDATIONS</p><h2>构筑缺口推荐</h2><p id="recommendation-keywords" class="section-note"></p></div><button type="button" class="section-heading-toggle">收起</button></div>
+        <div class="section-heading toggleable" data-section-toggle data-section="recommendation-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">CONSTRUCTION RECOMMENDATIONS</p><h2>构筑推荐</h2><p id="recommendation-keywords" class="section-note"></p></div><button type="button" class="section-heading-toggle">收起</button></div>
+        <div id="recommendation-tabs" class="recommendation-tabs" hidden role="tablist" aria-label="推荐视图"></div>
         <div id="recommendation-list" class="recommendation-grid"></div>
       </section>
       <p class="disclaimer">两个网站使用不同评分模型，结果应分别理解，不计算平均值。卡牌数据由 Scryfall 提供，组合数据由 Commander Spellbook 提供。</p>

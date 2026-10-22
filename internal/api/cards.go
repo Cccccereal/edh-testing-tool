@@ -66,6 +66,41 @@ func (h *Handler) cardAutocomplete(w http.ResponseWriter, r *http.Request) {
 	}{Suggestions: names})
 }
 
+// lookupCardChinese serves the hover translation: the zhs printing of one card
+// (printed name / type line / oracle text, per face for multi-faced cards).
+// The frontend asks lazily on first hover and caches the answer per card name,
+// so a 100-card deck never costs more lookups than cards actually hovered.
+func (h *Handler) lookupCardChinese(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "CARD_NAME_REQUIRED", "缺少卡牌名称。")
+		return
+	}
+	ctx, cancel := contextWithTimeout(r, h.requestTimeout)
+	defer cancel()
+	card, err := h.analyzer.LookupCardChinese(ctx, name)
+	if err != nil {
+		status, code, message := cardChineseError(err)
+		writeError(w, status, code, message)
+		return
+	}
+	if card.ChineseName == "" && card.ChineseTypeLine == "" && card.ChineseOracleText == "" && len(card.Faces) == 0 {
+		writeError(w, http.StatusNotFound, "CARD_ZH_NOT_FOUND", "该卡没有简体中文印刷。")
+		return
+	}
+	writeJSON(w, http.StatusOK, card)
+}
+
+func cardChineseError(err error) (int, string, string) {
+	if errors.Is(err, service.ErrChineseUnsupported) {
+		return http.StatusNotImplemented, "CARD_ZH_UNSUPPORTED", "当前卡牌目录不支持中文查询。"
+	}
+	if errors.Is(err, service.ErrCardData) {
+		return http.StatusBadGateway, "CARD_DATA_UNAVAILABLE", "卡牌数据暂不可用，请稍后重试。"
+	}
+	return http.StatusBadGateway, "CARD_ZH_FAILED", "中文翻译暂时无法加载，请稍后重试。"
+}
+
 func (h *Handler) randomCommander(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := contextWithTimeout(r, h.requestTimeout)
 	defer cancel()

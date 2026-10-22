@@ -143,28 +143,68 @@ func anyIncomplete(cons *construction.Report) bool {
 // missing" complaints players actually act on. Deficits are docked with a floor
 // so one missing category cannot zero the whole dimension — a 7/12 draw deck is
 // short, not broken.
+//
+// 收尾三选一：胜负手/终结者/穿透是三条替代的收尾路线（文本致胜、大威胁
+// 收尾、打穿阻挡），一条过线即说明牌组知道怎么结束对局。按簇取覆盖率
+// 最高的一条计分：voltron 卡组不吃胜负手亏空，组合技卡组不吃穿透亏空；
+// 只有三条全部未过线才作为一条缺口记 reason。
 func scoreRoleDeficits(cons *construction.Report, theme construction.Theme) (scoreComponent, bool) {
 	themeHints := themeRelevanceHints(theme)
+	winCluster := map[string]bool{"wincon": true, "finisher": true, "evasive": true}
 	var sum float64
 	var checked int
 	var gapCount int
 	var reasons []string
+	var winCoverages []float64
+	var winShort []string
 	for _, metric := range cons.Metrics {
 		if metric.Target <= 0 {
 			continue
 		}
+		coverage := 1.0
+		short := metric.Status == "short" && metric.Gap > 0
+		if short {
+			coverage = 1 - float64(metric.Gap)/float64(metric.Target)
+		}
+		if winCluster[metric.ID] {
+			winCoverages = append(winCoverages, coverage)
+			if short {
+				winShort = append(winShort, fmt.Sprintf("%s %d/%d", metric.Label, metric.Actual, metric.Target))
+			}
+			continue
+		}
 		checked++
-		if metric.Status == "short" && metric.Gap > 0 {
-			shortfall := float64(metric.Gap) / float64(metric.Target)
-			sum += 1 - shortfall
+		if short {
 			gapCount++
 			detail := fmt.Sprintf("%s缺 %d 张（当前 %d，目标 %d）", metric.Label, metric.Gap, metric.Actual, metric.Target)
 			if hint, ok := themeHints[metric.ID]; ok {
 				detail += "，" + hint
 			}
 			reasons = append(reasons, detail)
+			sum += coverage
 		} else {
 			sum += 1
+		}
+	}
+	if len(winCoverages) > 0 {
+		best := winCoverages[0]
+		for _, coverage := range winCoverages[1:] {
+			if coverage > best {
+				best = coverage
+			}
+		}
+		checked++
+		sum += best
+		if best < 1 {
+			gapCount++
+			detail := fmt.Sprintf("收尾路线均未过线（%s），三者一条过线即可", strings.Join(winShort, "、"))
+			for _, id := range []string{"wincon", "finisher", "evasive"} {
+				if hint, ok := themeHints[id]; ok {
+					detail += "，" + hint
+					break
+				}
+			}
+			reasons = append(reasons, detail)
 		}
 	}
 	if sum == 0 {
@@ -192,9 +232,8 @@ func themeRelevanceHints(theme construction.Theme) map[string]string {
 	}
 	hints := make(map[string]string)
 	if hasThemeKeyword(theme, "tokens") {
-		hints["mass_interaction"] = "token 主将通常不以群体干扰为重心"
+		hints["mass_interaction"] = "token 主将通常不以群体干扰为重心（清场牌也计入本项）"
 		hints["wincon"] = "token 主将的胜负手常由铺场数量承担"
-		hints["board_wipe"] = "token 主将的铺场常被扫场反制，清场需求因人而异"
 	}
 	if hasThemeKeyword(theme, "spells") {
 		hints["mass_interaction"] = "咒语主将通常以单点互动替代群体干扰"

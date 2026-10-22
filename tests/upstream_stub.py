@@ -107,6 +107,28 @@ CARD_INFO: dict[str, dict] = {
     "Ria Ivor, Bane of Bladehold": dict(cmc=4, mana_cost="{2}{W}{B}", type_line="Legendary Creature — Phyrexian Knight",
                                         oracle="Whenever Ria Ivor attacks, put a +1/+1 counter on it. It gains trample if you control another Phyrexian.",
                                         colors="WB", produced=["W", "B"], price=0.60, rank=450, salt=0.5, game_changer=False),
+    # 拍档主将旅程用：文本录入时空行后的两行应都被识别为主将
+    "Akiri, Line-Slinger": dict(cmc=2, mana_cost="{R}{W}", type_line="Legendary Creature — Human Soldier",
+                                oracle="Partner", colors="RW", produced=["R", "W"], price=0.30, rank=380, salt=0.3, game_changer=False),
+    "Bruse Tarl, Boorish Herder": dict(cmc=4, mana_cost="{2}{R}{W}", type_line="Legendary Creature — Human Berserker",
+                                       oracle="Partner", colors="RW", produced=["R", "W"], price=0.25, rank=420, salt=0.3, game_changer=False),
+    # 缺口语义兜底用：既不在初始牌组、也不在 EDHREC 推荐池，只被 scryfall_search
+    # 按查询语义带出，用来端到端验证 Scryfall 兜底管线（recommend.go）。
+    "Verity Circle": dict(cmc=3, mana_cost="{2}{W}", type_line="Enchantment",
+                          oracle="Whenever a creature an opponent controls becomes tapped, you may pay {1}. If you do, draw a card.",
+                          colors="W", produced=[], price=0.35, rank=260, salt=0.4, game_changer=False),
+    "Idyllic Tutor": dict(cmc=3, mana_cost="{2}{W}", type_line="Sorcery",
+                          oracle="Search your library for an enchantment card, reveal it, put it into your hand, then shuffle.",
+                          colors="W", produced=[], price=3.00, rank=120, salt=0.6, game_changer=False),
+    "Wing Shards": dict(cmc=3, mana_cost="{2}{W}", type_line="Instant",
+                        oracle="Destroy target attacking creature. Storm.",
+                        colors="W", produced=[], price=0.20, rank=500, salt=0.2, game_changer=False),
+    "Austere Command": dict(cmc=6, mana_cost="{5}{W}", type_line="Sorcery",
+                            oracle="Choose two — Destroy all artifacts; or destroy all enchantments; or destroy all creatures with converted mana cost 3 or less; or destroy all creatures with converted mana cost 4 or greater.",
+                            colors="W", produced=[], price=1.10, rank=210, salt=0.5, game_changer=False),
+    "Wayfarer's Bauble": dict(cmc=1, mana_cost="{1}", type_line="Artifact",
+                              oracle="{2}, {T}, Sacrifice Wayfarer's Bauble: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle.",
+                              colors="", produced=[], price=0.15, rank=130, salt=0.3, game_changer=False),
 }
 
 # EDHREC 推荐池：commander slug -> cardlists（形状对应 edhrec.page）
@@ -244,8 +266,44 @@ def _scryfall_row(name: str) -> dict:
         "layout": "normal",
         "produced_mana": info["produced"],
         "power": "2",
+        "edhrec_rank": info["rank"],
         "game_changer": info["game_changer"],
     }
+
+
+# scryfall_search 的按语义附加卡：查询串含某关键词时额外返回对应卡，
+# 让缺口语义兜底（recommend.go recGapQueries）的 e2e 有真实可分类、且不与
+# 牌组/EDHREC 池撞名的候选（撞名会被"已在牌组/已推荐"过滤掉）。
+SEARCH_EXTRAS: list[tuple[str, list[str]]] = [
+    ("search your library for a basic", ["Wayfarer's Bauble"]),
+    ("search your library", ["Idyllic Tutor"]),
+    ("draw", ["Verity Circle"]),
+    ("destroy target", ["Wing Shards"]),
+    ("destroy all", ["Austere Command"]),
+]
+
+
+def _search_rows(query: str) -> list[dict]:
+    lowered = query.lower()
+    # zhs 印刷查询（hover 翻译）：按卡名合成简中印刷行；Plains 用作"无简中印刷"
+    # 的 404 负例，覆盖 /api/v1/card-zh 的负缓存路径。
+    if "lang:zhs" in lowered:
+        import re as _re
+        exact = _re.search(r'!"([^"]+)"', query)
+        target = exact.group(1) if exact else ""
+        if not target or target == "Plains":
+            return []
+        info = _card_info(target)
+        row = _scryfall_row(target)
+        row["printed_name"] = target + "·简中"
+        row["printed_type_line"] = "简中·" + info["type_line"].split(" —")[0]
+        row["printed_text"] = "（简中规则文本）" + info["oracle"]
+        return [row]
+    names = ["Ghostly Prison", "Mask of Memory", "Keeper of the Accord"]
+    for needle, extras in SEARCH_EXTRAS:
+        if needle in lowered:
+            names.extend(name for name in extras if name not in names)
+    return [_scryfall_row(name) for name in names]
 
 
 def _getcards_row(name: str) -> dict:
@@ -472,9 +530,8 @@ class StubHandler(BaseHTTPRequestHandler):
             names = [n for n in CARD_INFO if n.lower().startswith(prefix)][:10]
             self._send_json({"object": "catalog", "total_values": len(names), "data": names})
         elif route == "scryfall_search":
-            self._send_json({"object": "list", "has_more": False, "data": [
-                _scryfall_row(name) for name in ["Ghostly Prison", "Mask of Memory", "Keeper of the Accord"]
-            ]})
+            q = query.get("q", [""])[0]
+            self._send_json({"object": "list", "has_more": False, "data": _search_rows(q)})
         elif route == "spellbook":
             name = query.get("q", [""])[0].strip().lower()
             results = [SPELLBOOK_COMBO] if name in _SPELLBOOK_COMBO_KEYS else []

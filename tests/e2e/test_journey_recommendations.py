@@ -1,7 +1,8 @@
-"""旅程③：构筑缺口推荐（全栈）——分组默认收起 → 展开 → 直接加入构筑。
+"""旅程③：构筑推荐双视图（全栈）——缺口词条 Tab + EDHREC 类别 Tab。
 
-推荐数据来自 stub EDHREC 页面经真实推荐管线（缺口加权过滤）后的输出；
-断言前端分组数与 API 一致、展开交互生效、「直接加入构筑」把卡写进编辑器。
+缺口视图按构筑指标分桶（含 Scryfall 语义兜底的卡，带来源徽章），类别视图
+保留 EDHREC 原生分组。断言两个 Tab 的分组数/卡数与 API 口径一致、缺口桶
+默认收起可展开、Scryfall 兜底徽章可见、「直接加入构筑」把卡写进编辑器。
 """
 
 import re
@@ -19,8 +20,10 @@ def test_gap_recommendation_journey(page, stubbed_server):
     _, payload = submit_analyze(page, url=CANONICAL_URL)
     wait_for_results(page)
 
+    gap_recs = payload.get("gap_recommendations") or []
     recommendations = payload["recommendations"]
-    assert len(recommendations) >= 2, "stub EDHREC 页应至少留下两个推荐分组"
+    assert gap_recs, "stub 牌组应有缺口词条推荐"
+    assert len(recommendations) >= 2, "stub EDHREC 页应至少留下两个类别分组"
 
     # 分析完成后右侧牌表抽屉会自动展开遮住主页面，先收起再操作推荐区
     page.click("#deck-drawer-close")
@@ -30,21 +33,56 @@ def test_gap_recommendation_journey(page, stubbed_server):
     expect(section).to_be_visible()
     expect(page.locator("#recommendation-keywords")).to_contain_text("EDHREC 主题")
 
-    groups = page.locator(".recommendation-group")
-    expect(groups).to_have_count(len(recommendations))
+    # 双 Tab 可见，默认落在缺口词条视图
+    tabs = page.locator("#recommendation-tabs")
+    expect(tabs).to_be_visible()
+    expect(tabs.locator(".recommendation-tab.is-active")).to_contain_text("缺口词条")
 
-    # 分组默认收起
+    gap_groups = page.locator(".recommendation-group.gap-recommendation-group")
+    expect(gap_groups).to_have_count(len(gap_recs))
+    # 每个缺口桶的标题与"还缺 N"来自 API；桶内卡数（含收起组，DOM 计数）一致
+    for i, metric in enumerate(gap_recs):
+        heading = gap_groups.nth(i).locator(".recommendation-group-heading")
+        expect(heading).to_contain_text(metric["label"])
+        expect(heading).to_contain_text(f"还缺 {metric['gap']}")
+    expect(page.locator(".gap-recommendation-group .recommendation-card")).to_have_count(
+        sum(len(metric.get("cards", [])) for metric in gap_recs)
+    )
+
+    # Scryfall 兜底：API 里带 source=scryfall 的卡，前端应有对应徽章与 Rank
+    scryfall_names = [
+        card["card"]["name"]
+        for metric in gap_recs
+        for card in metric.get("cards", [])
+        if card.get("source") == "scryfall"
+    ]
+    assert scryfall_names, "stub 语义查询应至少兜底一张卡（如检索/牌差词条）"
+    badges = page.locator(".gap-recommendation-group .recommendation-source")
+    expect(badges).to_have_count(len(scryfall_names))
+    expect(badges.first).to_have_text("Scryfall 兜底")
+    scryfall_card = page.locator(".gap-recommendation-group .recommendation-card.is-scryfall").first
+    expect(scryfall_card.locator(".recommendation-meta")).to_contain_text("EDHREC Rank")
+
+    # 缺口桶默认收起 → 展开第一个桶 → 推荐卡可见
+    first = gap_groups.first
     collapsed = re.compile(r".*is-collapsed.*")
-    first = groups.nth(0)
     expect(first).to_have_class(collapsed)
-
-    # 展开 → 推荐卡可见
-    first.locator("[data-recommendation-toggle='0']").click()
+    first.locator("[data-recommendation-toggle]").first.click()
     expect(first).not_to_have_class(collapsed)
     expect(first.locator(".recommendation-card").first).to_be_visible()
 
+    # 切到 EDHREC 类别视图：分组数与 API 一致（不要求补缺口的卡也在）
+    tabs.locator(".recommendation-tab", has_text="EDHREC 类别").click()
+    expect(tabs.locator(".recommendation-tab.is-active")).to_contain_text("EDHREC 类别")
+    category_groups = page.locator("#recommendation-list .recommendation-group:not(.gap-recommendation-group)")
+    expect(category_groups).to_have_count(len(recommendations))
+    expect(page.locator(".recommendation-card:not(.is-scryfall)")).to_have_count(
+        sum(len(group.get("cards", [])) for group in recommendations)
+    )
+
     # 「直接加入构筑」→ 按钮翻转 + 编辑器进入脏状态
-    add_button = first.locator(".recommend-add").first
+    category_groups.first.locator("[data-recommendation-toggle]").first.click()
+    add_button = category_groups.first.locator(".recommend-add").first
     added_name = add_button.get_attribute("data-add-name")
     assert added_name, "推荐卡应携带可加入的卡名"
     add_button.click()
