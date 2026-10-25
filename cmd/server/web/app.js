@@ -1,7 +1,7 @@
 // --- API 契约类型（编辑器提示用，不参与运行时） ---------------------------------
 // docs/api/openapi.yaml 是接口契约的单一事实源；api-types.d.ts 由 `npm run gen:api`
-// 从 spec 生成。改接口时先改 spec、重新生成类型，下面这些 JSDoc 标注会自动跟随，
-// 编辑器（TS language server）会即时标出字段名/类型对不上的地方。
+// 从 spec 生成改接口时先改 spec、重新生成类型，下面这些 JSDoc 标注会自动跟随，
+// 编辑器（TS language server）会即时标出字段名/类型对不上的地方
 /** @typedef {import('./api-types').components['schemas']['Analysis']} Analysis */
 /** @typedef {import('./api-types').components['schemas']['DisplayCard']} DisplayCard */
 /** @typedef {import('./api-types').components['schemas']['HealthResult']} HealthResult */
@@ -150,8 +150,10 @@ function renderCommanderPreview(commanders) {
     const image = cardImage(card) || cardPreviewImage(card);
     const isPartner = commander.is_partner;
     const previewImage = cardPreviewImage(card) || image;
+    const faces = picturedFacesOf(card);
+    const faceData = faces.length > 1 ? ` data-faces="${escapeHTML(JSON.stringify(faces))}"` : '';
     return `
-      <div class="builder-commander-preview-entry" data-preview-src="${escapeHTML(previewImage)}" data-preview-name="${escapeHTML(commander.name)}" data-card-text="${escapeHTML(previewTextFor(card))}">
+      <div class="builder-commander-preview-entry"${faceData} data-preview-src="${escapeHTML(previewImage)}" data-preview-name="${escapeHTML(commander.name)}" data-card-text="${escapeHTML(previewTextFor(card))}">
         <img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(commander.name)}">
         <button type="button" class="card-zoom-button" data-zoom-src="${escapeHTML(previewImage)}" data-preview-name="${escapeHTML(commander.name)}" data-card-text="${escapeHTML(previewTextFor(card))}" aria-label="查看 ${escapeHTML(commander.name)} 大图">大</button>
         <div class="builder-commander-preview-body">
@@ -177,11 +179,11 @@ async function resolveCommanderPreview(names) {
     });
     const payload = await response.json();
     if (!response.ok) {
-      return { error: payload.error?.message || '无法解析主将。' };
+      return { error: payload.error?.message || '无法解析主将' };
     }
     return payload;
   } catch {
-    return { error: '解析主将失败，请重试。' };
+    return { error: '解析主将失败，请重试' };
   }
 }
 
@@ -204,7 +206,7 @@ async function pickRandomCommander() {
     const response = await fetch('/api/v1/random-commander', { method: 'POST' });
     const payload = await response.json();
     if (!response.ok) {
-      builderMessage.textContent = payload.error?.message || '无法随机抽主将。';
+      builderMessage.textContent = payload.error?.message || '无法随机抽主将';
       return;
     }
     builderCommanderInput.value = payload.name || '';
@@ -213,7 +215,7 @@ async function pickRandomCommander() {
     renderCommanderPreview(buildCommanders);
     syncPartnerUI(buildCommanders);
   } catch {
-    builderMessage.textContent = '随机抽主将失败，请重试。';
+    builderMessage.textContent = '随机抽主将失败，请重试';
   } finally {
     builderRandomButton.disabled = false;
     builderRandomButton.textContent = '随机抽主将';
@@ -223,11 +225,11 @@ async function pickRandomCommander() {
 async function addPartnerCommander() {
   const secondary = builderPartnerInput.value.trim();
   if (!secondary) {
-    builderMessage.textContent = '请输入搭档主将名称。';
+    builderMessage.textContent = '请输入搭档主将名称';
     return;
   }
   if (!buildCommanders.length) {
-    builderMessage.textContent = '请先确定主将。';
+    builderMessage.textContent = '请先确定主将';
     return;
   }
   builderMessage.textContent = '';
@@ -246,14 +248,14 @@ async function addPartnerCommander() {
     renderBuilderSidebar();
     builderPartnerInput.value = '';
   } catch {
-    builderMessage.textContent = '添加搭档失败，请重试。';
+    builderMessage.textContent = '添加搭档失败，请重试';
   } finally {
     builderPartnerAddButton.disabled = false;
   }
 }
 
-// 一键出地的地牌分类。ID 与后端 service.LandCategories 对齐；点单类后按主将色组
-// 过滤，再渲染可加入草稿的地牌小图。
+// 一键出地的地牌分类ID 与后端 service.LandCategories 对齐；点单类后按主将色组
+// 过滤，再渲染可加入草稿的地牌小图
 const LAND_CATEGORIES = [
   { id: 'shock', label: '电震' },
   { id: 'surveil', label: '刺探' },
@@ -268,7 +270,7 @@ const LAND_CATEGORIES = [
   { id: 'slow', label: '慢地' }
 ];
 
-// 常见单卡分类。ID 与后端 service.StapleCategories 对齐；点单类后按主将色组过滤。
+// 常见单卡分类ID 与后端 service.StapleCategories 对齐；点单类后按主将色组过滤
 const STAPLE_CATEGORIES = [
   { id: 'ramp', label: '常见法术力增长' },
   { id: 'game-changer', label: '可用的 Game Changer' }
@@ -517,8 +519,8 @@ editorAddSuggestions.addEventListener('mousedown', (event) => {
 });
 
 
-// 一键出地：展开/收起八个地牌分类按钮。点击单个分类按主将色组请求可用地牌，
-// 渲染成可点选的小图，点某张地把它加入草稿。再次点击已打开的分类会收起它。
+// 一键出地：展开/收起八个地牌分类按钮点击单个分类按主将色组请求可用地牌，
+// 渲染成可点选的小图，点某张地把它加入草稿再次点击已打开的分类会收起它
 function toggleLandsPanel() {
   const visible = !builderLandsPanel.hidden;
   if (visible) {
@@ -530,7 +532,7 @@ function toggleLandsPanel() {
 }
 
 // 常见单卡：展开/收起分类按钮，点单个分类按主将色组请求可用单卡并渲染成可点选
-// 的小图，点某张常见单卡把它加入草稿。再次点击已打开的分类会收起它。
+// 的小图，点某张常见单卡把它加入草稿再次点击已打开的分类会收起它
 function toggleStaplesPanel() {
   const visible = !builderStaplesPanel.hidden;
   if (visible) {
@@ -555,7 +557,7 @@ function addStapleCard(name, card, gameChanger) {
   const key = normalizeBuildName(name);
   if (buildChosen.includes(key)) return;
   if (!canAddBuildCard(name)) {
-    noteBuildReject('"' + name + '" 是重复普通牌，只能放一张（基本地除外）。');
+    noteBuildReject('"' + name + '" 是重复普通牌，只能放一张（基本地除外）');
     return;
   }
   if (buildCards.length + (buildCommanders.length || (buildCommander ? 1 : 0)) >= BUILD_TARGET) return;
@@ -597,10 +599,10 @@ async function loadStapleCategory(categoryID) {
       body: JSON.stringify({ category: categoryID, color_identity: buildColors })
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error?.message || '无法加载单卡。');
+    if (!response.ok) throw new Error(payload.error?.message || '无法加载单卡');
     const staples = Array.isArray(payload.staples) ? payload.staples : [];
     if (!staples.length) {
-      resultBox.innerHTML = '<p class="editor-empty">该类别在你的主将色组内没有可用单卡。</p>';
+      resultBox.innerHTML = '<p class="editor-empty">该类别在你的主将色组内没有可用单卡</p>';
       return;
     }
     resultBox.innerHTML = `<div class="builder-lands-head"><strong>${escapeHTML(payload.category_label || category?.label || '')}</strong><small>点击加入草稿</small></div>
@@ -634,10 +636,10 @@ async function loadLandCategory(categoryID) {
       body: JSON.stringify({ category: categoryID, color_identity: buildColors })
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error?.message || '无法加载地牌。');
+    if (!response.ok) throw new Error(payload.error?.message || '无法加载地牌');
     const lands = Array.isArray(payload.lands) ? payload.lands : [];
     if (!lands.length) {
-      resultBox.innerHTML = '<p class="editor-empty">该类别在你的主将色组内没有可用地牌。</p>';
+      resultBox.innerHTML = '<p class="editor-empty">该类别在你的主将色组内没有可用地牌</p>';
       return;
     }
     resultBox.innerHTML = `<div class="builder-lands-head"><strong>${escapeHTML(payload.category_label || category?.label || '')}</strong><small>点击地牌加入草稿</small></div>
@@ -653,7 +655,7 @@ async function loadLandCategory(categoryID) {
 function addLandCard(name) {
   if (!name) return;
   if (!canAddBuildCard(name)) {
-    noteBuildReject('"' + name + '" 已经在牌组里了，普通地同样受单卡限制。');
+    noteBuildReject('"' + name + '" 已经在牌组里了，普通地同样受单卡限制');
     return;
   }
   if (buildCards.length + (buildCommanders.length || (buildCommander ? 1 : 0)) >= BUILD_TARGET) return;
@@ -698,7 +700,7 @@ function refreshIfCandidateCollides() {
 async function startBuild() {
   const name = builderCommanderInput.value.trim();
   if (!name) {
-    builderMessage.textContent = '请输入主将名称。';
+    builderMessage.textContent = '请输入主将名称';
     return;
   }
   builderMessage.textContent = '';
@@ -729,7 +731,7 @@ async function startBuild() {
       body: JSON.stringify({ commander: buildCommanders[0].name, chosen: [], seen: [], count: 3 })
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error?.message || '无法加载主将建议。');
+    if (!response.ok) throw new Error(payload.error?.message || '无法加载主将建议');
     buildChosen = [];
     buildCards = [];
     recentShown = [];
@@ -741,7 +743,7 @@ async function startBuild() {
     applyBuildCandidates(first);
     renderBuilderSidebar();
   } catch (error) {
-    builderMessage.textContent = error.message || '加载失败，请重试。';
+    builderMessage.textContent = error.message || '加载失败，请重试';
   } finally {
     builderStartButton.disabled = false;
     builderStartButton.textContent = '开始';
@@ -754,11 +756,17 @@ function applyBuildCandidates(candidates) {
     const image = cardImage(card.card);
     const preview = cardPreviewImage(card.card);
     const cardText = previewTextFor(card.card);
+    const faces = picturedFacesOf(card.card);
+    const faceSwitch = faceSwitchMarkup(faces);
+    const faceData = faces.length > 1 ? ` data-faces="${escapeHTML(JSON.stringify(faces))}"` : '';
     const fills = (card.fills || []).map((id) => buildMetricLabel(id)).filter(Boolean).join(' · ');
     const gcBadge = card.game_changer ? '<span class="builder-gc-tag" title="Game Changer">GC</span>' : '';
     return `
-      <div role="button" tabindex="0" class="builder-candidate" data-candidate="${index}" data-preview-src="${escapeHTML(preview)}" data-preview-name="${escapeHTML(card.name)}" data-card-text="${escapeHTML(cardText)}">
-        ${image ? `<img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(card.name)}">` : '<div class="builder-candidate-placeholder"></div>'}
+      <div role="button" tabindex="0" class="builder-candidate"${faceData} data-candidate="${index}" data-preview-src="${escapeHTML(preview)}" data-preview-name="${escapeHTML(card.name)}" data-card-text="${escapeHTML(cardText)}">
+        <div class="builder-candidate-art">
+          ${image ? `<img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(card.name)}">` : '<div class="builder-candidate-placeholder"></div>'}
+          ${faceSwitch}
+        </div>
         <div class="builder-candidate-body">
           <div class="builder-candidate-title">${gcBadge}<strong>${escapeHTML(card.name)}</strong></div>
           <span class="builder-synergy">Synergy ${(Number(card.synergy) || 0).toFixed(2)}%</span>
@@ -767,13 +775,13 @@ function applyBuildCandidates(candidates) {
         </div>
         <button type="button" class="card-zoom-button" data-zoom-src="${escapeHTML(preview)}" data-preview-name="${escapeHTML(card.name)}" data-card-text="${escapeHTML(cardText)}" aria-label="查看 ${escapeHTML(card.name)} 大图">大</button>
       </div>`;
-  }).join('') || '<p class="editor-empty">暂时没有更多建议，可快速加基本地或直接完成。</p>';
+  }).join('') || '<p class="editor-empty">暂时没有更多建议，可快速加基本地或直接完成</p>';
   localizeBuilderCandidates();
 }
 
-// 三选一的异能直接铺在卡片行里（手机上缩略图读不了字、每张都点"大"太费劲）。
+// 三选一的异能直接铺在卡片行里（手机上缩略图读不了字、每张都点"大"太费劲）
 // 中文可用时整段替换英文——与 hover 预览同一口径、共用页面级缓存；无简中的
-// 卡保持英文，同时把行内 dataset 一并换成中文，让"大"图层同步。
+// 卡保持英文，同时把行内 dataset 一并换成中文，让"大"图层同步
 function localizeBuilderCandidates() {
   builderCandidates.querySelectorAll('.builder-candidate').forEach((row) => {
     const name = row.dataset.previewName;
@@ -812,6 +820,25 @@ function cardPreviewImage(card) {
   return proxiedImage(cardObj.image_normal || cardObj.image_small || (cardObj.faces || []).find((face) => face.image_normal || face.image_small)?.image_normal || (cardObj.faces || []).find((face) => face.image_normal || face.image_small)?.image_small || '');
 }
 
+// 双面卡（MDFC/变身等）取"有独立卡图"的面：背面无图（如分裂卡共用一张图）
+// 或单面卡都不产生切换牌表卡、组牌候选与放大层共用这一口径
+function picturedFacesOf(card) {
+  return Array.isArray(card?.faces) ? card.faces.filter((face) => face.image_small || face.image_normal) : [];
+}
+
+// 正/反切换按钮条容器需自带 data-faces（原始 face JSON，图 URL 在切换时
+// 才走代理），点击由全局 .card-faces 委托处理；放大层的容器本身就是
+// .card-faces，只注入按钮（faceSwitchButtons），避免双层网格
+function faceSwitchButtons(faces) {
+  if (!Array.isArray(faces) || faces.length < 2) return '';
+  return faces.map((face, index) => `<button type="button" data-face="${index}" class="${index === 0 ? 'active' : ''}" aria-pressed="${index === 0}">${index === 0 ? '正面' : '反面'}</button>`).join('');
+}
+
+function faceSwitchMarkup(faces) {
+  const buttons = faceSwitchButtons(faces);
+  return buttons ? `<div class="card-faces">${buttons}</div>` : '';
+}
+
 function buildMetricLabel(id) {
   const metric = BUILD_METRICS.find((item) => item.id === id);
   return metric ? metric.label : id;
@@ -838,7 +865,7 @@ async function nextBuildBatch() {
       body: JSON.stringify({ commander: buildCommander, chosen: draftCardNames(), seen: recentShown, count: 3 })
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error?.message || '无法加载建议。');
+    if (!response.ok) throw new Error(payload.error?.message || '无法加载建议');
     const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
     rememberShown(candidates);
     applyBuildCandidates(candidates);
@@ -880,7 +907,7 @@ function addBuildCard(candidate) {
   const key = normalizeBuildName(candidate.name);
   if (buildChosen.includes(key)) return;
   if (!canAddBuildCard(candidate.name)) {
-    noteBuildReject('"' + candidate.name + '" 是重复普通牌，只能放一张（基本地除外）。');
+    noteBuildReject('"' + candidate.name + '" 是重复普通牌，只能放一张（基本地除外）');
     return;
   }
   buildChosen.push(key);
@@ -1005,7 +1032,7 @@ function renderBuilderSidebar() {
     <div class="builder-color-identity"><span>主将色组</span><strong>${(buildColors || []).map((color) => escapeHTML(color)).join(' ') || '无色'}</strong></div>
     <div class="builder-chosen">
       <div class="builder-chosen-head"><strong>已选牌</strong><span>${buildCards.length}</span></div>
-      ${chosenList ? `<ul class="builder-chosen-list">${chosenList}</ul>` : '<p class="builder-chosen-empty">还没有选择任何牌。</p>'}
+      ${chosenList ? `<ul class="builder-chosen-list">${chosenList}</ul>` : '<p class="builder-chosen-empty">还没有选择任何牌</p>'}
     </div>`;
 }
 
@@ -1133,8 +1160,8 @@ builderBackEdit.addEventListener('click', backToBuilderEdit);
 document.addEventListener('click', (event) => {
   const candidateButton = event.target.closest('[data-candidate]');
   if (candidateButton) {
-    // Ignore clicks on the zoom button inside a candidate
-    if (event.target.closest('.card-zoom-button')) return;
+    // Ignore clicks on the zoom button and the face switch inside a candidate
+    if (event.target.closest('.card-zoom-button, .card-faces button')) return;
     const index = Number(candidateButton.dataset.candidate);
     const candidate = buildCandidates[index];
     if (candidate) addBuildCard(candidate);
@@ -1264,10 +1291,10 @@ if (localStorage.getItem('theme') === 'light') {
   themeToggle.textContent = '亮色';
 }
 
-// 打开右侧牌表编辑抽屉：把录入/删改牌表的操作区随时拉出来。列表内容在
-// renderDeckCards 里已经渲染，这里只负责显隐与滚动锁定。
+// 打开右侧牌表编辑抽屉：把录入/删改牌表的操作区随时拉出来列表内容在
+// renderDeckCards 里已经渲染，这里只负责显隐与滚动锁定
 // 滚动锁定只发生在展开态（面板占据右侧、遮罩透明不挡内容）；收起成窄条后
-// 立即解除锁定，页面恢复上下滚动。
+// 立即解除锁定，页面恢复上下滚动
 function openDeckDrawer() {
   if (!deckDrawer) return;
   deckDrawer.hidden = false;
@@ -1283,7 +1310,7 @@ function closeDeckDrawer() {
   document.body.style.overflow = '';
 }
 // 收起/展开：展开时锁滚动（面板盖住交互区），收起成窄条时解除锁定，
-// 让用户能正常滚动页面看分析结果。
+// 让用户能正常滚动页面看分析结果
 document.addEventListener('click', (event) => {
   if (event.target.closest('[data-deck-drawer-open]')) {
     openDeckDrawer();
@@ -1319,12 +1346,12 @@ async function analyze() {
   const decklist = decklistInput.value.trim();
   message.textContent = '';
   if (!url && !decklist) {
-    message.textContent = '请填写 Moxfield URL 或粘贴牌表文本。';
+    message.textContent = '请填写 Moxfield URL 或粘贴牌表文本';
     input.focus();
     return;
   }
   if (url && !isMoxfieldDeckURL(url)) {
-    message.textContent = '请输入有效的公开 Moxfield 牌组地址。';
+    message.textContent = '请输入有效的公开 Moxfield 牌组地址';
     input.focus();
     return;
   }
@@ -1340,11 +1367,11 @@ async function analyze() {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error?.message || '分析失败，请稍后重试。');
+      throw new Error(payload.error?.message || '分析失败，请稍后重试');
     }
     render(payload);
   } catch (error) {
-    message.textContent = error.message || '网络请求失败，请稍后重试。';
+    message.textContent = error.message || '网络请求失败，请稍后重试';
   } finally {
     setLoading(false);
   }
@@ -1370,7 +1397,7 @@ function setLoading(active) {
 }
 
 // 点击开始分析后慢慢滚到加载区：浏览器原生 smooth 的时长不可控、一晃就过，
-// 骨架屏还没看清页面就停了；这里用 rAF 补间走一段 1.1s 的缓动转场。
+// 骨架屏还没看清页面就停了；这里用 rAF 补间走一段 1.1s 的缓动转场
 function scrollToSlowly(target, duration = 1100) {
   const start = window.scrollY;
   const end = target.getBoundingClientRect().top + start;
@@ -1401,7 +1428,7 @@ function render(payload) {
   renderProvider('edh', payload.results.edhpowerlevel, [
     ['efficiency', 'Efficiency'], ['impact', 'Impact'],
     ['score', 'Score'],
-    ['average_playability', '平均可施放率', 'Playability：按当前法术力基础，估算抽到（费用+7）张牌时，产费颜色与地的数量足以施放每张非地牌的复合概率，再对全牌组取平均。偏低说明法术力源不足或颜色配比失衡，不代表牌本身弱。']
+    ['average_playability', '平均可施放率', 'Playability：按当前法术力基础，估算抽到（费用+7）张牌时，产费颜色与地的数量足以施放每张非地牌的复合概率，再对全牌组取平均偏低说明法术力源不足或颜色配比失衡，不代表牌本身弱']
   ]);
   warning.hidden = !payload.warnings?.length;
   warning.textContent = payload.warnings?.join(' ') || '';
@@ -1494,15 +1521,15 @@ function renderManabase(manabase) {
   }[deltaClass];
 
   // 法术力生产（Moxfield 式）：每行一个颜色，显示该色符号占「全部符号」的比例
-  // （大数，含地牌上能产出的彩色符号）和占「地牌符号」的比例（小数）。两行口径
-  // 同源于后端 color_pips / land_color_pips；全部符号的基数 = 非地符号 + 地牌符号。
+  // （大数，含地牌上能产出的彩色符号）和占「地牌符号」的比例（小数）两行口径
+  // 同源于后端 color_pips / land_color_pips；全部符号的基数 = 非地符号 + 地牌符号
   const colorPips = (manabase.color_pips || {});
   const landColorPips = (manabase.land_color_pips || {});
   const colorlessPips = Number(manabase.colorless_pips || 0);
   const symbolCount = (color) => Number(colorPips[color] || 0) + Number(landColorPips[color] || 0);
   let composition = '';
   if (Object.keys(colorPips).length || colorlessPips > 0) {
-    // 无色符号也是「全部符号」的一部分，必须计入分母，否则无色行的占比会超过 100%。
+    // 无色符号也是「全部符号」的一部分，必须计入分母，否则无色行的占比会超过 100%
     const allSymbols = MANA_COLORS.reduce((sum, c) => sum + symbolCount(c), 0) + colorlessPips;
     const landSymbols = MANA_COLORS.reduce((sum, c) => sum + Number(landColorPips[c] || 0), 0);
     const pctOfAll = (n) => (allSymbols > 0 ? Math.round((n / allSymbols) * 100) : 0);
@@ -1529,7 +1556,7 @@ function renderManabase(manabase) {
         </div>`;
     }).join('');
     // 无色行：地牌产出的无色法力不算「彩色符号」，这行只有占全部符号的比例有意义，
-    // 第二格固定 0%；灰色沿用 Moxfield 的无色配色。
+    // 第二格固定 0%；灰色沿用 Moxfield 的无色配色
     const colorlessRow = colorlessPips > 0 ? `
         <div class="manabase-pip-row is-colorless">
           <span class="mana-symbol colorless">{C}</span>
@@ -1604,8 +1631,8 @@ function renderManabase(manabase) {
   // Bars start at height 0 (via CSS) and grow to their data-height on the next frame,
   // so the curve animates in rather than jumping to final size.
   // 颜色比例条也在这里用像素宽度着色，而不是依赖内联百分比宽度：某些渲染器（含
-  // IAB）会把对内联百分比的解析忽略掉，导致每根都被拉满。像素宽度对该选择器内
-  // 的元素不会歧义，始终正确。
+  // IAB）会把对内联百分比的解析忽略掉，导致每根都被拉满像素宽度对该选择器内
+  // 的元素不会歧义，始终正确
   requestAnimationFrame(() => {
     container.querySelectorAll('.manabase-curve-track i').forEach((bar) => {
       const height = parseFloat(bar.dataset.height) || 0;
@@ -1650,8 +1677,8 @@ function renderConstructionReport(report) {
   const metricCard = (metric) => {
     const percent = Math.min(100, Math.round((Number(metric.actual) / Math.max(1, Number(metric.target))) * 100));
     const cards = (metric.cards || []).map((card) => `<li><strong>${card.quantity}× ${escapeHTML(card.name)}</strong><span>${escapeHTML(card.reason)}</span></li>`).join('');
-    // 拆分说明：正向法力 = 地 + 0 费加速神器；胜负手 = 牌面胜负牌 + 制胜组合。
-    // 两个指标的 actual 都是合计值，不拆开的话数字对不上展开的卡列表。
+    // 拆分说明：正向法力 = 地 + 0 费加速神器；胜负手 = 牌面胜负牌 + 制胜组合
+    // 两个指标的 actual 都是合计值，不拆开的话数字对不上展开的卡列表
     let split = '';
     if (metric.id === 'lands') {
       const lands = (metric.cards || []).reduce((sum, card) => sum + (card.counts?.land || 0), 0);
@@ -1662,11 +1689,11 @@ function renderConstructionReport(report) {
     }
     return `<details class="construction-metric ${metric.status}">
       <summary><div><span>${escapeHTML(metric.label)}</span><strong>${metric.actual} / ${metric.target}</strong></div>${metric.hint ? `<em class="construction-hint">${escapeHTML(metric.hint)}</em>` : ''}<div class="construction-bar"><i data-pct="${percent}"></i></div><small>${metric.gap > 0 ? `缺少 ${metric.gap}${split}` : `已充分${split}`}</small></summary>
-      ${cards ? `<ul>${cards}</ul>` : '<p>没有识别到相关卡牌。</p>'}
+      ${cards ? `<ul>${cards}</ul>` : '<p>没有识别到相关卡牌</p>'}
     </details>`;
   };
-  // 分组渲染（怎么赢 / 怎么运转 / 怎么应对 / 牌组主线）；旧缓存没有 groups 时平铺兜底。
-  // 布局由 CSS 控制：#construction-metrics 两列，分组两两并排，组内指标竖向堆叠。
+  // 分组渲染（怎么赢 / 怎么运转 / 怎么应对 / 牌组主线）；旧缓存没有 groups 时平铺兜底
+  // 布局由 CSS 控制：#construction-metrics 两列，分组两两并排，组内指标竖向堆叠
   const groups = Array.isArray(report?.groups) && report.groups.length ? report.groups : [{ id: '', label: '', note: '' }];
   container.innerHTML = groups.map((group) => {
     const groupMetrics = metrics.filter((metric) => (metric.group || '') === group.id);
@@ -1738,10 +1765,10 @@ function renderCombos(combos, suggestions) {
 }
 
 // 推荐区双视图：「缺口词条」按构筑指标分桶（回答"我缺什么、补什么"），
-// 「常见搭配」保留推荐池的原生分组（回答"这个主将大家都带什么"）。
+// 「常见搭配」保留推荐池的原生分组（回答"这个主将大家都带什么"）
 // 缺口桶里混两路来源——推荐池（带 Synergy/Inclusion）和按词条语义检索的
-// 兜底（带热度排名，卡面打"词条检索"徽章）。旧缓存响应没有 gap_recommendations
-// 时回退类别视图单 Tab。
+// 兜底（带热度排名，卡面打"词条检索"徽章）旧缓存响应没有 gap_recommendations
+// 时回退类别视图单 Tab
 let recommendationGroupsData = [];
 let gapRecommendationData = [];
 let recommendationTab = 'gap';
@@ -1780,7 +1807,7 @@ function renderRecommendedCard(item) {
   const fromScryfall = item.source === 'scryfall';
   const rank = Number(item.card?.edhrec_rank);
   // 用户可见文案不带数据源品牌名：兜底卡用"热度排名/语义检索"表述，
-  // 外链统一"查看详情"。
+  // 外链统一"查看详情"
   const meta = fromScryfall
     ? `<div><span>热度排名</span><strong>${rank > 0 ? '#' + rank : '—'}</strong></div><div><span>来源</span><strong>语义检索</strong></div>`
     : `<div><span>Synergy</span><strong>${(Number(item.synergy || 0) * 100).toFixed(1)}%</strong></div><div><span>Inclusion</span><strong>${(Number(item.inclusion_rate || 0) * 100).toFixed(1)}%</strong></div>`;
@@ -1833,7 +1860,7 @@ function renderRecommendationView() {
 
 function renderDeckCards(cards) {
   const container = document.querySelector('#deck-card-list');
-  // 完整牌表整个住在右侧抽屉里；页面底部不再保留独立区块。空牌组时连抽屉一起隐藏。
+  // 完整牌表整个住在右侧抽屉里；页面底部不再保留独立区块空牌组时连抽屉一起隐藏
   if (deckDrawer) deckDrawer.hidden = !cards.length;
   let visible = cards;
   if (curveSelectedMv !== null) {
@@ -1842,7 +1869,7 @@ function renderDeckCards(cards) {
   // Filter note stays outside the re-rendered container so it survives re-renders.
   if (decklistFilterNote) {
     decklistFilterNote.hidden = !visible.length || curveSelectedMv === null;
-    decklistFilterNote.textContent = curveSelectedMv === null ? '' : `已按法术力值 ${curveSelectedMv} 筛选完整牌表，共 ${visible.length} 张非地牌。`;
+    decklistFilterNote.textContent = curveSelectedMv === null ? '' : `已按法术力值 ${curveSelectedMv} 筛选完整牌表，共 ${visible.length} 张非地牌`;
   }
   const groups = [
     ['Commander', visible.filter((item) => item.commander)],
@@ -1851,7 +1878,7 @@ function renderDeckCards(cards) {
   ];
   container.innerHTML = groups.filter(([, items]) => items.length).map(([title, items]) => `
     <section class="deck-group"><h3>${title} <span>${items.reduce((sum, item) => sum + item.quantity, 0)}</span></h3><div class="card-grid">${items.map(renderCard).join('')}</div></section>`).join('') ||
-    '<p class="decklist-filter-empty">该法力值下没有匹配的卡牌。</p>' +
+    '<p class="decklist-filter-empty">该法力值下没有匹配的卡牌</p>' +
     '<div class="deck-card-list-expand-overlay" data-decklist-expand>点击展开完整牌表 ▾</div>' +
     '<button type="button" class="deck-card-list-collapse-button" data-decklist-collapse>收起牌表 ▴</button>';
 }
@@ -1888,14 +1915,14 @@ function markDirty() {
 
 // --- 即时测算对比：原始分析基线 vs 当前编辑牌表 ------------------------------
 // 基线在每次完整分析（render）时记录，重新测算只更新“当前”列，
-// 反复对比始终相对原始牌表，避免基准漂移。
+// 反复对比始终相对原始牌表，避免基准漂移
 
 let baselineSnapshot = null;
 const editorCompareRunButton = document.querySelector('#editor-compare-run');
 const editorCompareResult = document.querySelector('#editor-compare-result');
 
-// 提取可对比的指标快照：双评分 + 构筑指标。缺席的（如 CommanderSalt 失败）
-// 保持缺省，渲染对比时跳过。
+// 提取可对比的指标快照：双评分 + 构筑指标缺席的（如 CommanderSalt 失败）
+// 保持缺省，渲染对比时跳过
 function extractCompareMetrics(payload) {
   const edh = payload.results?.edhpowerlevel?.metrics || {};
   const salt = payload.results?.commandersalt?.metrics || {};
@@ -1956,10 +1983,10 @@ async function runEditorCompare() {
       body: JSON.stringify({ decklist: editorToDeckText() })
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error?.message || '测算失败。');
+    if (!response.ok) throw new Error(payload.error?.message || '测算失败');
     renderCompareResult(baselineSnapshot, extractCompareMetrics(payload));
   } catch (error) {
-    editorCompareResult.innerHTML = `<p class="form-message">${escapeHTML(error.message || '测算失败，请稍后重试。')}</p>`;
+    editorCompareResult.innerHTML = `<p class="form-message">${escapeHTML(error.message || '测算失败，请稍后重试')}</p>`;
     editorCompareResult.hidden = false;
   } finally {
     editorCompareRunButton.disabled = false;
@@ -2165,7 +2192,7 @@ function saveVersion() {
 function renderVersionsList() {
   const versions = loadVersions();
   if (!versions.length) {
-    editorVersionsList.innerHTML = '<p class="editor-empty">还没有保存的版本。</p>';
+    editorVersionsList.innerHTML = '<p class="editor-empty">还没有保存的版本</p>';
     return;
   }
   editorVersionsList.innerHTML = versions.map((version, index) => `
@@ -2215,11 +2242,11 @@ editorVersionsButton.addEventListener('click', () => {
 
 function renderCard(item) {
   const card = item.card || {};
-  const picturedFaces = Array.isArray(card.faces) ? card.faces.filter((face) => face.image_small || face.image_normal) : [];
-  const image = proxiedImage(card.image_small || card.image_normal || picturedFaces[0]?.image_small || picturedFaces[0]?.image_normal);
-  const previewImage = proxiedImage(card.image_normal || card.image_small || picturedFaces[0]?.image_normal || picturedFaces[0]?.image_small);
-  const faceSwitch = picturedFaces.length > 1 ? `<div class="card-faces">${picturedFaces.map((face, index) => `<button type="button" data-face="${index}" class="${index === 0 ? 'active' : ''}" aria-pressed="${index === 0}">${index === 0 ? '正面' : '反面'}</button>`).join('')}</div>` : '';
-  const faceData = picturedFaces.length > 1 ? ` data-faces="${escapeHTML(JSON.stringify(picturedFaces))}"` : '';
+  const faces = picturedFacesOf(card);
+  const image = proxiedImage(card.image_small || card.image_normal || faces[0]?.image_small || faces[0]?.image_normal);
+  const previewImage = proxiedImage(card.image_normal || card.image_small || faces[0]?.image_normal || faces[0]?.image_small);
+  const faceSwitch = faceSwitchMarkup(faces);
+  const faceData = faces.length > 1 ? ` data-faces="${escapeHTML(JSON.stringify(faces))}"` : '';
   const editorControls = item.editor === false ? '' : `<div class="card-edit-controls">
     <button type="button" data-card-subtract="${escapeHTML(card.name || '')}" aria-label="减少 ${escapeHTML(card.name || '')}"><span aria-hidden="true">−</span></button>
     <button type="button" data-card-add="${escapeHTML(card.name || '')}" aria-label="增加 ${escapeHTML(card.name || '')}"><span aria-hidden="true">+</span></button>
@@ -2284,7 +2311,9 @@ document.addEventListener('click', (event) => {
   const button = event.target.closest('.card-faces button');
   if (!button) return;
   event.preventDefault();
-  const cardElement = button.closest('.mtg-card');
+  // 牌表卡与组牌候选共用这套按钮：容器只要带 data-faces 就能翻面
+  const cardElement = button.closest('[data-faces]');
+  if (!cardElement) return;
   let faces;
   try { faces = JSON.parse(cardElement.dataset.faces || '[]'); } catch { return; }
   const face = faces[Number(button.dataset.face)];
@@ -2294,15 +2323,19 @@ document.addEventListener('click', (event) => {
   imageElement?.setAttribute('alt', face.name || '');
   cardElement.dataset.previewSrc = proxiedImage(face.image_normal || face.image_small || '');
   cardElement.dataset.previewName = face.name || '';
-  cardElement.querySelector('.mtg-card-face strong').textContent = face.name || '';
-  cardElement.dataset.cardText = previewTextForCard({ name: face.name, mana_cost: face.mana_cost, type_line: face.type_line, oracle_text: face.oracle_text });
+  const titleElement = cardElement.querySelector('.mtg-card-face strong, .builder-candidate-title strong');
+  if (titleElement) titleElement.textContent = face.name || '';
+  const faceText = previewTextForCard({ name: face.name, mana_cost: face.mana_cost, type_line: face.type_line, oracle_text: face.oracle_text });
+  cardElement.dataset.cardText = faceText;
+  // 组牌候选里的「大」钮带一份自己的 cardText 副本，翻面后同步，放大层不串面
+  cardElement.querySelector('[data-zoom-src]')?.setAttribute('data-card-text', faceText);
   cardElement.querySelectorAll('.card-faces button').forEach((item) => {
     const active = item === button;
     item.classList.toggle('active', active);
     item.setAttribute('aria-pressed', String(active));
   });
   // 切面重建了 cardText，之前拼进去的中文块随之丢失：清掉标记让下次悬停
-  // 重新拼接（页面缓存命中，不会再发请求）。
+  // 重新拼接（页面缓存命中，不会再发请求）
   cardElement.dataset.zhLoaded = '';
   if (activePreviewCard === cardElement) showCardPreview(cardElement);
 });
@@ -2315,9 +2348,11 @@ const zoomModal = document.querySelector('#card-zoom');
 const zoomImage = document.querySelector('#card-zoom-image');
 const zoomName = document.querySelector('#card-zoom-name');
 const zoomOracle = document.querySelector('#card-zoom-oracle');
+const zoomFacesBar = document.querySelector('#card-zoom-faces');
 const canHover = window.matchMedia('(hover: hover) and (pointer: fine)');
 let activePreviewCard = null;
 let previewImageCache = new Map(); // url -> resolved element (pre-loaded large art)
+let zoomFaceList = []; // 双面卡打开放大层时的面数据（正面优先），单面卡为空
 
 // Open a large card art view (mobile-friendly tap target). The trigger carries the
 // large art URL in data-zoom-src; clicking the backdrop or pressing Escape closes it.
@@ -2337,10 +2372,25 @@ function openCardZoom(trigger) {
     zoomOracle.textContent = '';
     zoomOracle.hidden = true;
   }
+  // 双面卡：放大层直接给正/反切换，背面不用回牌表找面数据取自触发元素
+  // 所在容器（组牌候选/主将预览条目）的 data-faces；打开放大层总是先回正面
+  zoomFaceList = [];
+  try {
+    const rawFaces = JSON.parse(card.closest('[data-faces]')?.dataset.faces || '[]');
+    zoomFaceList = rawFaces.filter((face) => face.image_normal || face.image_small);
+  } catch { /* 损坏的 JSON 按单面处理 */ }
+  if (zoomFaceList.length > 1) {
+    zoomFacesBar.innerHTML = faceSwitchButtons(zoomFaceList);
+    zoomFacesBar.hidden = false;
+  } else {
+    zoomFaceList = [];
+    zoomFacesBar.innerHTML = '';
+    zoomFacesBar.hidden = true;
+  }
   zoomModal.hidden = false;
   document.body.style.overflow = 'hidden';
   // 放大层同样按需补中文：本次打开仍是英文，译文回来后写进 dataset，
-  // 下次打开（或悬停）即带中文。
+  // 下次打开（或悬停）即带中文
   maybeLoadChinese(card);
 }
 function closeCardZoom() {
@@ -2348,8 +2398,35 @@ function closeCardZoom() {
   zoomImage.removeAttribute('src');
   zoomOracle.textContent = '';
   zoomOracle.hidden = true;
+  zoomFaceList = [];
+  zoomFacesBar.innerHTML = '';
+  zoomFacesBar.hidden = true;
   document.body.style.overflow = '';
 }
+// 放大层翻面：图片/名称/异能都切到所选面（打开时默认正反面全文并列，
+// 翻到某一面则聚焦该面的规则文本）
+zoomFacesBar.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-face]');
+  if (!button) return;
+  const face = zoomFaceList[Number(button.dataset.face)];
+  if (!face) return;
+  zoomImage.src = proxiedImage(face.image_normal || face.image_small || '');
+  zoomImage.alt = face.name || '';
+  zoomName.textContent = face.name || '';
+  const text = previewTextForCard({ name: face.name, mana_cost: face.mana_cost, type_line: face.type_line, oracle_text: face.oracle_text });
+  if (text) {
+    zoomOracle.textContent = text;
+    zoomOracle.hidden = false;
+  } else {
+    zoomOracle.textContent = '';
+    zoomOracle.hidden = true;
+  }
+  zoomFacesBar.querySelectorAll('button').forEach((item) => {
+    const active = item === button;
+    item.classList.toggle('active', active);
+    item.setAttribute('aria-pressed', String(active));
+  });
+});
 document.addEventListener('click', (event) => {
   const zoomTrigger = event.target.closest('[data-zoom-src]');
   if (zoomTrigger) {
@@ -2408,7 +2485,7 @@ function builderPreviewTextFor(card) {
 // API 的卡牌 payload 只在极少数情况下带中文字段；hover 预览的中文改为按需补齐：
 // 首次悬停某张卡时向 /api/v1/card-zh 要一次 zhs 印刷，把译文回写进该卡 DOM 的
 // dataset（同页再悬停零请求），404（无简中印刷）同样打标记不再追问；瞬时失败
-// 不记缓存，下次悬停可重试。页面级 Map 合并同一卡名的并发请求。
+// 不记缓存，下次悬停可重试页面级 Map 合并同一卡名的并发请求
 const chineseCardCache = new Map();
 
 function fetchChineseCard(name) {
@@ -2448,7 +2525,7 @@ function maybeLoadChinese(card) {
     card.dataset.zhLoaded = '1';
     if (!zh) return;
     const block = chineseTextBlock(zh);
-    // 有中文就整段替换英文（异能本体用中文读）；没有中文的卡保持英文原文。
+    // 有中文就整段替换英文（异能本体用中文读）；没有中文的卡保持英文原文
     if (block) card.dataset.cardText = block;
     if (zh.chinese_name) card.dataset.zhName = zh.chinese_name;
     if (activePreviewCard !== card || preview.hidden) return;
@@ -2608,7 +2685,7 @@ function renderProvider(prefix, provider, secondaryMetrics) {
   const content = document.querySelector(`#${prefix}-content`);
   if (!provider || provider.status !== 'success') {
     const code = provider?.error?.code || '';
-    const message = provider?.error?.message || '该评分网站暂时无法返回结果。';
+    const message = provider?.error?.message || '该评分网站暂时无法返回结果';
     if (!provider || provider.status === 'unavailable') {
       // "unavailable" is a known, expected state (e.g. text input has no Moxfield
       // URL for CommanderSalt), so label it differently from a hard failure.
@@ -2866,7 +2943,7 @@ function showStickyNav() {
   
   // Smooth scroll on nav click
   navLinks.forEach((link) => {
-    // 牌表编辑是按钮（无 href），不做平滑滚动，交给 data-deck-drawer-open 的委托处理器。
+    // 牌表编辑是按钮（无 href），不做平滑滚动，交给 data-deck-drawer-open 的委托处理器
     if (link.tagName !== 'A' || !link.getAttribute('href')) return;
     link.addEventListener('click', (e) => {
       e.preventDefault();
@@ -2897,8 +2974,8 @@ function looksLikeReleaseTag(value) {
   return typeof value === 'string' && /^v\d{8}-\d{4}$/.test(value);
 }
 
-// 发布说明摘要：取第一条有效行，去 markdown 加粗/列表符，超长截断。
-// "Full Changelog" 对比链接是 generate_release_notes 的噪音，跳过。
+// 发布说明摘要：取第一条有效行，去 markdown 加粗/列表符，超长截断
+// "Full Changelog" 对比链接是 generate_release_notes 的噪音，跳过
 function summarizeReleaseNotes(notes) {
   if (!notes) return '';
   for (const rawLine of String(notes).split('\n')) {
@@ -2922,8 +2999,8 @@ function showUpdateBanner(latest, current) {
   currentTag.className = 'update-current';
   currentTag.textContent = `（当前 ${current}）`;
   // 发布说明摘要：让用户知道"这次更新改了什么"——评分算法类调整直接
-  // 关系到用户分数为何变化（churn 治理，学 CommanderSalt 的季度日志）。
-  // GitHub generate_release_notes 的 "Full Changelog" 对比行是噪音，过滤掉。
+  // 关系到用户分数为何变化（churn 治理，学 CommanderSalt 的季度日志）
+  // GitHub generate_release_notes 的 "Full Changelog" 对比行是噪音，过滤掉
   const notesSummary = summarizeReleaseNotes(latest.notes);
   if (notesSummary) {
     const notesLine = document.createElement('span');

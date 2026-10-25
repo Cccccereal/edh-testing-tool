@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="同时查询 CommanderSalt 与 EDH Power Level 的 Commander 牌组评分。">
+  <meta name="description" content="同时查询 CommanderSalt 与 EDH Power Level 的 Commander 牌组评分">
   <meta name="color-scheme" content="dark">
   <title>Commander Power Check</title>
   <link rel="stylesheet" href="/styles.css?v=4">
@@ -26,8 +26,8 @@
   <main class="shell">
     <header class="hero">
       <p class="eyebrow">COMMANDER DECK ANALYZER</p>
-      <h1>多维度分析，<br><span>一次性掌握。</span></h1>
-      <p class="intro">输入公开的 Moxfield 牌组地址，同时获取 CommanderSalt 与 EDH Power Level 的独立分析结果。</p>
+      <h1>多维度分析，<br><span>一次性掌握</span></h1>
+      <p class="intro">输入公开的 Moxfield 牌组地址，同时获取 CommanderSalt 与 EDH Power Level 的独立分析结果</p>
     </header>
 
     <section class="search-panel" aria-labelledby="search-title">
@@ -59,7 +59,7 @@
             <button id="clear-decklist" class="ghost-button clear-decklist" type="button" aria-label="清空文本输入框">一键清空</button>
           </div>
           <textarea id="decklist-input" rows="10" placeholder="Commander&#10;1 Ria Ivor, Bane of Bladehold&#10;&#10;Deck&#10;1 Sol Ring" aria-describedby="form-message"></textarea>
-          <p>填写文本时将优先使用文本作为分析牌表。</p>
+          <p>填写文本时将优先使用文本作为分析牌表</p>
         </details>
       </form>
       <div class="build-entry">
@@ -76,7 +76,7 @@
 
     <section id="builder" class="builder" hidden aria-live="polite">
       <div class="builder-head">
-        <div><h2>从一张主将开始组牌</h2><p class="section-note">输入主将名称，逐轮选择与它相性的牌，直到组满 100 张。</p></div>
+        <div><h2>从一张主将开始组牌</h2><p class="section-note">输入主将名称，逐轮选择与它相性的牌，直到组满 100 张</p></div>
         <button id="builder-close" class="ghost-button" type="button">返回分析</button>
       </div>
       <div class="builder-commander-row">
@@ -131,7 +131,7 @@
         <aside id="builder-sidebar" class="builder-sidebar"></aside>
       </div>
       <div id="builder-complete" class="builder-complete" hidden>
-        <div class="builder-complete-head"><p class="eyebrow">DECK COMPLETE</p><h3>牌组已组满 100 张</h3><p class="section-note">可以继续微调牌表（不会超过 100 张），或直接送去完整分析。</p></div>
+        <div class="builder-complete-head"><p class="eyebrow">DECK COMPLETE</p><h3>牌组已组满 100 张</h3><p class="section-note">可以继续微调牌表（不会超过 100 张），或直接送去完整分析</p></div>
         <div class="builder-complete-actions">
           <button id="builder-export" class="ghost-button" type="button">导出牌表</button>
           <button id="builder-analyze" class="primary-button" type="button">送去完整分析</button>
@@ -202,18 +202,18 @@
         </article>
       </div>
       <section id="manabase-section" class="catalog-section" hidden>
-        <div class="section-heading toggleable" data-section-toggle data-section="manabase-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">MANABASE</p><h2>法术力基础</h2><p class="section-note">基于 Frank Karsten 的地张数回归与条件超几何模型。</p></div><button type="button" class="section-heading-toggle">收起</button></div>
+        <div class="section-heading toggleable" data-section-toggle data-section="manabase-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">MANABASE</p><h2>法术力基础</h2><p class="section-note">基于 Frank Karsten 的地张数回归与条件超几何模型</p></div><button type="button" class="section-heading-toggle">收起</button></div>
         <div id="manabase-content" class="manabase-content"></div>
       </section>
       <section id="construction-section" class="catalog-section" hidden>
-        <div class="section-heading toggleable" data-section-toggle data-section="construction-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">DECK CONSTRUCTION</p><h2>构筑概览</h2><p class="section-note">分类允许重叠；计划相关为启发式判断。</p></div><button type="button" class="section-heading-toggle">收起</button></div>
+        <div class="section-heading toggleable" data-section-toggle data-section="construction-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">DECK CONSTRUCTION</p><h2>构筑概览</h2><p class="section-note">分类允许重叠；计划相关为启发式判断</p></div><button type="button" class="section-heading-toggle">收起</button></div>
         <div id="construction-metrics" class="construction-grid"></div>
       </section>
       <section id="combo-section" class="catalog-section" hidden>
         <div class="section-heading toggleable" data-section-toggle data-section="combo-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">RELATED CARDS</p><h2>关联卡牌与组合</h2></div><button type="button" class="section-heading-toggle">收起</button></div>
         <div id="combo-list" class="combo-list"></div>
         <div id="combo-suggestion-block" hidden>
-          <div class="combo-suggestion-heading"><h3>差一张就成组合</h3><p>已有牌组里只缺下面这些牌就能完成的 Commander Spellbook 组合，按缺少张数与制胜优先排序。</p></div>
+          <div class="combo-suggestion-heading"><h3>差一张就成组合</h3><p>已有牌组里只缺下面这些牌就能完成的 Commander Spellbook 组合，按缺少张数与制胜优先排序</p></div>
           <div id="combo-suggestion-list" class="combo-list"></div>
         </div>
       </section>
@@ -222,7 +222,7 @@
         <div id="recommendation-tabs" class="recommendation-tabs" hidden role="tablist" aria-label="推荐视图"></div>
         <div id="recommendation-list" class="recommendation-grid"></div>
       </section>
-      <p class="disclaimer">两个网站使用不同评分模型，结果应分别理解，不计算平均值。卡牌数据由 Scryfall 提供，组合数据由 Commander Spellbook 提供。</p>
+      <p class="disclaimer">两个网站使用不同评分模型，结果应分别理解，不计算平均值卡牌数据由 Scryfall 提供，组合数据由 Commander Spellbook 提供</p>
     </section>
   </main>
   <div id="deck-drawer" class="deck-drawer" hidden>
@@ -248,7 +248,7 @@
           <button id="editor-versions-toggle" class="ghost-button" type="button">版本</button>
         </div>
       </div>
-      <p id="editor-dirty-note" class="editor-dirty-note" hidden>当前牌表有未重新分析的本地修改；构筑指标与评分仍基于上次分析。</p>
+      <p id="editor-dirty-note" class="editor-dirty-note" hidden>当前牌表有未重新分析的本地修改；构筑指标与评分仍基于上次分析</p>
       <div id="editor-versions-panel" class="editor-versions-panel" hidden>
         <div class="editor-versions-heading"><strong>已保存版本</strong><button id="editor-versions-close" class="ghost-button" type="button">关闭</button></div>
         <div id="editor-versions-list" class="editor-versions-list"></div>
@@ -260,7 +260,7 @@
           <div><strong>即时测算对比</strong><span>当前牌表 vs 原始分析</span></div>
           <button id="editor-compare-run" class="primary-button" type="button">重新测算</button>
         </div>
-        <p class="editor-compare-note">对当前编辑中的牌表跑一遍完整分析流水线（约 10–60 秒），对比评分与构筑指标的变化。</p>
+        <p class="editor-compare-note">对当前编辑中的牌表跑一遍完整分析流水线（约 10–60 秒），对比评分与构筑指标的变化</p>
         <div id="editor-compare-result" class="editor-compare-result" hidden></div>
       </div>
     </aside>
@@ -274,6 +274,7 @@
     <div class="card-zoom-backdrop" data-card-zoom-close></div>
     <section class="card-zoom-panel" role="dialog" aria-modal="true" aria-labelledby="card-zoom-name">
       <img id="card-zoom-image" alt="">
+      <div class="card-faces" id="card-zoom-faces" hidden></div>
       <span id="card-zoom-name"></span>
       <span id="card-zoom-oracle" hidden></span>
     </section>
