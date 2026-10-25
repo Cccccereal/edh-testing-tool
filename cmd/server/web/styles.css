@@ -521,6 +521,14 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 :root.light-mode #construction-section.scroll-reveal::before { background: #f0a392; }
 .catalog-section[hidden] { display: none; }
 .section-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin-bottom: 22px; }
+/* 刊物式题注：说明小字不再独立成行压在标题下面，而是以「—」引导、
+   与标题同基线行内续排（排不下时整段落到下一行，破折号天然读作续句） */
+.section-heading > div, .panel-heading > div, .builder-head > div:first-child {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 16px;
+}
+.section-note::before, .panel-heading p::before { content: "—\00a0"; color: var(--muted); }
+.section-note:empty::before, .panel-heading p:empty::before { content: none; }
+.section-note:empty { display: none; }
 /* 版面级标题走 display 字体，与面板标题拉开层级——开放版面靠字阶分组。 */
 .section-heading h2, .builder-head h2, .deck-drawer-head h2 { font-family: var(--font-display); font-size: 32px; letter-spacing: -.03em; }
 .section-heading.toggleable { cursor: pointer; }

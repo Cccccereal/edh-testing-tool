@@ -775,7 +775,7 @@ function applyBuildCandidates(candidates) {
         </div>
         <button type="button" class="card-zoom-button" data-zoom-src="${escapeHTML(preview)}" data-preview-name="${escapeHTML(card.name)}" data-card-text="${escapeHTML(cardText)}" aria-label="查看 ${escapeHTML(card.name)} 大图">大</button>
       </div>`;
-  }).join('') || '<p class="editor-empty">暂时没有更多建议，可快速加基本地或直接完成</p>';
+  }).join('') || '<p class="editor-empty">没有更多建议了——可快速补基本地，或直接完成</p>';
   localizeBuilderCandidates();
 }
 
