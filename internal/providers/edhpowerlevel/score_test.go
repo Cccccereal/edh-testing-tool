@@ -1,8 +1,12 @@
 package edhpowerlevel
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"powerlevel/internal/deck"
 	"powerlevel/internal/providers/spellbook"
 )
 
@@ -214,5 +218,52 @@ func TestLookupCardFlavorName(t *testing.T) {
 	}
 	if got := lookupCard(split, "Boggart Trawler // Boggart Bog"); got == nil {
 		t.Fatalf("split front-face lookup failed: %+v", got)
+	}
+}
+
+// TestScoreNormalizesOversizedDecks pins the deck-size divergence: the site's
+// curve is calibrated for 100-card decks, so without normalization an oversized
+// deck (Whtz the Bibliophile has no maximum deck size) inflates its score purely
+// by adding cards. Two decks of identical per-card quality — one 100 cards, one
+// 130 — must score the same; without the sizeScale factor the 130-card score is
+// 1.3x and the power level jumps accordingly.
+func TestScoreNormalizesOversizedDecks(t *testing.T) {
+	row := `{"name":"Filler Card","price":1.5,"cmc":2,"edhrec_rank":26900,"colors":["R"],` +
+		`"produced_mana":["R"],"mana_cost":"{1}{R}","type_line":"Artifact","layout":"normal",` +
+		`"legal":"legal","gamechanger":false,"oracle_text":["Tap: add mana."]}`
+	payload := `{"details":{"found":1,"requested":1},"data":[` + row + `]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(payload))
+	}))
+	t.Cleanup(server.Close)
+
+	scoreFor := func(quantity int) (float64, float64) {
+		t.Helper()
+		metrics, err := ScoreWithCombos(context.Background(),
+			deck.Deck{Mainboard: []deck.Card{{Name: "Filler Card", Quantity: quantity}}},
+			server.Client(), nil, nil, nil, t.TempDir(), server.URL)
+		if err != nil {
+			t.Fatalf("quantity %d: %v", quantity, err)
+		}
+		score, _ := metrics["score"].(float64)
+		power, _ := metrics["power_level"].(float64)
+		return score, power
+	}
+
+	hundredScore, hundredPower := scoreFor(100)
+	oversizedScore, oversizedPower := scoreFor(130)
+	if oversizedScore != hundredScore {
+		t.Fatalf("130-card score %v != 100-card score %v; deck-size normalization not applied", oversizedScore, hundredScore)
+	}
+	if oversizedPower != hundredPower {
+		t.Fatalf("130-card power %v != 100-card power %v", oversizedPower, hundredPower)
+	}
+	if hundredPower < 0 || hundredPower > 10 {
+		t.Fatalf("power level out of range: %v", hundredPower)
+	}
+	// Without normalization the 130-card deck scores 1.3x (30% more impact from
+	// identical cards); the normalized value must sit far below that.
+	if oversizedScore > hundredScore*1.01 {
+		t.Fatalf("oversized deck still inflates: %v vs %v", oversizedScore, hundredScore)
 	}
 }

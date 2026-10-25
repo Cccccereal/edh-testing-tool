@@ -717,6 +717,22 @@ func ScoreWithCombos(ctx context.Context, target deck.Deck, httpClient *http.Cli
 		avgCost = math.Round(avgCostNumerator/float64(nonlands)*100) / 100
 	}
 
+	// Deck-size normalization (deliberate divergence from the mirrored site).
+	// The site's power curve is calibrated for 100-card decks — its methodology
+	// page says the sharp start represents "the baseline of any 100 cards having
+	// some value" — while totalImpact is a plain sum over every card. A deck
+	// above 100 cards (Whtz the Bibliophile decks have no maximum size) therefore
+	// inflates the score purely by being thicker until the curve saturates at
+	// Power Level 10; the site only relabels that saturation as "10+". Rescale
+	// the impact sum to its 100-card equivalent so the score tracks per-card
+	// strength instead of deck thickness. Decks at or below 100 cards (including
+	// partial builder drafts) are scored exactly as before.
+	deckCards := lands + nonlands
+	sizeScale := 1.0
+	if deckCards > 100 {
+		sizeScale = 100.0 / float64(deckCards)
+	}
+
 	// Ka = Tipping Point: smallest cmc where cumulative non-land impact > 65% of p.
 	ka := 0
 	cumulative := 0.0
@@ -731,7 +747,7 @@ func ScoreWithCombos(ctx context.Context, target deck.Deck, httpClient *http.Cli
 	g := (avgCost + float64(ka)) / 2
 	ce := (cmcCeiling - g) / (cmcCeiling - cmcFloor)
 	efficiency := efficiencyLo + (efficiencyHi-efficiencyLo)*ce
-	score := totalImpact * efficiency
+	score := totalImpact * efficiency * sizeScale
 	powerLevel := curve(score, powerCurve, 1)
 
 	// Bracket rules (minimum bracket) and evaluated bracket.
