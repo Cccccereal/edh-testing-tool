@@ -151,8 +151,8 @@ var winconTextPhrases = []string{
 // winconXBurnRe 覆盖，这里点名收录"总量足以收尾但费用固定"的形状——
 // 规则文本表达不了"5 伤 × 最多三个目标 = 15 点"这种算术。
 var winconBurnNamed = []string{
-	"crackle with power",    // 聚力劈响：对至多三个目标各造成 5 伤
-	"aetherflux reservoir",  // 付 7 血打 50 点激光
+	"crackle with power",   // 聚力劈响：对至多三个目标各造成 5 伤
+	"aetherflux reservoir", // 付 7 血打 50 点激光
 }
 
 // winconXBurnRe：X 费可放大至致死的直伤/吸血爆发（Fireball、Banefire、
