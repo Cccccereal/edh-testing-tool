@@ -50,9 +50,12 @@ body {
   margin: 0;
   min-height: 100vh;
   color: var(--ink);
+  /* 深色主题：放弃三段灰绿斜渐变（发闷显脏），改为深平底 + 两层低量微光
+     ——酸绿在右上呼应主按钮，淡蓝在左中呼应数据色，层深靠表面色阶走 */
   background:
-    radial-gradient(circle at 85% 5%, rgba(215, 255, 63, .09), transparent 26rem),
-    linear-gradient(135deg, #10110f, #151814 60%, #10110f);
+    radial-gradient(circle at 85% 4%, rgba(215, 255, 63, .06), transparent 24rem),
+    radial-gradient(circle at 6% 30%, rgba(168, 205, 245, .05), transparent 30rem),
+    #0d0e0c;
   font-family: var(--font-body);
   font-size: 16px;
   line-height: 1.6;
@@ -410,7 +413,10 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .manabase-table-heading span { font: 700 12px var(--font-ui); letter-spacing: .08em; color: var(--acid); }
 .manabase-table-heading small { color: var(--muted); font-size: 12px; }
 .manabase-pips { display: grid; gap: 12px; }
-.manabase-pip-row { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 14px; }
+/* 第三列定宽：百分数读数各行宽窄不一，auto 列会把中间的灰色底条挤得
+   长短不齐；统一 172px 后所有底条右缘对齐 */
+.manabase-pip-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 172px; align-items: center; gap: 14px; }
+@media (max-width: 560px) { .manabase-pip-row { grid-template-columns: 34px minmax(0, 1fr) 128px; } }
 /* Moxfield-style mana production: bars come first — they are the main visual — with
    the two percentage readouts trailing after them. The fill is a real <i> child so
    the rAF pixel-width pass can animate it (inline percents get dropped by some

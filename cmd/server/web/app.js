@@ -1807,10 +1807,14 @@ function renderCardImpacts(points, deckCards) {
     }
   }
 
-  // 均值线口径：均值 CMC 按（非地、含份数）；均值冲击 = 总冲击 / 总张数。
-  let cmcNum = 0, cmcDen = 0, impactTotal = 0, copies = 0, maxCmc = 0, maxImpact = 0;
+  // 均值线与刻度口径：Y 轴按「单份权值」（总权值 ÷ 份数）作图——总权值会把
+  // 40 张基本地顶成全场最大的点（2×40=80）趴在左上，把真信号全部淹没；
+  // 单份口径下基本地齐落在底部 2.0，"左上 = 最超值"恢复成立。均值 CMC
+  // 按（非地、含份数）；均线 = 总权值 / 总份数，即单份均值。
+  let cmcNum = 0, cmcDen = 0, impactTotal = 0, copies = 0, maxCmc = 0, maxPerCopy = 0;
   for (const point of points) {
     const qty = Number(point.quantity) || 1;
+    const perCopy = (Number(point.impact) || 0) / qty;
     copies += qty;
     impactTotal += Number(point.impact) || 0;
     if (!point.is_land) {
@@ -1818,14 +1822,14 @@ function renderCardImpacts(points, deckCards) {
       cmcDen += qty;
     }
     maxCmc = Math.max(maxCmc, Number(point.cmc) || 0);
-    maxImpact = Math.max(maxImpact, Number(point.impact) || 0);
+    maxPerCopy = Math.max(maxPerCopy, perCopy);
   }
   const avgCmc = cmcDen ? cmcNum / cmcDen : 0;
   const avgImpact = copies ? impactTotal / copies : 0;
 
   const W = 860, H = 470, L = 48, R = 18, T = 16, B = 42;
   const xMax = Math.max(10, maxCmc);
-  const yMax = Math.max(1, maxImpact) * 1.06;
+  const yMax = Math.max(1, maxPerCopy) * 1.06;
   const x = (cmc) => L + (cmc / xMax) * (W - L - R);
   const y = (v) => H - B - (v / yMax) * (H - T - B);
   // 同坐标多点微散：按卡名哈希 ±5 视图单位偏移，基本地墙不叠成一个点。
@@ -1848,21 +1852,23 @@ function renderCardImpacts(points, deckCards) {
   parts.push(`<line x1="${x(avgCmc).toFixed(1)}" y1="${T}" x2="${x(avgCmc).toFixed(1)}" y2="${H - B}" class="impact-avg"/>`);
   parts.push(`<text x="${(x(avgCmc) + 6).toFixed(1)}" y="${T + 12}" class="impact-avg-label">均值 CMC ${formatNumber(avgCmc, 2)}</text>`);
   parts.push(`<line x1="${L}" y1="${y(avgImpact).toFixed(1)}" x2="${W - R}" y2="${y(avgImpact).toFixed(1)}" class="impact-avg"/>`);
-  parts.push(`<text x="${W - R - 6}" y="${(y(avgImpact) - 6).toFixed(1)}" text-anchor="end" class="impact-avg-label">均值冲击 ${formatNumber(avgImpact, 1)}</text>`);
+  parts.push(`<text x="${W - R - 6}" y="${(y(avgImpact) - 6).toFixed(1)}" text-anchor="end" class="impact-avg-label">均值权值 ${formatNumber(avgImpact, 1)}</text>`);
 
   for (const point of points) {
     const card = byName.get(String(point.name).toLowerCase()) || {};
     const qty = Number(point.quantity) || 1;
+    const totalImpact = Number(point.impact) || 0;
+    const perCopy = totalImpact / qty;
     const radius = qty >= 3 ? 8 : qty === 2 ? 6.5 : 5;
     const cx = x(Number(point.cmc) || 0);
-    const cy = y(Number(point.impact) || 0) + jitter(point.name);
+    const cy = y(perCopy) + jitter(point.name);
     const previewSrc = cardPreviewImage(card) || '';
     const cardText = previewTextFor(card);
-    const label = `${point.name}${qty > 1 ? ` ×${qty}` : ''} — 冲击 ${formatNumber(point.impact, 1)} @ ${point.cmc} 费`;
+    const label = `${point.name}${qty > 1 ? ` ×${qty}` : ''} — 权值 ${formatNumber(perCopy, 1)}/份${qty > 1 ? `（合计 ${formatNumber(totalImpact, 1)}）` : ''} @ ${point.cmc} 费`;
     parts.push(`<g class="impact-dot" data-preview-src="${escapeHTML(previewSrc)}" data-preview-name="${escapeHTML(point.name)}" data-card-text="${escapeHTML(cardText)}"><circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${radius}" fill="${impactTypeColor(point)}" opacity=".92"><title>${escapeHTML(label)}</title></circle></g>`);
   }
   parts.push(`<text x="${(L + W - R) / 2}" y="${H - 6}" text-anchor="middle" class="impact-axis">法术力值 →</text>`);
-  parts.push(`<text x="14" y="${(T + H - B) / 2}" text-anchor="middle" class="impact-axis" transform="rotate(-90 14 ${(T + H - B) / 2})">冲击 ↑</text>`);
+  parts.push(`<text x="14" y="${(T + H - B) / 2}" text-anchor="middle" class="impact-axis" transform="rotate(-90 14 ${(T + H - B) / 2})">权值 ↑</text>`);
 
   // 图例只列这套牌里实际出现的牌类。
   const present = new Set(points.map(impactTypeColor));
@@ -1871,7 +1877,7 @@ function renderCardImpacts(points, deckCards) {
     .join('');
 
   container.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="单卡权值散点图：横轴法术力值，纵轴冲击值">${parts.join('')}</svg>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="单卡权值散点图：横轴法术力值，纵轴单份权值">${parts.join('')}</svg>
     <div class="impact-legend">${legend}</div>`;
 }
 
@@ -3011,15 +3017,17 @@ function escapeHTML(value) {
   })[char]);
 }
 
-// Scroll-triggered reveal, state-driven (learned from bekventures.com): the
-// observer toggles a single `in-view` class and CSS transitions handle both
-// directions with the same curve, so scrolling back replays the exact mirror
-// of the entrance instead of a separate "dim" keyframe. The dataset guard
-// keeps repeat analyses from re-hiding sections already in view.
+// Scroll-triggered reveal, one-shot: 元素首次进入视口时加 in-view 并停止观察。
+// 之前的 toggle 式会在向上回滚时把已看过的区块再播一遍镜像进出，观感
+// 很怪；一次性 reveal 后内容看过即定格。dataset 防止重复分析对同一元素
+// 重复注册。触屏设备与 reduced-motion 由 CSS 侧整体关闭。
 function initScrollAnimations() {
-  const observer = new IntersectionObserver((entries) => {
+  const observer = new IntersectionObserver((entries, obs) => {
     entries.forEach((entry) => {
-      entry.target.classList.toggle('in-view', entry.isIntersecting);
+      if (entry.isIntersecting) {
+        entry.target.classList.add('in-view');
+        obs.unobserve(entry.target);
+      }
     });
   }, { rootMargin: '50px 0px 50px 0px' });
 
