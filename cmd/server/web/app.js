@@ -3096,45 +3096,50 @@ function showStickyNav() {
   if (links) links.hidden = false;
   document.body.classList.add('has-sticky-nav');
   
-  // Set up intersection observer for active link highlighting
+  const nav = document.querySelector('#sticky-nav');
   const sections = document.querySelectorAll('#results, #manabase-section, #construction-section, #impact-section, #combo-section, #recommendation-section');
   const navLinks = document.querySelectorAll('.sticky-nav-link');
-  
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        const id = entry.target.id;
-        navLinks.forEach((link) => {
-          if (link.getAttribute('href') === `#${id}`) {
-            link.classList.add('active');
-          } else {
-            link.classList.remove('active');
-          }
-        });
-      }
+
+  // Scroll-spy by section position: the active link is the last section whose
+  // top crossed the focus line (a bit under the sticky nav). The previous
+  // IntersectionObserver only reacted to sections ENTERING its narrowed root
+  // band and required a 0.3 visibility ratio that tall sections (推荐/Combo)
+  // could never reach inside it — so scrolling back up left the green
+  // underline stranded on the last section that had fired.
+  function updateActiveNavLink() {
+    const focusLine = window.scrollY + (nav ? nav.offsetHeight : 0) + Math.round(window.innerHeight * 0.2);
+    let currentHref = '';
+    sections.forEach((section) => {
+      // display:none 的区块 rect.top 恒为 0，会假性“越过焦点线”，跳过
+      if (section.hidden) return;
+      if (section.getBoundingClientRect().top + window.scrollY <= focusLine) currentHref = `#${section.id}`;
     });
-  }, {
-    threshold: 0.3,
-    rootMargin: '-80px 0px -60% 0px'
-  });
-  
-  sections.forEach((section) => observer.observe(section));
-  
-  // Smooth scroll on nav click
-  navLinks.forEach((link) => {
-    // 牌表编辑是按钮（无 href），不做平滑滚动，交给 data-deck-drawer-open 的委托处理器
-    if (link.tagName !== 'A' || !link.getAttribute('href')) return;
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      const targetId = link.getAttribute('href').substring(1);
-      const target = document.getElementById(targetId);
-      if (target) {
-        const navHeight = nav.offsetHeight;
-        const targetPosition = target.getBoundingClientRect().top + window.scrollY - navHeight - 20;
-        window.scrollTo({ top: targetPosition, behavior: 'smooth' });
-      }
+    navLinks.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === currentHref));
+  }
+
+  // showStickyNav runs again after every analysis; wire the listeners once.
+  if (!document.body.dataset.navSpyReady) {
+    document.body.dataset.navSpyReady = '1';
+    window.addEventListener('scroll', updateActiveNavLink, { passive: true });
+    window.addEventListener('resize', updateActiveNavLink, { passive: true });
+
+    // Smooth scroll on nav click
+    navLinks.forEach((link) => {
+      // 牌表编辑是按钮（无 href），不做平滑滚动，交给 data-deck-drawer-open 的委托处理器
+      if (link.tagName !== 'A' || !link.getAttribute('href')) return;
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetId = link.getAttribute('href').substring(1);
+        const target = document.getElementById(targetId);
+        if (target) {
+          const navHeight = nav ? nav.offsetHeight : 0;
+          const targetPosition = target.getBoundingClientRect().top + window.scrollY - navHeight - 20;
+          window.scrollTo({ top: targetPosition, behavior: 'smooth' });
+        }
+      });
     });
-  });
+  }
+  updateActiveNavLink();
 }
 
 // ---------------------------------------------------------------------------
