@@ -106,6 +106,7 @@ fn main() {
 
             let url: tauri::Url = format!("http://127.0.0.1:{port}").parse().unwrap();
             let local_origin = format!("http://127.0.0.1:{port}");
+            let popup_origin = local_origin.clone();
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title("EDH Power Level")
                 .inner_size(1280.0, 840.0)
@@ -121,6 +122,17 @@ fn main() {
                     // browser instead of replacing the Tauri window.
                     let _ = open::that(target);
                     false
+                })
+                // wry denies every new-window request (target="_blank" / window.open)
+                // silently when no handler is registered, which left the front-end's
+                // external links (前往 Moxfield 等) dead in the client. Hand those
+                // URLs to the system browser too and deny the in-app popup.
+                .on_new_window(move |url, _features| {
+                    let target = url.to_string();
+                    if !target.starts_with(&popup_origin) {
+                        let _ = open::that(target);
+                    }
+                    tauri::webview::NewWindowResponse::Deny
                 })
                 .build()?;
 

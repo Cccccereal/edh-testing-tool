@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 
 	"powerlevel/internal/deck"
@@ -82,6 +83,11 @@ func (c *Client) Load(ctx context.Context, sourceURL, sourceID string) (deck.Dec
 	}
 	result.Commanders = parseZone(zoneCards(zones["commanders"]), true)
 	result.Mainboard = parseZone(zoneCards(zones["mainboard"]), false)
+	// Moxfield's boards are JSON objects keyed by card ID, so parseZone walks them
+	// in Go's randomized map order — without sorting, the deck list and every
+	// export derived from it (deck_cards, editor state) reshuffle per analysis.
+	sort.Slice(result.Commanders, func(i, j int) bool { return result.Commanders[i].Name < result.Commanders[j].Name })
+	sort.Slice(result.Mainboard, func(i, j int) bool { return result.Mainboard[i].Name < result.Mainboard[j].Name })
 	if len(result.Commanders) == 0 {
 		return deck.Deck{}, errors.New("Moxfield deck has no commander")
 	}

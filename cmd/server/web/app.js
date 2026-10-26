@@ -1110,7 +1110,11 @@ function builderToDeckText() {
     if (!counts.has(key)) counts.set(key, { name: card.name, count: 0 });
     counts.get(key).count += 1;
   }
-  const mainboardLines = Array.from(counts.values()).map((entry) => `${entry.count} ${entry.name}`);
+  // Sort the aggregated entries by name so the exported list is deterministic
+  // (insertion order is just click order) and matches the canonical deck text.
+  const mainboardLines = Array.from(counts.values())
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .map((entry) => `${entry.count} ${entry.name}`);
   return `Commander\n${commanderLines.join('\n')}\n\nDeck\n${mainboardLines.join('\n')}`;
 }
 
@@ -1171,7 +1175,7 @@ function setSectionCollapsed(sectionId, collapsed) {
   const chip = section.querySelector('.section-heading-toggle');
   if (chip) chip.textContent = collapsed ? '展开' : '收起';
 }
-builderExport.addEventListener('click', () => downloadText('decklist.txt', builderToDeckText()));
+builderExport.addEventListener('click', () => exportDecklistText(builderExport, builderToDeckText()));
 builderAnalyze.addEventListener('click', () => {
   decklistInput.value = builderToDeckText();
   closeBuilder();
@@ -2228,12 +2232,28 @@ async function addCardByName(rawName) {
 }
 
 // Serialize the current editor state to the canonical decklist format. Uses the same
-// "quantity name" shape PrintPlainText consumes; sorting is skipped to preserve the
-// user's working order, which is fine for an editable local draft.
+// "quantity name" shape PrintPlainText consumes. Entries sort by name so the export
+// is deterministic and matches the backend canonical decklist; the editor's working
+// order comes from the Moxfield API's map iteration and is effectively random.
 function editorToDeckText() {
-  const commanders = editorCards.filter((item) => item.commander).map((item) => `${item.quantity || 1} ${item.card?.name || ''}`);
-  const mainboard = editorCards.filter((item) => !item.commander).map((item) => `${item.quantity || 1} ${item.card?.name || ''}`);
+  const byName = (a, b) => String(a.card?.name || '').localeCompare(String(b.card?.name || ''));
+  const commanders = editorCards.filter((item) => item.commander).sort(byName).map((item) => `${item.quantity || 1} ${item.card?.name || ''}`);
+  const mainboard = editorCards.filter((item) => !item.commander).sort(byName).map((item) => `${item.quantity || 1} ${item.card?.name || ''}`);
   return `Commander\n${commanders.join('\n')}\n\nDeck\n${mainboard.join('\n')}`;
+}
+
+// 导出牌表：剪贴板优先，复制失败再退回文件下载。桌面客户端（Tauri WebView）里
+// <a download> 超链导出不可靠，而「复制 → 粘贴进 Moxfield」本来就是主工作流。
+async function exportDecklistText(button, text) {
+  const original = button.textContent;
+  const copied = await copyTextToClipboard(text);
+  if (copied) {
+    button.textContent = '已复制';
+  } else {
+    downloadText('decklist.txt', text);
+    button.textContent = '已下载';
+  }
+  setTimeout(() => { button.textContent = original; }, 1600);
 }
 
 // Clipboard write with a fallback for Android WebView, where navigator.clipboard
@@ -2293,8 +2313,8 @@ function downloadText(filename, text) {
   URL.revokeObjectURL(url);
 }
 
-function exportEditedDeck() {
-  downloadText('decklist.txt', editorToDeckText());
+async function exportEditedDeck() {
+  await exportDecklistText(editorExportButton, editorToDeckText());
 }
 
 function versionsKey() {
