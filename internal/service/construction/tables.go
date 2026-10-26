@@ -37,14 +37,14 @@ var targets = []struct {
 	hint      string
 }{
 	// 靠什么赢
-	{"wincon", "胜负手", 4, "win", "牌面直接写明获胜/令对手落败的牌，加上已识别的制胜组合（如 Thassa's Oracle）"},
+	{"wincon", "胜负手", 4, "win", "牌面直接写明获胜/令对手落败的牌，加上已识别的制胜组合与大直伤终局（X 费爆发、聚力劈响类）"},
 	{"finisher", "终结者", 5, "win", "5 攻以上带穿透的大生物或全军增幅，靠场面收尾（如 Craterhoof）"},
 	{"evasive", "穿透", 6, "win", "带穿透关键词的生物，以及持续赋予穿透的武具/灵气/地（如 Aether Tunnel、Rogue's Passage）；一次性欺敌咒语不计"},
 	// 怎么运转
 	{"lands", "正向法力", 38, "engine", "地与 0 费产费神器，净增法术力来源（Sol Ring 也算）"},
 	{"ramp", "加速", 10, "engine", "产费、找地、降费与珍宝"},
 	{"draw_discard", "牌差件", 12, "engine", "抽牌、放逐牌库顶、坟场回收等资源补给"},
-	{"tutors", "检索", 5, "engine", "从牌库检索特定牌（纯找地归加速）"},
+	{"tutors", "检索", 5, "engine", "从牌库检索特定牌或精堆牌库顶（纯找地归加速）"},
 	// 怎么应对
 	// 清场不再单独立指标（旧目标 4）：清场牌本就命中群体干扰的触发词，
 	// 独立配额会把同一张牌重复计缺两次。伤害型清场（"damage to each
@@ -146,3 +146,17 @@ var winconTextPhrases = []string{
 	"a player with 10 or more poison counters loses the game",
 	"players with 10 or more poison counters lose the game",
 }
+
+// winconBurnNamed：固定数值的大直伤终局咒语。X 费可放大的爆发由
+// winconXBurnRe 覆盖，这里点名收录"总量足以收尾但费用固定"的形状——
+// 规则文本表达不了"5 伤 × 最多三个目标 = 15 点"这种算术。
+var winconBurnNamed = []string{
+	"crackle with power",    // 聚力劈响：对至多三个目标各造成 5 伤
+	"aetherflux reservoir",  // 付 7 血打 50 点激光
+}
+
+// winconXBurnRe：X 费可放大至致死的直伤/吸血爆发（Fireball、Banefire、
+// Comet Storm、Earthquake、Exsanguinate、Torment of Hailfire、Debt to the
+// Deathless 形状）。必须与"费用带 X"同时成立（classify 侧校验），固定
+// 数值的伤害模板不受影响。
+var winconXBurnRe = regexp.MustCompile(`deals (?:twice )?x damage|loses (?:two times )?x life`)

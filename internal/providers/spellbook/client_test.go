@@ -279,3 +279,115 @@ func TestAllComponentsInDeck(t *testing.T) {
 		t.Fatal("test fixture looks wrong")
 	}
 }
+
+// TestSearchServesDiskCacheAcrossClients pins the persistence tier: a fresh
+// fetch by one client writes the disk row, and a second client with the same
+// cache dir (fresh process equivalent, dead upstream) must serve the combo
+// without any network call.
+func TestSearchServesDiskCacheAcrossClients(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		_, _ = w.Write([]byte(comboResponse))
+	}))
+	defer server.Close()
+	dir := t.TempDir()
+
+	first := NewWithPacing(server.URL, server.Client(), time.Millisecond)
+	first.SetDiskDir(dir)
+	if got, err := first.Search(context.Background(), []string{"Card A"}, 12); err != nil || len(got) != 1 {
+		t.Fatalf("first search: %v combos=%v", err, got)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("expected 1 upstream call, got %d", calls.Load())
+	}
+
+	dead := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("fresh disk row must not hit the upstream")
+	}))
+	dead.Close() // connection refused from here on
+	second := NewWithPacing(dead.URL, server.Client(), time.Millisecond)
+	second.SetDiskDir(dir)
+	got, err := second.Search(context.Background(), []string{"Card A"}, 12)
+	if err != nil {
+		t.Fatalf("second search: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "1-2" {
+		t.Fatalf("disk-served combo missing: %+v", got)
+	}
+}
+
+// TestSearchFallsBackToStaleDiskRow pins the degradation path: an expired disk
+// row plus a dead upstream still yields the old combos instead of nothing.
+func TestSearchFallsBackToStaleDiskRow(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(comboResponse))
+	}))
+	dir := t.TempDir()
+	client := NewWithPacing(server.URL, server.Client(), time.Millisecond)
+	client.SetDiskDir(dir)
+	if _, err := client.Search(context.Background(), []string{"Card A"}, 12); err != nil {
+		t.Fatal(err)
+	}
+	server.Close()
+	// Age the row past diskTTL so only the failure fallback can serve it.
+	client.mu.Lock()
+	client.disk.put("card a", mustCombos(t), time.Now().Add(-48*time.Hour))
+	client.mu.Unlock()
+
+	aged := NewWithPacing(server.URL, server.Client(), time.Millisecond)
+	aged.SetDiskDir(dir)
+	got, err := aged.Search(context.Background(), []string{"Card A"}, 12)
+	if err != nil {
+		t.Fatalf("aged search: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("stale fallback lost the combo: %+v", got)
+	}
+}
+
+// TestSearchRetriesTransientFailureOnce pins the retry: with no disk row to
+// fall back on, a single failed request is retried once before the name is
+// skipped.
+func TestSearchRetriesTransientFailureOnce(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte(comboResponse))
+	}))
+	defer server.Close()
+	client := NewWithPacing(server.URL, server.Client(), time.Millisecond)
+	got, err := client.Search(context.Background(), []string{"Card A"}, 12)
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("retry did not recover the combo: %+v (calls=%d)", got, calls.Load())
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("expected exactly 2 upstream calls (fail + retry), got %d", calls.Load())
+	}
+}
+
+func mustCombos(t *testing.T) []Combo {
+	t.Helper()
+	// Decode the fixture straight through the same response shape.
+	var payload response
+	if err := json.Unmarshal([]byte(comboResponse), &payload); err != nil {
+		t.Fatal(err)
+	}
+	var combos []Combo
+	for _, item := range payload.Results {
+		combo := Combo{ID: item.ID, SourceURL: "https://commanderspellbook.com/combo/" + item.ID, ManaValueNeeded: item.ManaValueNeeded}
+		for _, use := range item.Uses {
+			zone := strings.Join(use.ZoneLocations, ",")
+			combo.Components = append(combo.Components, Component{Name: use.Card.Name, OracleID: use.Card.OracleID, ImageNormal: use.Card.ImageUriFrontNormal, ImageSmall: use.Card.ImageUriFrontSmall, Zone: zone})
+		}
+		combo.Name = "Card A + Card B"
+		combos = append(combos, combo)
+	}
+	return combos
+}

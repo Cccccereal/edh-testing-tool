@@ -560,20 +560,16 @@ function addStapleCard(name, card, gameChanger) {
     noteBuildReject('"' + name + '" 是重复普通牌，只能放一张（基本地除外）');
     return;
   }
-  if (buildCards.length + (buildCommanders.length || (buildCommander ? 1 : 0)) >= BUILD_TARGET) return;
+  if (buildCapReached()) return;
   buildChosen.push(key);
   const entry = { name, card: card || { name, type_line: 'Artifact' } };
   if (gameChanger) entry.game_changer = true;
   buildCards.push(entry);
   renderBuilderSidebar();
   if (isBuilderComplete()) {
-    builderComplete.hidden = false;
-    if (!hasShownCompletePulse) {
-      hasShownCompletePulse = true;
-      builderSidebar.classList.add('complete-pulse');
-      setTimeout(() => builderSidebar.classList.remove('complete-pulse'), 2000);
-      builderComplete.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
+    noteBuilderComplete();
+    // 无上限主将还能继续选：完成横幅之外同时换掉已选中的候选。
+    if (buildUnbounded) refreshIfCandidateCollides();
   } else {
     refreshIfCandidateCollides();
   }
@@ -658,18 +654,13 @@ function addLandCard(name) {
     noteBuildReject('"' + name + '" 已经在牌组里了，普通地同样受单卡限制');
     return;
   }
-  if (buildCards.length + (buildCommanders.length || (buildCommander ? 1 : 0)) >= BUILD_TARGET) return;
+  if (buildCapReached()) return;
   buildChosen.push(normalizeBuildName(name));
   buildCards.push({ name, card: { name, type_line: 'Land' } });
   renderBuilderSidebar();
   if (isBuilderComplete()) {
-    builderComplete.hidden = false;
-    if (!hasShownCompletePulse) {
-      hasShownCompletePulse = true;
-      builderSidebar.classList.add('complete-pulse');
-      setTimeout(() => builderSidebar.classList.remove('complete-pulse'), 2000);
-      builderComplete.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
+    noteBuilderComplete();
+    if (buildUnbounded) refreshIfCandidateCollides();
   } else {
     refreshIfCandidateCollides();
   }
@@ -683,6 +674,46 @@ function isBuilderComplete() {
 // below 100 or starting a new build, so users get visual feedback each time they
 // complete the deck after editing.
 let hasShownCompletePulse = false;
+// 无上限主将（Rulebreaker，如 Whtz the Bibliophile 的 "no maximum deck size"）：
+// 组牌不受 100 张硬顶约束，达标后仍可继续加牌。普通主将维持原有封顶行为。
+let buildUnbounded = false;
+
+function commanderAllowsUnboundedDeck() {
+  return buildCommanders.some((c) => {
+    const card = c.card || {};
+    const text = `${card.oracle_text || ''} ${(card.faces || []).map((face) => face.oracle_text || '').join(' ')}`.toLowerCase();
+    return text.includes('no maximum deck size');
+  });
+}
+
+function buildCardCount() {
+  return buildCards.length + (buildCommanders.length || (buildCommander ? 1 : 0));
+}
+
+function buildCapReached() {
+  if (buildUnbounded) return false;
+  return buildCardCount() >= BUILD_TARGET;
+}
+
+// 达成 100 张时的完成横幅与脉冲动画；文案随主将是否无上限切换。
+function noteBuilderComplete() {
+  const heading = builderComplete.querySelector('.builder-complete-head h3');
+  const note = builderComplete.querySelector('.builder-complete-head .section-note');
+  if (buildUnbounded) {
+    if (heading) heading.textContent = '已组满 100 张，主将无上限';
+    if (note) note.textContent = '主将允许超过 100 张，可继续加牌，或直接送去做完整分析';
+  } else {
+    if (heading) heading.textContent = '牌组已组满 100 张';
+    if (note) note.textContent = '可继续微调（不会超过 100 张），或直接送去做完整分析';
+  }
+  builderComplete.hidden = false;
+  if (!hasShownCompletePulse) {
+    hasShownCompletePulse = true;
+    builderSidebar.classList.add('complete-pulse');
+    setTimeout(() => builderSidebar.classList.remove('complete-pulse'), 2000);
+    builderComplete.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
 
 // After a quick-add (land / basic / staple / candidate) puts a card into the draft,
 // refresh the 3-choose-1 hand if any currently shown candidate is now already chosen.
@@ -706,6 +737,8 @@ async function startBuild() {
   builderMessage.textContent = '';
   builderStartButton.disabled = true;
   builderStartButton.textContent = '加载中…';
+  // 先按有上限处理，解析主将成功后再按牌面文本升级；解析失败不会沿用上局状态
+  buildUnbounded = false;
   try {
     // Resolve the (single, or already-paired) commander(s) for color identity and
     // display data; the build-suggest call below only seeds the candidate hand.
@@ -722,6 +755,7 @@ async function startBuild() {
     buildCommanders = (resolved.commanders || []).map((c) => ({ name: c.name, card: c.card, is_partner: c.is_partner }));
     buildColors = (resolved.color_identity || []).slice();
     buildCommander = buildCommanders.map((c) => c.name).join(' // ');
+    buildUnbounded = commanderAllowsUnboundedDeck();
     renderCommanderPreview(buildCommanders);
     syncPartnerUI(buildCommanders);
 
@@ -916,13 +950,9 @@ function addBuildCard(candidate) {
   buildCards.push(entry);
   renderBuilderSidebar();
   if (isBuilderComplete()) {
-    builderComplete.hidden = false;
-    if (!hasShownCompletePulse) {
-      hasShownCompletePulse = true;
-      builderSidebar.classList.add('complete-pulse');
-      setTimeout(() => builderSidebar.classList.remove('complete-pulse'), 2000);
-      builderComplete.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
+    noteBuilderComplete();
+    // 无上限主将选满 100 后继续三选一：换新一手，选过的候选不再回放。
+    if (buildUnbounded) nextBuildBatch();
   } else {
     // Fetch a fresh random hand immediately; the un-picked cards vanish with it.
     nextBuildBatch();
@@ -933,18 +963,13 @@ function addBasicLand(type) {
   const key = type.toLowerCase();
   const count = buildCards.filter((card) => card.name.toLowerCase() === key).length;
   // Basic lands (including the colorless Wastes) may appear in multiples; still avoid
-  // exceeding the 100-card ceiling.
-  if (buildCards.length + (buildCommanders.length || (buildCommander ? 1 : 0)) >= BUILD_TARGET) return;
+  // exceeding the 100-card ceiling (unbounded commanders exempt).
+  if (buildCapReached()) return;
   buildCards.push({ name: type, card: { name: type, type_line: `Basic Land — ${type}` } });
   renderBuilderSidebar();
   if (isBuilderComplete()) {
-    builderComplete.hidden = false;
-    if (!hasShownCompletePulse) {
-      hasShownCompletePulse = true;
-      builderSidebar.classList.add('complete-pulse');
-      setTimeout(() => builderSidebar.classList.remove('complete-pulse'), 2000);
-      builderComplete.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
+    noteBuilderComplete();
+    if (buildUnbounded) refreshIfCandidateCollides();
   } else {
     refreshIfCandidateCollides();
   }
@@ -1434,6 +1459,7 @@ function render(payload) {
   warning.textContent = payload.warnings?.join(' ') || '';
   renderManabase(payload.manabase);
   renderConstructionReport(payload.construction_report);
+  renderCardImpacts(payload.results?.edhpowerlevel?.metrics?.card_impacts, payload.deck_cards || []);
   renderCombos(payload.combos || [], payload.combo_suggestions || []);
   renderRecommendations(payload.recommendations || [], payload.gap_recommendations || [], payload.recommendation_keywords || []);
   renderDeckCards(payload.deck_cards || []);
@@ -1739,6 +1765,114 @@ function comboCategoryBadge(combo) {
   const key = comboCategory(combo);
   const category = COMBO_CATEGORIES[key];
   return `<span class="combo-badge combo-badge-${key}" title="${escapeHTML(combo.result || '')}">${category.label}</span>`;
+}
+
+// --- 单卡权值散点（原站 "Impact and CMC by Card" 的本地部署） ------------------
+// 每张牌一个点：横轴法术力值、纵轴冲击贡献（含份数），按牌类着色，蓝色虚线
+// 是均值 CMC 与均值单卡权值。纯 SVG 无依赖；hover 走全局卡牌预览（与牌表
+// 按（小写全名/正面名）联表取卡图与规则文本）。
+const IMPACT_TYPE_COLORS = [
+  ['Creature', '#e0674f'],
+  ['Artifact', '#c9b891'],
+  ['Enchantment', '#7fb06d'],
+  ['Instant', '#6db7e3'],
+  ['Sorcery', '#5d8fd6'],
+  ['Planeswalker', '#e59ec9'],
+  ['Battle', '#a88fe0'],
+  ['Land', '#9aa7b8'],
+];
+
+function impactTypeColor(point) {
+  const type = String(point.type_line || '').toLowerCase();
+  for (const [key, color] of IMPACT_TYPE_COLORS) {
+    if (type.includes(key.toLowerCase())) return color;
+  }
+  return '#a7a59e';
+}
+
+function renderCardImpacts(points, deckCards) {
+  const section = document.querySelector('#impact-section');
+  const container = document.querySelector('#impact-chart');
+  if (!Array.isArray(points) || !points.length || !section || !container) {
+    if (section) section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+
+  const byName = new Map();
+  for (const item of deckCards) {
+    const card = item.card || {};
+    for (const name of [card.name, ...(card.faces || []).map((face) => face.name)].filter(Boolean)) {
+      byName.set(String(name).toLowerCase(), card);
+    }
+  }
+
+  // 均值线口径：均值 CMC 按（非地、含份数）；均值冲击 = 总冲击 / 总张数。
+  let cmcNum = 0, cmcDen = 0, impactTotal = 0, copies = 0, maxCmc = 0, maxImpact = 0;
+  for (const point of points) {
+    const qty = Number(point.quantity) || 1;
+    copies += qty;
+    impactTotal += Number(point.impact) || 0;
+    if (!point.is_land) {
+      cmcNum += (Number(point.cmc) || 0) * qty;
+      cmcDen += qty;
+    }
+    maxCmc = Math.max(maxCmc, Number(point.cmc) || 0);
+    maxImpact = Math.max(maxImpact, Number(point.impact) || 0);
+  }
+  const avgCmc = cmcDen ? cmcNum / cmcDen : 0;
+  const avgImpact = copies ? impactTotal / copies : 0;
+
+  const W = 860, H = 470, L = 48, R = 18, T = 16, B = 42;
+  const xMax = Math.max(10, maxCmc);
+  const yMax = Math.max(1, maxImpact) * 1.06;
+  const x = (cmc) => L + (cmc / xMax) * (W - L - R);
+  const y = (v) => H - B - (v / yMax) * (H - T - B);
+  // 同坐标多点微散：按卡名哈希 ±5 视图单位偏移，基本地墙不叠成一个点。
+  const jitter = (name) => {
+    let h = 0;
+    for (const ch of String(name)) h = (h * 31 + ch.codePointAt(0)) % 997;
+    return (h / 997 - 0.5) * 10;
+  };
+
+  const parts = [];
+  for (let i = 0; i <= 4; i++) {
+    const v = (yMax / 4) * i;
+    const yy = y(v);
+    parts.push(`<line x1="${L}" y1="${yy.toFixed(1)}" x2="${W - R}" y2="${yy.toFixed(1)}" class="impact-grid"/>`);
+    parts.push(`<text x="${L - 8}" y="${(yy + 4).toFixed(1)}" text-anchor="end" class="impact-tick">${v.toFixed(v < 10 ? 1 : 0)}</text>`);
+  }
+  for (let cmc = 0; cmc <= xMax; cmc++) {
+    parts.push(`<text x="${x(cmc).toFixed(1)}" y="${H - B + 20}" text-anchor="middle" class="impact-tick">${cmc}</text>`);
+  }
+  parts.push(`<line x1="${x(avgCmc).toFixed(1)}" y1="${T}" x2="${x(avgCmc).toFixed(1)}" y2="${H - B}" class="impact-avg"/>`);
+  parts.push(`<text x="${(x(avgCmc) + 6).toFixed(1)}" y="${T + 12}" class="impact-avg-label">均值 CMC ${formatNumber(avgCmc, 2)}</text>`);
+  parts.push(`<line x1="${L}" y1="${y(avgImpact).toFixed(1)}" x2="${W - R}" y2="${y(avgImpact).toFixed(1)}" class="impact-avg"/>`);
+  parts.push(`<text x="${W - R - 6}" y="${(y(avgImpact) - 6).toFixed(1)}" text-anchor="end" class="impact-avg-label">均值冲击 ${formatNumber(avgImpact, 1)}</text>`);
+
+  for (const point of points) {
+    const card = byName.get(String(point.name).toLowerCase()) || {};
+    const qty = Number(point.quantity) || 1;
+    const radius = qty >= 3 ? 8 : qty === 2 ? 6.5 : 5;
+    const cx = x(Number(point.cmc) || 0);
+    const cy = y(Number(point.impact) || 0) + jitter(point.name);
+    const previewSrc = cardPreviewImage(card) || '';
+    const cardText = previewTextFor(card);
+    const label = `${point.name}${qty > 1 ? ` ×${qty}` : ''} — 冲击 ${formatNumber(point.impact, 1)} @ ${point.cmc} 费`;
+    parts.push(`<g class="impact-dot" data-preview-src="${escapeHTML(previewSrc)}" data-preview-name="${escapeHTML(point.name)}" data-card-text="${escapeHTML(cardText)}"><circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${radius}" fill="${impactTypeColor(point)}" opacity=".92"><title>${escapeHTML(label)}</title></circle></g>`);
+  }
+  parts.push(`<text x="${(L + W - R) / 2}" y="${H - 6}" text-anchor="middle" class="impact-axis">法术力值 →</text>`);
+  parts.push(`<text x="14" y="${(T + H - B) / 2}" text-anchor="middle" class="impact-axis" transform="rotate(-90 14 ${(T + H - B) / 2})">冲击 ↑</text>`);
+
+  // 图例只列这套牌里实际出现的牌类。
+  const present = new Set(points.map(impactTypeColor));
+  const legend = IMPACT_TYPE_COLORS.filter(([, color]) => present.has(color))
+    .map(([label, color]) => `<span class="impact-legend-item"><i style="background:${color}"></i>${label}</span>`)
+    .join('');
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="单卡权值散点图：横轴法术力值，纵轴冲击值">${parts.join('')}</svg>
+    <div class="impact-legend">${legend}</div>`;
 }
 
 function renderCombos(combos, suggestions) {
@@ -2667,11 +2801,11 @@ function hideCardPreview() {
 }
 
 document.addEventListener('pointerover', (event) => {
-  const trigger = event.target.closest('.mtg-card, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img');
+  const trigger = event.target.closest('.mtg-card, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot');
   if (trigger && !trigger.contains(event.relatedTarget)) showCardPreview(trigger);
 });
 document.addEventListener('pointerout', (event) => {
-  const trigger = event.target.closest('.mtg-card, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img');
+  const trigger = event.target.closest('.mtg-card, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot');
   if (trigger && !trigger.contains(event.relatedTarget)) hideCardPreview();
 });
 document.addEventListener('focusin', (event) => { if (event.target.matches('.mtg-card, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img')) showCardPreview(event.target); });
@@ -2712,11 +2846,28 @@ function renderProvider(prefix, provider, secondaryMetrics) {
   const suggestions = prefix === 'salt'
     ? renderSuggestions(metrics.suggestions)
     : renderEDHBracketDetails(metrics.bracket_details);
+  // EDH 模型披露：单卡评分 = 牌价轴 + EDHREC 热度轴，这里报出牌价在实际评分
+  // 里的占比（旧缓存载荷没有该指标时整行不渲染）——衡量的是牌组含金量，
+  // 不是对局强度，让用户自己掂量信不信。超编牌组（如 Whtz 主将）另行注明
+  // 评分与冲击已按 100 张等效折算，回应"为什么 130 张不是天然高分"。
+  const priceShare = Number(metrics.price_weight_share);
+  const deckCards = Number(metrics.deck_cards);
+  const sizeNote = metrics.size_normalized && deckCards > 100
+    ? `牌组共 ${deckCards} 张，评分与冲击已按 100 张等效折算`
+    : '';
+  const disclosureBody = [
+    priceShare > 0 ? `本评分约 ${priceShare}% 的权重来自牌价，其余来自 EDHREC 热度——衡量牌组含金量，不等于对局强度` : '',
+    sizeNote,
+  ].filter(Boolean).join('；');
+  const disclosure = prefix === 'edh' && disclosureBody
+    ? `<p class="provider-disclosure">${disclosureBody}</p>`
+    : '';
   content.innerHTML = `
     <div class="hero-metric"><strong>${power}</strong><span>/ 10 Power Level</span></div>
     ${brackets}
     <div class="metric-list">${list}</div>
-    ${suggestions}`;
+    ${suggestions}
+    ${disclosure}`;
 }
 
 function renderEDHBracketDetails(details) {
@@ -2918,7 +3069,7 @@ function showStickyNav() {
   document.body.classList.add('has-sticky-nav');
   
   // Set up intersection observer for active link highlighting
-  const sections = document.querySelectorAll('#results, #manabase-section, #construction-section, #combo-section, #recommendation-section');
+  const sections = document.querySelectorAll('#results, #manabase-section, #construction-section, #impact-section, #combo-section, #recommendation-section');
   const navLinks = document.querySelectorAll('.sticky-nav-link');
   
   const observer = new IntersectionObserver((entries) => {

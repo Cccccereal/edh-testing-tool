@@ -2,10 +2,14 @@ package spellbook
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -56,6 +60,11 @@ type Client struct {
 	cache map[string]cacheEntry
 	mu    sync.Mutex
 	ttl   time.Duration
+	// disk is the persistent tier under the same keying as the memory cache.
+	// Fresh rows (diskTTL) serve without network; rows of any age are served
+	// when the upstream fails, so a throttled or downed Spellbook degrades to
+	// slightly-old combos instead of dropping a deck's early-combo detection.
+	disk *diskCache
 	// minNameDelay spaces out per-name requests. Spellbook throttles request
 	// bursts (a rapid 12-request batch gets 429s and a ~45s window), while
 	// paced serial requests stay at 200 — so pacing is what keeps a cold-cache
@@ -64,6 +73,17 @@ type Client struct {
 	// lastFetch timestamps the most recent real name query so Search can pace
 	// uncached lookups across the burst-throttling window.
 	lastFetch time.Time
+}
+
+// SetDiskDir wires the persistent cache directory (e.g. config.CacheDir); rows
+// live under <dir>/spellbook/. Best-effort: a broken directory just means the
+// client keeps its memory-only behavior.
+func (c *Client) SetDiskDir(dir string) {
+	if sub, err := newDiskCache(dir); err == nil {
+		c.mu.Lock()
+		c.disk = sub
+		c.mu.Unlock()
+	}
 }
 
 type cacheEntry struct {
@@ -137,39 +157,69 @@ func (c *Client) Search(ctx context.Context, names []string, limit int) ([]Combo
 			appendCached(cached, &combos, &seen, limit)
 			continue
 		}
-		// Pace uncached names so a cold deck analysis does not burst the API.
-		// Cached names skip the wait: only real network hits need spacing. The
-		// send slot is reserved under the mutex before waiting, so concurrent
-		// deck analyses space their requests against each other instead of each
-		// sleeping the same delay and bursting together.
-		c.mu.Lock()
-		wait := time.Duration(0)
-		if last := c.lastFetch; !last.IsZero() {
-			if gap := c.minNameDelay - time.Since(last); gap > 0 {
-				wait = gap
-			}
+		// 磁盘层新鲜数据（24h 内）直接采用并回填内存，绕开限速闸门。
+		if fresh, ok := c.diskGetFresh(key); ok {
+			c.set(key, fresh)
+			appendCached(fresh, &combos, &seen, limit)
+			continue
 		}
-		c.lastFetch = time.Now().Add(wait)
-		c.mu.Unlock()
-		if wait > 0 {
-			timer := time.NewTimer(wait)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return combos, ctx.Err()
-			case <-timer.C:
-			}
+		if err := c.waitSlot(ctx); err != nil {
+			return combos, err
 		}
 		fetched, err := c.fetchName(ctx, key, limit)
 		if err != nil {
-			// A throttled or failed single name is skipped: the batch continues
-			// with the remaining names rather than blanking every combo.
-			continue
+			// 上游抖动/限流时优先退给磁盘里任何年龄的旧数据：组合库变化很慢，
+			// 昨天的组合线远好过这次分析直接漏检。
+			if stale, ok := c.diskGetAny(key); ok {
+				c.set(key, stale)
+				appendCached(stale, &combos, &seen, limit)
+				continue
+			}
+			// 无旧数据可退：隔一个限速间隔再试一次，抗瞬时 5xx/网络抖动；
+			// 仍然失败才放弃这个名字（与旧行为一致——批内其余名字继续）。
+			if err := c.waitSlot(ctx); err != nil {
+				return combos, err
+			}
+			if fetched, err = c.fetchName(ctx, key, limit); err != nil {
+				continue
+			}
 		}
 		c.set(key, fetched)
+		c.diskPut(key, fetched)
 		appendCached(fetched, &combos, &seen, limit)
 	}
 	return combos, nil
+}
+
+// waitSlot reserves the next pacing slot (reserveSlot) and sleeps until it
+// opens, abandoning the wait when ctx is done.
+func (c *Client) waitSlot(ctx context.Context) error {
+	if wait := c.reserveSlot(); wait > 0 {
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil
+}
+
+// reserveSlot claims the next request slot under the pacing gate and returns how
+// long the caller must wait before sending. Both the main loop and the retry
+// path go through it, so a retry can never burst past the throttle window.
+func (c *Client) reserveSlot() time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	wait := time.Duration(0)
+	if last := c.lastFetch; !last.IsZero() {
+		if gap := c.minNameDelay - time.Since(last); gap > 0 {
+			wait = gap
+		}
+	}
+	c.lastFetch = time.Now().Add(wait)
+	return wait
 }
 
 // fetchName queries Spellbook for one card name and re-fetches pages until the
@@ -328,6 +378,120 @@ func (c *Client) set(key string, combos []Combo) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.cache[key] = cacheEntry{combos: combos, expiresAt: time.Now().Add(c.ttl)}
+}
+
+// --- on-disk cache (mirrors edhpowerlevel's getcards disk tier) ----------------
+//
+// One JSON file per normalized card name under <cacheDir>/spellbook/. File
+// names are the SHA-256 of the key so unicode and path separators never reach
+// the filesystem. All operations are best-effort: a missing or corrupt row
+// simply falls back to the network path. Empty combo lists are cached too —
+// most cards are not combo pieces, and negative rows are what keep cold decks
+// from re-paging the upstream forever.
+
+// diskTTL is how long a disk row is trusted without refresh. The combo DB
+// changes slowly, so a day keeps early-combo detection fresh while making
+// repeat and overlapping deck analyses fully offline.
+const diskTTL = 24 * time.Hour
+
+type diskEntry struct {
+	FetchedAt time.Time `json:"fetched_at"`
+	Combos    []Combo   `json:"combos"`
+}
+
+type diskCache struct{ dir string }
+
+func newDiskCache(base string) (*diskCache, error) {
+	dir := filepath.Join(base, "spellbook")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	return &diskCache{dir: dir}, nil
+}
+
+func (d *diskCache) path(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return filepath.Join(d.dir, hex.EncodeToString(sum[:])+".json")
+}
+
+// get returns the row for key, its fetch time, and whether a usable row was
+// found. A row with a zero fetch time is treated as corrupt and dropped.
+func (d *diskCache) get(key string) ([]Combo, time.Time, bool) {
+	if d == nil {
+		return nil, time.Time{}, false
+	}
+	data, err := os.ReadFile(d.path(key))
+	if err != nil {
+		return nil, time.Time{}, false
+	}
+	var entry diskEntry
+	if err := json.Unmarshal(data, &entry); err != nil || entry.FetchedAt.IsZero() {
+		_ = os.Remove(d.path(key))
+		return nil, time.Time{}, false
+	}
+	return entry.Combos, entry.FetchedAt, true
+}
+
+// put writes the row atomically (temp file + rename) so a crash never leaves a
+// half-written entry behind.
+func (d *diskCache) put(key string, combos []Combo, fetchedAt time.Time) {
+	if d == nil {
+		return
+	}
+	data, err := json.Marshal(diskEntry{FetchedAt: fetchedAt, Combos: combos})
+	if err != nil {
+		return
+	}
+	temp, err := os.CreateTemp(d.dir, "*.tmp")
+	if err != nil {
+		return
+	}
+	name := temp.Name()
+	if _, err := temp.Write(data); err != nil {
+		_ = temp.Close()
+		_ = os.Remove(name)
+		return
+	}
+	if err := temp.Close(); err != nil {
+		_ = os.Remove(name)
+		return
+	}
+	_ = os.Rename(name, d.path(key))
+}
+
+func (c *Client) diskGetFresh(key string) ([]Combo, bool) {
+	c.mu.Lock()
+	disk := c.disk
+	c.mu.Unlock()
+	if disk == nil {
+		return nil, false
+	}
+	combos, fetchedAt, ok := disk.get(key)
+	if !ok || time.Since(fetchedAt) >= diskTTL {
+		return nil, false
+	}
+	return combos, true
+}
+
+func (c *Client) diskGetAny(key string) ([]Combo, bool) {
+	c.mu.Lock()
+	disk := c.disk
+	c.mu.Unlock()
+	if disk == nil {
+		return nil, false
+	}
+	combos, _, ok := disk.get(key)
+	return combos, ok
+}
+
+func (c *Client) diskPut(key string, combos []Combo) {
+	c.mu.Lock()
+	disk := c.disk
+	c.mu.Unlock()
+	if disk == nil {
+		return
+	}
+	disk.put(key, combos, time.Now())
 }
 
 func prioritizeNames(names []string) []string {

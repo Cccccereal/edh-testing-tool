@@ -81,6 +81,8 @@ func main() {
 	moxfieldClient := moxfield.New(cfg.MoxfieldAPIURL, moxfieldHTTPClient)
 	cardCatalogClient := cardcatalog.New(cfg.ScryfallAPIURL, httpClient, cfg.CardCatalogTTL, cfg.CacheDir)
 	spellbookClient := spellbook.NewWithPacing(cfg.SpellbookAPIURL, httpClient, cfg.SpellbookMinNameDelay)
+	// 磁盘层：组合查询 24h 内免上游、上游故障时退旧数据——早组合检测的稳定性开关。
+	spellbookClient.SetDiskDir(cfg.CacheDir)
 	edhrecClient := edhrec.New(cfg.EDHRECJSONURL, httpClient)
 	analyzer := service.NewAnalyzer(
 		moxfieldClient,

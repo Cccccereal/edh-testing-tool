@@ -310,6 +310,14 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 				return true, "Tutors cards from library"
 			}
 		}
+		// 精堆（top-deck 堆叠）：检视/拿取牌库顶并按任意顺序放回，或把手中
+		// 已知的牌置于牌库顶——Sensei's Divining Top、Brainstorm、Scroll
+		// Rack、Doomsday、Sylvan Library 形状。它们不走 search 模板，但提供
+		// 同等的找牌质量。先剥掉括号提示文本再匹配：scry 的提醒语恰好同时
+		// 含两套短语，纯 scry（Preordain）不算精堆。
+		if cleanStack := stripReminder(text); (strings.Contains(cleanStack, "of your library") && strings.Contains(cleanStack, "in any order")) || strings.Contains(cleanStack, "on top of your library") {
+			return true, "Stacks the top of your library"
+		}
 	case "ramp":
 		if strings.Contains(typeLine, "land") {
 			return false, ""
@@ -348,6 +356,18 @@ func classify(category string, card cardcatalog.Card) (bool, string) {
 		// 对齐 CommanderSalt 把可被牌组喂养的重复放血 payoff 计为胜负手。
 		if strings.Contains(text, "each opponent loses") {
 			return true, "Table-wide drain scales into a win"
+		}
+		// 大直伤终局：X 费可放大到致死的直伤/吸血（大火球/放血潮形状），
+		// 大法力下从手牌直接收尾对局。X 在费用里是硬前提——固定数值的
+		// 伤害模板（即使文字里引用 X 的效果）不在此列。
+		if strings.Contains(card.ManaCost+faceManaCosts(card), "{X}") && winconXBurnRe.MatchString(text) {
+			return true, "X-cost burn/drain can close out the game"
+		}
+		// 点名收录的固定大直伤（聚力劈响这类"总量够收尾但费用固定"的形状）。
+		for _, name := range winconBurnNamed {
+			if strings.EqualFold(card.Name, name) {
+				return true, "Big fixed-damage finisher"
+			}
 		}
 		if strings.Contains(text, "you may choose a new commander") {
 			return true, "Replaces commander (can set up a loop)"
@@ -422,6 +442,17 @@ func faceText(card cardcatalog.Card) string {
 	}
 	return out.String()
 }
+
+// faceManaCosts concatenates the per-face mana costs: on split/DFC cards
+// Scryfall only fills mana_cost per face, so the X-in-cost check must read both.
+func faceManaCosts(card cardcatalog.Card) string {
+	var out strings.Builder
+	for _, face := range card.Faces {
+		out.WriteString(face.ManaCost)
+	}
+	return out.String()
+}
+
 func faceTypes(card cardcatalog.Card) string {
 	var out strings.Builder
 	for _, face := range card.Faces {

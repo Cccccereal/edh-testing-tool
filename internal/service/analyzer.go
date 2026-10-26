@@ -393,6 +393,14 @@ func (a *Analyzer) analyze(ctx context.Context, sourceURL, sourceID string, supp
 	// results also feed the "差一张" suggestion list, where near-misses belong.
 	var combos []spellbook.Combo
 	if runCombos {
+		// 早组合检测最怕同一套牌两次分析在 0/有 之间跳变。Spellbook 限速 +
+		// 60s 提供方超时经常在冷缓存上撞线，而 Search 超时时手里已经有一批
+		// 已确认的组合——保留这批部分结果比全部丢弃稳定得多，只提示用户。
+		if comboErr != nil && len(foundCombos) > 0 &&
+			(errors.Is(comboErr, context.DeadlineExceeded) || errors.Is(comboErr, context.Canceled)) {
+			comboErr = nil
+			analysis.Warnings = append(analysis.Warnings, "Commander Spellbook 组合仅加载了部分结果。")
+		}
 		if comboErr != nil {
 			analysis.Warnings = append(analysis.Warnings, "Commander Spellbook 组合暂时无法加载。")
 		} else {

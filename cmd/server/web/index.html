@@ -16,6 +16,7 @@
         <a href="#results" class="sticky-nav-link">结果</a>
         <a href="#manabase-section" class="sticky-nav-link">法力基础</a>
         <a href="#construction-section" class="sticky-nav-link">构筑分析</a>
+        <a href="#impact-section" class="sticky-nav-link">单卡权值</a>
         <a href="#combo-section" class="sticky-nav-link">Combo</a>
         <a href="#recommendation-section" class="sticky-nav-link">推荐</a>
         <button type="button" class="sticky-nav-link" data-deck-drawer-open>牌表编辑</button>
@@ -208,6 +209,10 @@
       <section id="construction-section" class="catalog-section" hidden>
         <div class="section-heading toggleable" data-section-toggle data-section="construction-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">DECK CONSTRUCTION</p><h2>构筑概览</h2><p class="section-note">类别可重叠，计划相关为启发式</p></div><button type="button" class="section-heading-toggle">收起</button></div>
         <div id="construction-metrics" class="construction-grid"></div>
+      </section>
+      <section id="impact-section" class="catalog-section" hidden>
+        <div class="section-heading toggleable" data-section-toggle data-section="impact-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">CARD IMPACT</p><h2>单卡权值</h2><p class="section-note">每张牌的 EDH 冲击贡献，横轴法术力值、纵轴冲击值，虚线为均值；最值钱的牌在左上</p></div><button type="button" class="section-heading-toggle">收起</button></div>
+        <div id="impact-chart" class="impact-chart"></div>
       </section>
       <section id="combo-section" class="catalog-section" hidden>
         <div class="section-heading toggleable" data-section-toggle data-section="combo-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">RELATED CARDS</p><h2>关联卡牌与组合</h2></div><button type="button" class="section-heading-toggle">收起</button></div>

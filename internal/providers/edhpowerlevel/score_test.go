@@ -267,3 +267,129 @@ func TestScoreNormalizesOversizedDecks(t *testing.T) {
 		t.Fatalf("oversized deck still inflates: %v vs %v", oversizedScore, hundredScore)
 	}
 }
+
+// TestOversizedImpactMetricIsNormalized pins the display consistency: the
+// `impact` metric must be reported in the same 100-card-equivalent terms as
+// `score`. A raw impact next to a normalized score reads as "impact 1300+ /
+// power 9" — exactly the customer-visible contradiction that made oversized
+// decks look broken even after the score itself was fixed.
+func TestOversizedImpactMetricIsNormalized(t *testing.T) {
+	row := `{"name":"Filler","price":1.5,"cmc":2,"edhrec_rank":26900,"colors":["R"],` +
+		`"produced_mana":["R"],"mana_cost":"{1}{R}","type_line":"Artifact","layout":"normal",` +
+		`"legal":"legal","gamechanger":false,"oracle_text":["Tap: add mana."]}`
+	payload := `{"details":{"found":1,"requested":1},"data":[` + row + `]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(payload))
+	}))
+	t.Cleanup(server.Close)
+
+	run := func(quantity int) map[string]any {
+		t.Helper()
+		metrics, err := ScoreWithCombos(context.Background(),
+			deck.Deck{Mainboard: []deck.Card{{Name: "Filler", Quantity: quantity}}},
+			server.Client(), nil, nil, nil, t.TempDir(), server.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return metrics
+	}
+	hundred, oversized := run(100), run(130)
+	if hundred["impact"] != oversized["impact"] {
+		t.Fatalf("impact not size-normalized: 100-card %v vs 130-card %v", hundred["impact"], oversized["impact"])
+	}
+	if cards, _ := oversized["deck_cards"].(int); cards != 130 {
+		t.Fatalf("deck_cards = %v, want 130", oversized["deck_cards"])
+	}
+	if normalized, _ := oversized["size_normalized"].(bool); !normalized {
+		t.Fatalf("size_normalized flag missing on oversized deck")
+	}
+	if normalized, _ := hundred["size_normalized"].(bool); normalized {
+		t.Fatalf("size_normalized must be false for a 100-card deck")
+	}
+}
+
+// TestPriceWeightShareMetric pins the disclosure arithmetic: the metric reports
+// how much of a deck's rating came from the price axis versus the EDHREC
+// popularity axis. A pricey-but-unranked card must read 100, a free-but-maximally
+// popular card must read 0, and a 50/50 mix must read 50.
+func TestPriceWeightShareMetric(t *testing.T) {
+	row := func(name string, price, rank string) string {
+		return `{"name":"` + name + `","price":` + price + `,"cmc":2,"edhrec_rank":` + rank +
+			`,"colors":["R"],"produced_mana":["R"],"mana_cost":"{1}{R}","type_line":"Artifact",` +
+			`"layout":"normal","legal":"legal","gamechanger":false,"oracle_text":["Tap: add mana."]}`
+	}
+	payload := `{"details":{"found":2,"requested":2},"data":[` +
+		row("Pricey Hermit", "1.5", "26900") + `,` + // price axis only (pop 0)
+		row("Beloved Bulk", "0", "0") + `]}` // popularity axis only (price 0)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(payload))
+	}))
+	t.Cleanup(server.Close)
+
+	score := func(mainboard []deck.Card) float64 {
+		t.Helper()
+		metrics, err := ScoreWithCombos(context.Background(), deck.Deck{Mainboard: mainboard},
+			server.Client(), nil, nil, nil, t.TempDir(), server.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		share, ok := metrics["price_weight_share"].(float64)
+		if !ok {
+			t.Fatalf("price_weight_share missing for %v", mainboard)
+		}
+		return share
+	}
+
+	if got := score([]deck.Card{{Name: "Pricey Hermit", Quantity: 1}}); got != 100 {
+		t.Fatalf("price-only card: share = %v, want 100", got)
+	}
+	if got := score([]deck.Card{{Name: "Beloved Bulk", Quantity: 1}}); got != 0 {
+		t.Fatalf("pop-only card: share = %v, want 0", got)
+	}
+	// 一张 2.5 价格分（无热度）+ 一张 7.5 热度分（零价格）：
+	// 实际权重占比 2.5/(2.5+7.5)=25%——披露的是真实评分权重，不是轴上限。
+	if got := score([]deck.Card{{Name: "Pricey Hermit", Quantity: 1}, {Name: "Beloved Bulk", Quantity: 1}}); got != 25 {
+		t.Fatalf("even mix: share = %v, want 25", got)
+	}
+}
+
+// TestCardImpactsMetric pins the scatter data shape: one point per deck line
+// with cmc/impact/quantity/type, sorted by impact descending (the frontend's
+// "Impact and CMC by Card" chart consumes this directly).
+func TestCardImpactsMetric(t *testing.T) {
+	rows := `{"name":"Cheap Favorite","price":1,"cmc":2,"edhrec_rank":0,"colors":["R"],` +
+		`"produced_mana":["R"],"mana_cost":"{1}{R}","type_line":"Creature","layout":"normal",` +
+		`"legal":"legal","gamechanger":false,"oracle_text":[]},` +
+		`{"name":"Pricey Obscure","price":10,"cmc":6,"edhrec_rank":26900,"colors":["R"],` +
+		`"produced_mana":["R"],"mana_cost":"{4}{R}{R}","type_line":"Land","layout":"normal",` +
+		`"legal":"legal","gamechanger":false,"oracle_text":[]}`
+	payload := `{"details":{"found":2,"requested":2},"data":[` + rows + `]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(payload))
+	}))
+	t.Cleanup(server.Close)
+
+	metrics, err := ScoreWithCombos(context.Background(),
+		deck.Deck{Mainboard: []deck.Card{
+			{Name: "Cheap Favorite", Quantity: 2},
+			{Name: "Pricey Obscure", Quantity: 1},
+		}}, server.Client(), nil, nil, nil, t.TempDir(), server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	points, ok := metrics["card_impacts"].([]cardImpactPoint)
+	if !ok || len(points) != 2 {
+		t.Fatalf("card_impacts shape: %T len=%d", metrics["card_impacts"], len(points))
+	}
+	if points[0].Impact < points[1].Impact {
+		t.Fatalf("card_impacts not sorted desc: %v then %v", points[0].Impact, points[1].Impact)
+	}
+	for _, point := range points {
+		if point.Name == "" || point.TypeLine == "" || point.Quantity < 1 {
+			t.Fatalf("point missing fields: %+v", point)
+		}
+	}
+	if points[0].Name != "Cheap Favorite" || points[0].Quantity != 2 {
+		t.Fatalf("unexpected first point: %+v", points[0])
+	}
+}

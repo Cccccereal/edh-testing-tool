@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -602,11 +603,28 @@ type scoredCard struct {
 	cmc      int
 	// pips counts, per color, of the mana symbols in this card's mana cost (×quantity).
 	pips map[string]int
+	// pricePart/popPart mirror impact's computation for the price and popularity
+	// axes separately, so the caller can disclose how much of a deck's score is
+	// market value versus EDHREC demand. Basic lands (fixed impact 2) count
+	// toward neither.
+	pricePart float64
+	popPart   float64
 }
 
 type scoreResult struct {
 	powerLevel float64
 	metrics    map[string]any
+}
+
+// cardImpactPoint 是一张牌在 "Impact and CMC by Card" 散点图上的坐标：
+// 法术力值（X 轴）与含份数的总冲击（Y 轴），牌类供前端着色。
+type cardImpactPoint struct {
+	Name     string  `json:"name"`
+	CMC      int     `json:"cmc"`
+	Impact   float64 `json:"impact"`
+	Quantity int     `json:"quantity"`
+	IsLand   bool    `json:"is_land"`
+	TypeLine string  `json:"type_line"`
 }
 
 // Score runs the full EDH Power Level formula against a deck and returns the metrics
@@ -654,6 +672,10 @@ func ScoreWithCombos(ctx context.Context, target deck.Deck, httpClient *http.Cli
 	var totalImpact, landImpact float64
 	var lands, nonlands int
 	var avgCostNumerator float64
+	var priceImpact, popImpact float64
+	// cardImpacts 收集每张牌的 (法术力值, 冲击值) 与牌类，镜像原站
+	// "Impact and CMC by Card" 散点图的数据；冲击含份数与全部乘区。
+	cardImpacts := make([]cardImpactPoint, 0, len(scored))
 	cmcImpact := make([]float64, 40) // non-land impact indexed by cmc
 	cmcImpactColor := map[string][]float64{
 		"R": make([]float64, 40), "W": make([]float64, 40), "G": make([]float64, 40),
@@ -662,6 +684,16 @@ func ScoreWithCombos(ctx context.Context, target deck.Deck, httpClient *http.Cli
 
 	for _, s := range scored {
 		totalImpact += s.impact
+		priceImpact += s.pricePart
+		popImpact += s.popPart
+		cardImpacts = append(cardImpacts, cardImpactPoint{
+			Name:     s.card.name,
+			CMC:      s.cmc,
+			Impact:   roundTo(s.impact, 2),
+			Quantity: s.quantity,
+			IsLand:   s.isLand,
+			TypeLine: s.card.typeLine,
+		})
 		if s.isLand {
 			lands += s.quantity
 			landImpact += s.impact
@@ -757,12 +789,25 @@ func ScoreWithCombos(ctx context.Context, target deck.Deck, httpClient *http.Cli
 		"power_level": roundTo(powerLevel, 2),
 		"efficiency":  roundTo(ce*10, 2),
 		"score":       math.Round(score),
-		"impact":      roundTo(totalImpact, 2),
+		// impact 与 score 同口径（百张等效）：否则超编牌组会并排出现
+		// "冲击 1100+ / 评分 9 分"的自相矛盾，用户无从判断该信哪个。
+		"impact": roundTo(totalImpact*sizeScale, 2),
+		// 超编牌组的归一化披露：前端据此注明"已按 100 张等效折算"。
+		"deck_cards":      deckCards,
+		"size_normalized": deckCards > 100,
 		// Percentage (0-100), matching the site's display; the frontend appends "%".
 		"average_playability": roundTo(averagePlayability(scored, producerCount, lands, nonlands, len(target.Commanders))*100, 1),
 		"rules_bracket":       displayRulesBracket(rulesBracket),
 		"evaluated_bracket":   evaluatedBracket(powerLevel, rulesBracket),
 	}
+	// 价格权重披露：该模型的单卡评分 = 价格轴（上限 12.5）+ EDHREC 热度轴（上限 7.5），
+	// 实际占比随套牌构成浮动。只报数、不改分——镜像忠实原站，披露交给用户判断。
+	if priceImpact+popImpact > 0 {
+		metrics["price_weight_share"] = math.Round(priceImpact / (priceImpact + popImpact) * 100)
+	}
+	// 单卡冲击散点：按冲击降序，全部返回（≤100 张），均值线与着色由前端算。
+	sort.SliceStable(cardImpacts, func(i, j int) bool { return cardImpacts[i].Impact > cardImpacts[j].Impact })
+	metrics["card_impacts"] = cardImpacts
 	if bdetails != nil {
 		metrics["bracket_details"] = bdetails
 	}
@@ -811,8 +856,17 @@ func scoreOne(deckCard deck.Card, c *card, commanderNames map[string]bool) *scor
 	} else {
 		s.impact = baseImpact
 	}
+	// 价格/热度分量走与 impact 相同的乘区（数量、调整倍率、地牌系数），
+	// 仅供披露口径使用，不参与评分。
+	s.pricePart = priceRating * float64(deckCard.Quantity) * impact
+	s.popPart = popRating * float64(deckCard.Quantity) * impact
+	if isLand {
+		s.pricePart *= landFactor
+		s.popPart *= landFactor
+	}
 	if basicLands[name] {
 		s.impact = 2 * float64(deckCard.Quantity)
+		s.pricePart, s.popPart = 0, 0
 	}
 	return s
 }

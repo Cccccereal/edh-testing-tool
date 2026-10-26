@@ -93,7 +93,10 @@ button { cursor: pointer; }
 
 .sticky-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: rgba(16, 17, 15, 0.95); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
 :root.light-mode .sticky-nav { background: rgba(250, 251, 249, 0.95); }
-.sticky-nav-inner { max-width: 1240px; width: min(100%, calc(100% - 64px)); margin: 0 auto; padding: 0 24px; display: flex; align-items: center; gap: 10px; }
+/* 未分析时链接区隐藏，内层若无最小高度会塌缩成主题钮自身高度——
+   钮体贴死黑栏上下缘显得很挤；定住 52px 让它常驻居中，分析后出现
+   链接时栏高也不再跳变 */
+.sticky-nav-inner { max-width: 1240px; width: min(100%, calc(100% - 64px)); min-height: 52px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; gap: 10px; }
 /* 链接区独享横向滚动（分析后出现），主题键钉在右端 */
 .sticky-nav-links { display: flex; gap: 2px; overflow-x: auto; -webkit-overflow-scrolling: touch; flex: 1; min-width: 0; }
 .sticky-nav-links[hidden] { display: none; }
@@ -358,6 +361,9 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .suggestion-item p { margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
 .provider-error { color: #ffc0b5; line-height: 1.6; font-size: 14px; }
 .provider-muted { color: var(--muted); line-height: 1.6; font-size: 14px; }
+/* EDH 模型的价格权重披露行：与区块题注同一套「—」引导语言，压在卡底 */
+.provider-disclosure { margin: 18px 0 0; padding-top: 12px; border-top: 1px solid var(--hairline); color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+.provider-disclosure::before { content: "—\00a0"; color: var(--muted); }
 /* 构筑指标外层：分组两两并排一行（靠什么赢|怎么运转，怎么应对|牌组主线），
    每组半宽、组内指标竖向堆叠成列表条——卡片宽而浅，口径文字不用挤成多行。 */
 #construction-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; align-items: start; }
@@ -460,6 +466,20 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .manabase-stat { display: inline-flex; align-items: baseline; gap: 6px; }
 .manabase-stat small { color: var(--muted); font-size: 11px; }
 .decklist-filter-note { margin: 10px 0 0; padding: 8px 12px; border: 1px solid rgba(200, 232, 74, .35); border-radius: 8px; background: rgba(200, 232, 74, .06); color: var(--ink); font-size: 13px; }
+
+/* 单卡权值散点（第三栏）：纯 SVG 点图，按牌类着色，蓝虚线为均值参考。 */
+.impact-chart { border: 0; background: var(--surface); border-radius: 20px; padding: 24px 18px 16px; }
+.impact-chart svg { width: 100%; height: auto; display: block; }
+.impact-grid { stroke: var(--hairline); stroke-width: 1; }
+.impact-tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.impact-axis { fill: var(--muted); font-size: 11px; letter-spacing: .06em; }
+.impact-avg { stroke: var(--blue); stroke-width: 1.5; stroke-dasharray: 5 5; opacity: .55; }
+.impact-avg-label { fill: var(--blue); font-size: 11px; font-weight: 700; }
+.impact-dot circle { transition: opacity .12s ease, stroke-width .12s ease; }
+.impact-dot:hover circle { opacity: 1; stroke: var(--ink); stroke-width: 1.5; }
+.impact-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; padding: 0 6px; }
+.impact-legend-item { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.impact-legend-item i { width: 10px; height: 10px; border-radius: 50%; }
 .decklist-filter-empty { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
 .construction-group { margin-bottom: 0; }
 #construction-metrics .construction-group:last-child { margin-bottom: 0; }
@@ -515,6 +535,9 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 #manabase-section .eyebrow { color: var(--blue); }
 #construction-section.scroll-reveal::before { background: var(--orange); }
 #construction-section .eyebrow { color: var(--orange); }
+/* 单卡权值散点：数据来自 EDH 评分，强调色沿用 EDH 蓝 */
+#impact-section.scroll-reveal::before { background: var(--blue); }
+#impact-section .eyebrow { color: var(--blue); }
 #combo-section.scroll-reveal::before { background: var(--acid); }
 #recommendation-section.scroll-reveal::before { background: var(--acid-soft); }
 :root.light-mode #manabase-section.scroll-reveal::before { background: #7ab0e0; }
