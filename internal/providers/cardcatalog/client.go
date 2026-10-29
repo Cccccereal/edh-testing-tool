@@ -141,7 +141,15 @@ func (c *Client) Search(ctx context.Context, query string, limit int) ([]Card, e
 // whether another page follows.
 func (c *Client) fetchSearchPage(ctx context.Context, endpoint string) ([]scryfallCard, bool, error) {
 	resp, err := c.doWithRetry(ctx, func() (*http.Request, error) {
-		return http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+		// Scryfall rejects headerless requests (observed as HTTP 400), same as
+		// every other endpoint on this client.
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", userAgent)
+		return req, nil
 	})
 	if err != nil {
 		return nil, false, fmt.Errorf("request Scryfall search: %w", err)
@@ -180,6 +188,8 @@ type Client struct {
 	// cache maps normalized lookup keys to cards; entries are also mirrored to
 	// disk on write.
 	cache map[string]cacheEntry
+	// zh 持有中文译名索引的构建状态（懒加载 + 落盘），见 zhindex.go。
+	zh zhIndexState
 }
 
 type cacheEntry struct {
@@ -315,7 +325,9 @@ func (c *Client) Lookup(ctx context.Context, names []string) (map[string]Card, e
 		c.mu.RLock()
 		entry, ok := c.cache[key]
 		c.mu.RUnlock()
-		if ok && now.Before(entry.expiresAt) {
+		// 只认「本名匹配」的缓存条目：面名别名条目（双面牌的第二面恰好是
+		// 另一张牌的本名时写入的）在这里顶包，会让按名查真卡返回双面牌
+		if ok && now.Before(entry.expiresAt) && normalizeName(entry.card.Name) == key {
 			result[key] = entry.card
 			continue
 		}
@@ -327,7 +339,7 @@ func (c *Client) Lookup(ctx context.Context, names []string) (map[string]Card, e
 			if !found {
 				continue
 			}
-			if now.Before(fetchedAt.Add(c.ttl)) {
+			if now.Before(fetchedAt.Add(c.ttl)) && normalizeName(card.Name) == key {
 				result[key] = card
 				c.mu.Lock()
 				c.cache[key] = cacheEntry{card: card, expiresAt: fetchedAt.Add(c.ttl)}
@@ -352,7 +364,22 @@ func (c *Client) Lookup(ctx context.Context, names []string) (map[string]Card, e
 			break
 		}
 		for _, card := range cards {
+			// 面名键不能抢占别的牌的本名键：双面牌 "A // Lightning Bolt" 的
+			// 第二面键 "lightning bolt" 会把真闪电击的缓存顶掉，之后按名查
+			// 闪电击会返回双面牌（建议列表出现两行同名）。
+			ownKey := normalizeName(card.Name)
 			for _, key := range cardLookupKeys(card) {
+				if key != ownKey {
+					if existing, ok := result[key]; ok && existing.Name != card.Name {
+						continue
+					}
+					c.mu.RLock()
+					entry, cached := c.cache[key]
+					c.mu.RUnlock()
+					if cached && now.Before(entry.expiresAt) && entry.card.Name != card.Name {
+						continue
+					}
+				}
 				result[key] = card
 				c.mu.Lock()
 				c.cache[key] = cacheEntry{card: card, expiresAt: time.Now().Add(c.ttl)}

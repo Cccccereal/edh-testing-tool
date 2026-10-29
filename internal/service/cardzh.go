@@ -35,3 +35,23 @@ func (a *Analyzer) LookupCardChinese(ctx context.Context, name string) (cardcata
 	}
 	return localizer.LookupChinese(ctx, name)
 }
+
+// ChineseAliaser is the optional en→zh display-name capability of a catalog
+// client (the real cardcatalog.Client reads its zh index; test stubs don't).
+type ChineseAliaser interface {
+	ChineseAlias(name string) string
+}
+
+// ChineseNameFor returns the Simplified Chinese alias shown after an autocomplete
+// suggestion's English name; empty when the catalog can't provide one (index not
+// built yet, no translation, or stub catalog). Never blocks: display only.
+func (a *Analyzer) ChineseNameFor(name string) string {
+	if a.cards == nil {
+		return ""
+	}
+	aliaser, ok := a.cards.(ChineseAliaser)
+	if !ok {
+		return ""
+	}
+	return aliaser.ChineseAlias(name)
+}

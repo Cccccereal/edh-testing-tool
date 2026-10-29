@@ -40,11 +40,10 @@ def test_gap_recommendation_journey(page, stubbed_server):
 
     gap_groups = page.locator(".recommendation-group.gap-recommendation-group")
     expect(gap_groups).to_have_count(len(gap_recs))
-    # 每个缺口桶的标题与"还缺 N"来自 API；桶内卡数（含收起组，DOM 计数）一致
+    # 每个缺口桶的标题来自 API；桶内卡数（含收起组，DOM 计数）一致
     for i, metric in enumerate(gap_recs):
         heading = gap_groups.nth(i).locator(".recommendation-group-heading")
         expect(heading).to_contain_text(metric["label"])
-        expect(heading).to_contain_text(f"还缺 {metric['gap']}")
     expect(page.locator(".gap-recommendation-group .recommendation-card")).to_have_count(
         sum(len(metric.get("cards", [])) for metric in gap_recs)
     )

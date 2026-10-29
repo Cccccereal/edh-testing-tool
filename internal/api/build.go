@@ -103,6 +103,8 @@ func buildSuggestError(err error) (int, string, string) {
 	switch {
 	case errors.Is(err, service.ErrBuildCommanderNotFound):
 		return http.StatusNotFound, "COMMANDER_NOT_FOUND", "找不到该主将，请检查名称拼写。"
+	case errors.Is(err, service.ErrChineseUnsupported):
+		return http.StatusNotImplemented, "CARD_ZH_UNSUPPORTED", "当前卡牌目录不支持中文查询。"
 	case errors.Is(err, service.ErrCardData):
 		return http.StatusBadGateway, "CARD_DATA_UNAVAILABLE", "卡牌资料不完整，暂时无法生成建议。"
 	case errors.Is(err, service.ErrBuildBackfill):

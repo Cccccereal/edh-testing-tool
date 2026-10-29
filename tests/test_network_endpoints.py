@@ -87,15 +87,15 @@ def test_commander_autocomplete(api):
     assert resp.status_code == 200, resp.text
     suggestions = resp.json()["suggestions"]
     assert suggestions, "主将自动补全不应为空"
-    assert all(isinstance(name, str) for name in suggestions)
-    assert any("Atraxa" in name for name in suggestions)
+    assert all(isinstance(s, dict) and s.get("name") for s in suggestions)
+    assert any("Atraxa" in s["name"] for s in suggestions)
 
 
 def test_card_autocomplete(api):
     resp = api.get("/api/v1/card-autocomplete", params={"q": "sol ring"})
 
     assert resp.status_code == 200, resp.text
-    assert "Sol Ring" in resp.json()["suggestions"]
+    assert "Sol Ring" in [s["name"] for s in resp.json()["suggestions"]]
 
 
 def test_resolve_commanders_returns_color_identity(api):

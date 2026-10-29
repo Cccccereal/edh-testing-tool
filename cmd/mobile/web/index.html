@@ -6,7 +6,7 @@
   <meta name="description" content="同时查询 CommanderSalt 与 EDH Power Level 的 Commander 牌组评分">
   <meta name="color-scheme" content="dark">
   <title>Commander Power Check</title>
-  <link rel="stylesheet" href="/styles.css?v=4">
+  <link rel="stylesheet" href="/styles.css?v=14">
 
 </head>
 <body>
@@ -21,14 +21,15 @@
         <a href="#recommendation-section" class="sticky-nav-link">推荐</a>
         <button type="button" class="sticky-nav-link" data-deck-drawer-open>牌表编辑</button>
       </div>
+      <button id="nav-back" class="nav-back" type="button" hidden>← 返回输入</button>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换主题">暗色</button>
     </div>
   </nav>
   <main class="shell">
+    <div id="input-view">
     <header class="hero">
       <p class="eyebrow">COMMANDER DECK ANALYZER</p>
       <h1>多维度分析，<br><span>一次性掌握</span></h1>
-      <p class="intro">贴一条公开的 Moxfield 链接，两套独立评分模型同时读你的牌组</p>
     </header>
 
     <section class="search-panel" aria-labelledby="search-title">
@@ -36,7 +37,6 @@
         <span class="step" aria-hidden="true"></span>
         <div>
           <h2 id="search-title">输入牌组链接</h2>
-          <p>仅收录公开的 Moxfield Commander 牌组</p>
         </div>
       </div>
       <form id="analyze-form" novalidate>
@@ -54,13 +54,12 @@
         </div>
         <p id="form-message" class="form-message" role="alert" aria-live="polite"></p>
         <details class="decklist-input-panel">
-          <summary>或粘贴牌表文本</summary>
+          <summary>或粘贴牌表文本（优先于链接）</summary>
           <div class="decklist-label-row">
             <label for="decklist-input">含 Commander / Deck 标题最稳；无标题时，空行后的末 1–2 行视为主将（拍档写两行）</label>
             <button id="clear-decklist" class="ghost-button clear-decklist" type="button" aria-label="清空文本输入框">一键清空</button>
           </div>
           <textarea id="decklist-input" rows="10" placeholder="Commander&#10;1 Ria Ivor, Bane of Bladehold&#10;&#10;Deck&#10;1 Sol Ring" aria-describedby="form-message"></textarea>
-          <p>填了文本则优先按文本分析</p>
         </details>
       </form>
       <div class="build-entry">
@@ -74,11 +73,13 @@
         </details>
       </div>
     </section>
+    </div>
 
-    <section id="builder" class="builder" hidden aria-live="polite">
+    <div id="builder-view" hidden>
+    <section id="builder" class="builder" aria-live="polite">
       <div class="builder-head">
-        <div><h2>从一张主将开始组牌</h2><p class="section-note">一轮三选一，组满 100 张为止</p></div>
-        <button id="builder-close" class="ghost-button" type="button">返回分析</button>
+        <div><h2>从一张主将开始组牌</h2></div>
+        <button id="builder-close" class="ghost-button" type="button">返回输入</button>
       </div>
       <div class="builder-commander-row">
         <div class="builder-commander-field">
@@ -132,7 +133,7 @@
         <aside id="builder-sidebar" class="builder-sidebar"></aside>
       </div>
       <div id="builder-complete" class="builder-complete" hidden>
-        <div class="builder-complete-head"><p class="eyebrow">DECK COMPLETE</p><h3>牌组已组满 100 张</h3><p class="section-note">可继续微调（不会超过 100 张），或直接送去做完整分析</p></div>
+        <div class="builder-complete-head"><p class="eyebrow">DECK COMPLETE</p><h3>牌组已组满 100 张</h3></div>
         <div class="builder-complete-actions">
           <button id="builder-export" class="ghost-button" type="button">导出牌表</button>
           <button id="builder-analyze" class="primary-button" type="button">送去完整分析</button>
@@ -140,7 +141,9 @@
         </div>
       </div>
     </section>
+    </div>
 
+    <div id="results-view" hidden>
     <section id="loading" class="loading" hidden aria-live="polite">
       <div class="loader"></div>
       <div><strong>正在分析牌组</strong><span>首次分析约需一分钟，稍安勿躁</span></div>
@@ -203,22 +206,23 @@
         </article>
       </div>
       <section id="manabase-section" class="catalog-section" hidden>
-        <div class="section-heading toggleable" data-section-toggle data-section="manabase-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">MANABASE</p><h2>法术力基础</h2><p class="section-note">Frank Karsten 地张回归 × 条件超几何</p></div><button type="button" class="section-heading-toggle">收起</button></div>
+        <div class="section-heading toggleable" data-section-toggle data-section="manabase-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">MANABASE</p><h2>法术力基础</h2></div><button type="button" class="section-heading-toggle">收起</button></div>
         <div id="manabase-content" class="manabase-content"></div>
       </section>
       <section id="construction-section" class="catalog-section" hidden>
-        <div class="section-heading toggleable" data-section-toggle data-section="construction-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">DECK CONSTRUCTION</p><h2>构筑概览</h2><p class="section-note">类别可重叠，计划相关为启发式</p></div><button type="button" class="section-heading-toggle">收起</button></div>
+        <div class="section-heading toggleable" data-section-toggle data-section="construction-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">DECK CONSTRUCTION</p><h2>构筑概览</h2></div><button type="button" class="section-heading-toggle">收起</button></div>
         <div id="construction-metrics" class="construction-grid"></div>
       </section>
       <section id="impact-section" class="catalog-section" hidden>
-        <div class="section-heading toggleable" data-section-toggle data-section="impact-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">CARD IMPACT</p><h2>单卡权值</h2><p class="section-note">每张牌的 EDH 权值按单份计，横轴法术力值、纵轴单份权值，虚线为均值；最超值的牌在左上</p></div><button type="button" class="section-heading-toggle">收起</button></div>
+        <div class="section-heading toggleable" data-section-toggle data-section="impact-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">CARD IMPACT</p><h2>单卡权值</h2></div><button type="button" class="section-heading-toggle">收起</button></div>
         <div id="impact-chart" class="impact-chart"></div>
+        <p class="impact-hint">横轴法术力值，纵轴单份权值，虚线为均值；最超值的牌在左上</p>
       </section>
       <section id="combo-section" class="catalog-section" hidden>
         <div class="section-heading toggleable" data-section-toggle data-section="combo-section" aria-expanded="true" role="button" tabindex="0"><div><p class="eyebrow">RELATED CARDS</p><h2>关联卡牌与组合</h2></div><button type="button" class="section-heading-toggle">收起</button></div>
         <div id="combo-list" class="combo-list"></div>
         <div id="combo-suggestion-block" hidden>
-          <div class="combo-suggestion-heading"><h3>差一张就成组合</h3><p>只差一张牌即可成立的 Spellbook 组合，按缺件数与制胜优先排序</p></div>
+          <div class="combo-suggestion-heading"><h3>差一张就成组合</h3></div>
           <div id="combo-suggestion-list" class="combo-list"></div>
         </div>
       </section>
@@ -229,6 +233,7 @@
       </section>
       <p class="disclaimer">两站模型不同，各自解读、不做平均；卡牌数据来自 Scryfall，组合数据来自 Commander Spellbook</p>
     </section>
+    </div>
   </main>
   <div id="deck-drawer" class="deck-drawer" hidden>
     <button type="button" class="deck-drawer-tab" aria-label="收起/展开牌表面板"><span aria-hidden="true">›</span></button>
@@ -262,7 +267,7 @@
       <p id="decklist-filter-note" class="decklist-filter-note" hidden></p>
       <div id="editor-compare" class="editor-compare" hidden>
         <div class="editor-compare-head">
-          <div><strong>即时测算对比</strong><span>当前牌表 vs 原始分析</span></div>
+          <div><strong>即时测算对比</strong></div>
           <button id="editor-compare-run" class="primary-button" type="button">重新测算</button>
         </div>
         <p class="editor-compare-note">对当前牌表完整跑一遍分析（约 10–60 秒），对比评分与构筑指标的变化</p>
@@ -286,7 +291,7 @@
   </div>
   <p id="app-version" class="app-version" hidden></p>
   <script src="/config.js?v=4"></script>
-  <script src="/app.js?v=4" defer></script>
+  <script src="/app.js?v=11" defer></script>
   <script>document.querySelector('#editor-versions-close').addEventListener('click', () => { document.querySelector('#editor-versions-panel').hidden = true; });</script>
   <script>document.querySelector('#deck-drawer-close').addEventListener('click', () => { document.querySelector('#deck-drawer').hidden = true; document.body.style.overflow = ''; });</script>
 </body>

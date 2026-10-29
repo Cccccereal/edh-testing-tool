@@ -41,7 +41,7 @@ var targets = []struct {
 	{"finisher", "终结者", 5, "win", "5 攻以上带穿透的大生物或全军增幅，靠场面收尾（如 Craterhoof）"},
 	{"evasive", "穿透", 6, "win", "带穿透关键词的生物，以及持续赋予穿透的武具/灵气/地（如 Aether Tunnel、Rogue's Passage）；一次性欺敌咒语不计"},
 	// 怎么运转
-	{"lands", "正向法力", 38, "engine", "地与 0 费产费神器，净增法术力来源（Sol Ring 也算）"},
+	{"lands", "正向法力", 38, "engine", "地与产费神器，净增法术力来源（Sol Ring 等零费神器也算）"},
 	{"ramp", "加速", 10, "engine", "产费、找地、降费与珍宝"},
 	{"draw_discard", "牌差件", 12, "engine", "抽牌、放逐牌库顶、坟场回收等资源补给"},
 	{"tutors", "检索", 5, "engine", "从牌库检索特定牌或精堆牌库顶（纯找地归加速）"},

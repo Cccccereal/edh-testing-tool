@@ -950,7 +950,14 @@ components:
       type: object
       required: [suggestions]
       properties:
-        suggestions: { type: array, items: { type: string } }
+        suggestions:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, description: "Canonical English card name" }
+              chinese: { type: string, description: "Simplified Chinese alias for display; omitted when unknown" }
     ResolveCommandersResponse:
       type: object
       required: [commanders, color_identity]

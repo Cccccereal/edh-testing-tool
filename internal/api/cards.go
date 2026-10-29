@@ -28,6 +28,22 @@ func (h *Handler) lookupCard(w http.ResponseWriter, r *http.Request) {
 	}{Card: card})
 }
 
+// nameSuggestion is one autocomplete row: the canonical English name (what
+// clicks/decklists use) plus its Simplified Chinese alias for display, when
+// the zh index happens to be loaded.
+type nameSuggestion struct {
+	Name    string `json:"name"`
+	Chinese string `json:"chinese,omitempty"`
+}
+
+func toNameSuggestions(h *Handler, names []string) []nameSuggestion {
+	out := make([]nameSuggestion, 0, len(names))
+	for _, name := range names {
+		out = append(out, nameSuggestion{Name: name, Chinese: h.analyzer.ChineseNameFor(name)})
+	}
+	return out
+}
+
 func (h *Handler) commanderAutocomplete(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if query == "" {
@@ -43,8 +59,8 @@ func (h *Handler) commanderAutocomplete(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, struct {
-		Suggestions []string `json:"suggestions"`
-	}{Suggestions: names})
+		Suggestions []nameSuggestion `json:"suggestions"`
+	}{Suggestions: toNameSuggestions(h, names)})
 }
 
 func (h *Handler) cardAutocomplete(w http.ResponseWriter, r *http.Request) {
@@ -62,8 +78,8 @@ func (h *Handler) cardAutocomplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, struct {
-		Suggestions []string `json:"suggestions"`
-	}{Suggestions: names})
+		Suggestions []nameSuggestion `json:"suggestions"`
+	}{Suggestions: toNameSuggestions(h, names)})
 }
 
 // lookupCardChinese serves the hover translation: the zhs printing of one card

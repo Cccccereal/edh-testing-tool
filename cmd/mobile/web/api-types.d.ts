@@ -672,7 +672,11 @@ export interface components {
             is_partner: boolean;
         };
         AutocompleteResponse: {
-            suggestions: string[];
+            suggestions: {
+                name: string;
+                /** Simplified Chinese alias for display; absent when unknown */
+                chinese?: string;
+            }[];
         };
         ResolveCommandersResponse: {
             commanders: components["schemas"]["ResolvedCommander"][];

@@ -18,6 +18,10 @@ const loading = document.querySelector('#loading');
 const results = document.querySelector('#results');
 const warning = document.querySelector('#warning');
 const retryButton = document.querySelector('#retry-button');
+const inputView = document.querySelector('#input-view');
+const resultsView = document.querySelector('#results-view');
+const builderView = document.querySelector('#builder-view');
+const navBackButton = document.querySelector('#nav-back');
 const decklistToggle = document.querySelector('#decklist-toggle');
 const copyDecklistButton = document.querySelector('#copy-decklist');
 const clearDecklistButton = document.querySelector('#clear-decklist');
@@ -298,13 +302,19 @@ function openBuilder() {
   builderCommanderPreview.innerHTML = '';
   builderPartnerRow.hidden = true;
   builderPartnerInput.value = '';
+  // 组牌是独立的一层：盖掉输入层与结果层。返回由卡片头部的「返回输入」承担，
+  // 导航返回按钮只留给内容很长的结果层，避免同一层两个一样的入口
+  inputView.hidden = true;
+  resultsView.hidden = true;
+  builderView.hidden = false;
+  window.scrollTo(0, 0);
   builderCommanderInput.focus();
-  builder.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function closeBuilder() {
   builder.hidden = true;
   hideCommanderSuggestions();
+  showInputView();
 }
 
 // --- commander autocomplete -------------------------------------------------
@@ -320,14 +330,20 @@ function commanderSuggestionItems() {
   return Array.from(builderCommanderSuggestions.querySelectorAll('[data-suggestion]'));
 }
 
-function renderCommanderSuggestions(names) {
+// 建议行：点击/回车填英文名（data-suggestion），展示文本在后面补简中译名
+function suggestionLabel(suggestion) {
+  if (typeof suggestion === 'string') return suggestion;
+  return suggestion.chinese ? `${suggestion.name} · ${suggestion.chinese}` : suggestion.name;
+}
+
+function renderCommanderSuggestions(suggestions) {
   commanderAutocompleteIndex = -1;
-  if (!names || names.length === 0) {
+  if (!suggestions || suggestions.length === 0) {
     hideCommanderSuggestions();
     return;
   }
-  builderCommanderSuggestions.innerHTML = names.map((name) =>
-    `<li role="option" data-suggestion="${escapeHTML(name)}">${escapeHTML(name)}</li>`).join('');
+  builderCommanderSuggestions.innerHTML = suggestions.map((suggestion) =>
+    `<li role="option" data-suggestion="${escapeHTML(suggestion.name ?? suggestion)}">${escapeHTML(suggestionLabel(suggestion))}</li>`).join('');
   builderCommanderSuggestions.hidden = false;
 }
 
@@ -426,14 +442,14 @@ function editorSuggestionItems() {
   return Array.from(editorAddSuggestions.querySelectorAll('[data-suggestion]'));
 }
 
-function renderEditorSuggestions(names) {
+function renderEditorSuggestions(suggestions) {
   editorAutocompleteIndex = -1;
-  if (!names || names.length === 0) {
+  if (!suggestions || suggestions.length === 0) {
     hideEditorSuggestions();
     return;
   }
-  editorAddSuggestions.innerHTML = names.map((name) =>
-    `<li role="option" data-suggestion="${escapeHTML(name)}">${escapeHTML(name)}</li>`).join('');
+  editorAddSuggestions.innerHTML = suggestions.map((suggestion) =>
+    `<li role="option" data-suggestion="${escapeHTML(suggestion.name ?? suggestion)}">${escapeHTML(suggestionLabel(suggestion))}</li>`).join('');
   editorAddSuggestions.hidden = false;
 }
 
@@ -1243,9 +1259,13 @@ copyDecklistButton?.addEventListener('click', async () => {
 });
 
 retryButton?.addEventListener('click', () => {
-  results.hidden = true;
+  showInputView();
   input.focus();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+navBackButton?.addEventListener('click', () => {
+  showInputView();
+  input.focus();
 });
 
 clearDecklistButton?.addEventListener('click', () => {
@@ -1365,6 +1385,17 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && deckDrawer && !deckDrawer.hidden) closeDeckDrawer();
 });
 
+// 抽屉面板顶部要贴住吸顶导航下缘（styles.css 的 --nav-h）：导航实际高度随字体
+// 度量浮动（安卓 WebView 的 textZoom 也会放大它），写死像素值会出缝或被盖住
+const syncNavHeight = () => {
+  const nav = document.querySelector('.sticky-nav');
+  if (!nav) return;
+  document.documentElement.style.setProperty('--nav-h', `${nav.getBoundingClientRect().height}px`);
+};
+syncNavHeight();
+window.addEventListener('load', syncNavHeight);
+window.addEventListener('resize', syncNavHeight, { passive: true });
+
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   await analyze();
@@ -1386,7 +1417,7 @@ async function analyze() {
   }
 
   setLoading(true);
-  scrollToSlowly(loading);
+  showResultsView();
   results.hidden = true;
   try {
     const response = await fetch('/api/v1/analyze', {
@@ -1400,6 +1431,8 @@ async function analyze() {
     }
     render(payload);
   } catch (error) {
+    // 表单和错误提示都在输入层，失败时切回去让用户看到报错并修改输入
+    showInputView();
     message.textContent = error.message || '网络请求失败，请稍后重试';
   } finally {
     setLoading(false);
@@ -1425,21 +1458,30 @@ function setLoading(active) {
   submitButton.querySelector('.button-label').textContent = active ? '分析中…' : '开始分析';
 }
 
-// 点击开始分析后慢慢滚到加载区：浏览器原生 smooth 的时长不可控、一晃就过，
-// 骨架屏还没看清页面就停了；这里用 rAF 补间走一段 1.1s 的缓动转场
-function scrollToSlowly(target, duration = 1100) {
-  const start = window.scrollY;
-  const end = target.getBoundingClientRect().top + start;
-  const distance = end - start;
-  if (Math.abs(distance) < 2) return;
-  const t0 = performance.now();
-  const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
-  const step = (now) => {
-    const progress = Math.min((now - t0) / duration, 1);
-    window.scrollTo(0, start + distance * ease(progress));
-    if (progress < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
+// 两层视图：输入层（链接/牌表/组牌器）与结果层互斥显示。结果层靠导航上的
+// 「← 返回输入」或「重新分析」退回；返回不清状态，重新提交即覆盖旧结果
+function showResultsView() {
+  inputView.hidden = true;
+  builderView.hidden = true;
+  resultsView.hidden = false;
+  if (navBackButton) navBackButton.hidden = false;
+  window.scrollTo(0, 0);
+}
+
+function showInputView() {
+  resultsView.hidden = true;
+  builderView.hidden = true;
+  inputView.hidden = false;
+  loading.hidden = true;
+  const skeleton = document.querySelector('#skeleton');
+  if (skeleton) skeleton.hidden = true;
+  results.hidden = true;
+  const links = document.querySelector('#sticky-nav-links');
+  if (links) links.hidden = true;
+  if (navBackButton) navBackButton.hidden = true;
+  document.body.classList.remove('has-sticky-nav');
+  closeDeckDrawer();
+  window.scrollTo(0, 0);
 }
 
 /** @param {Analysis} payload */
@@ -1462,7 +1504,7 @@ function render(payload) {
   warning.hidden = !payload.warnings?.length;
   warning.textContent = payload.warnings?.join(' ') || '';
   renderManabase(payload.manabase);
-  renderConstructionReport(payload.construction_report);
+  renderConstructionReport(payload.construction_report, payload.deck_cards || []);
   renderCardImpacts(payload.results?.edhpowerlevel?.metrics?.card_impacts, payload.deck_cards || []);
   renderCombos(payload.combos || [], payload.combo_suggestions || []);
   renderRecommendations(payload.recommendations || [], payload.gap_recommendations || [], payload.recommendation_keywords || []);
@@ -1476,7 +1518,7 @@ function render(payload) {
   // Fresh analyses start with 关联卡牌与组合 folded: it is the tallest section
   // and its content matters least while the user reads scores first.
   setSectionCollapsed('combo-section', true);
-  results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  window.scrollTo(0, 0);
   
   // Show sticky navigation
   showStickyNav();
@@ -1600,7 +1642,8 @@ function renderManabase(manabase) {
           </div>
         </div>` : '';
     composition = `
-      <div class="manabase-table-heading"><span>法术力生产</span><small>符号占比 · 全部 vs 地牌</small></div>
+      <div class="manabase-table-heading"><span>法术力生产</span></div>
+      <p class="manabase-pips-hint">每个颜色两条：全部符号占比 与 地牌符号占比</p>
       <div class="manabase-pips">${pipRows}${colorlessRow}</div>`;
   }
 
@@ -1635,12 +1678,12 @@ function renderManabase(manabase) {
       <span class="manabase-stat"><span>中位数</span><strong>${fmt(medianNoLands)}</strong><small>不含地</small></span>
       <span class="manabase-stat"><span>总法力值</span><strong>${Number.isFinite(totalMv) ? Math.round(totalMv) : '—'}</strong><small>全部非地牌</small></span>`;
     return `
-      <div class="manabase-table-heading"><span>法术力曲线</span><small>非地牌 · 含主将与加速物</small></div>
+      <div class="manabase-table-heading"><span>法术力曲线</span></div>
       <div class="manabase-curve-legend">
         <span class="manabase-legend-item is-permanent"><i></i>永久物</span>
         <span class="manabase-legend-item is-all"><i></i>全部法术</span>
       </div>
-      <p class="manabase-curve-hint">点击柱子筛选下方牌表中对应法术力值的卡牌</p>
+      <p class="manabase-curve-hint">统计非地牌（含主将与加速物）；点击柱子筛选下方牌表中对应法术力值的卡牌</p>
       <div class="manabase-curve">${rows}</div>
       ${statsKnown ? `<div class="manabase-stats">${statsHTML}</div>` : ''}`;
   })() : '';
@@ -1698,22 +1741,45 @@ function renderColorFinding(finding) {
 }
 
 /** @param {ConstructionReport} report */
-function renderConstructionReport(report) {
+function renderConstructionReport(report, deckCards) {
   const section = document.querySelector('#construction-section');
   const container = document.querySelector('#construction-metrics');
   const metrics = Array.isArray(report?.metrics) ? report.metrics : [];
   section.hidden = !metrics.length;
   const winconCombos = Number(report?.wincon_combo_count || 0);
+  // 分类条目带缩略图与类型/费用：新玩家不认识英文名，靠图 + 悬停中文规则文本识别。
+  // data-* 属性与牌表卡片同一套约定，悬停预览、点开大图、按需中文翻译直接复用。
+  const cardByName = new Map((deckCards || []).map((item) => [String(item.card?.name || '').toLowerCase(), item.card || {}]));
   const metricCard = (metric) => {
     const percent = Math.min(100, Math.round((Number(metric.actual) / Math.max(1, Number(metric.target))) * 100));
-    const cards = (metric.cards || []).map((card) => `<li><strong>${card.quantity}× ${escapeHTML(card.name)}</strong><span>${escapeHTML(card.reason)}</span></li>`).join('');
-    // 拆分说明：正向法力 = 地 + 0 费加速神器；胜负手 = 牌面胜负牌 + 制胜组合
+    const cards = (metric.cards || []).map((card) => {
+      const data = cardByName.get(String(card.name || '').toLowerCase()) || null;
+      const faces = data ? picturedFacesOf(data) : [];
+      const image = data ? proxiedImage(data.image_small || data.image_normal || faces[0]?.image_small || faces[0]?.image_normal) : '';
+      const previewImage = data ? proxiedImage(data.image_normal || data.image_small || faces[0]?.image_normal || faces[0]?.image_small) : '';
+      const faceData = faces.length > 1 ? ` data-faces="${escapeHTML(JSON.stringify(faces))}"` : '';
+      const zoomAttr = previewImage ? ` data-zoom-src="${escapeHTML(previewImage)}"` : '';
+      const metaBits = [];
+      if (data?.type_line) metaBits.push(escapeHTML(data.type_line));
+      else if (faces[0]?.type_line) metaBits.push(escapeHTML(faces[0].type_line));
+      if (data?.mana_cost) metaBits.push(escapeHTML(data.mana_cost));
+      else if (faces[0]?.mana_cost) metaBits.push(escapeHTML(faces[0].mana_cost));
+      return `<li class="construction-card-item"${faceData} data-preview-src="${escapeHTML(previewImage || '')}" data-preview-name="${escapeHTML(card.name)}" data-card-text="${escapeHTML(data ? previewTextForCard(data) : '')}"${zoomAttr}>
+        ${image ? `<img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(card.name)}">` : '<div class="construction-card-placeholder"></div>'}
+        <div class="construction-card-info">
+          <strong>${card.quantity}× ${escapeHTML(card.name)}</strong>
+          ${metaBits.length ? `<span class="construction-card-meta">${metaBits.join(' · ')}</span>` : ''}
+          ${card.reason ? `<span>${escapeHTML(card.reason)}</span>` : ''}
+        </div>
+      </li>`;
+    }).join('');
+    // 拆分说明：正向法力 = 地 + 产费神器；胜负手 = 牌面胜负牌 + 制胜组合
     // 两个指标的 actual 都是合计值，不拆开的话数字对不上展开的卡列表
     let split = '';
     if (metric.id === 'lands') {
       const lands = (metric.cards || []).reduce((sum, card) => sum + (card.counts?.land || 0), 0);
       const fast = (metric.cards || []).reduce((sum, card) => sum + (card.counts?.fast_mana || 0), 0);
-      split = ` <small class="construction-split">其中 ${lands} 地 + ${fast} 加速</small>`;
+      split = ` <small class="construction-split">${fast > 0 ? `其中 ${lands} 地 + ${fast} 张产费神器` : `其中 ${lands} 地`}</small>`;
     } else if (metric.id === 'wincon' && winconCombos > 0) {
       split = ` <small class="construction-split">其中 ${Math.max(0, metric.actual - winconCombos)} 张牌 + ${winconCombos} 条制胜组合</small>`;
     }
@@ -1973,7 +2039,7 @@ function renderRecommendationView() {
     container.innerHTML = gapRecommendationData.map((metric, index) => `
       <section class="recommendation-group gap-recommendation-group is-collapsed" data-gap-id="${escapeHTML(metric.id || '')}" data-group-index="gap-${index}">
         <div class="recommendation-group-heading toggleable" role="button" tabindex="0" data-recommendation-toggle="gap-${index}">
-          <div><h3>${escapeHTML(metric.label || metric.id)}</h3><span>还缺 ${Number(metric.gap) || 0} · ${(metric.cards || []).length} 张推荐</span></div>
+          <div><h3>${escapeHTML(metric.label || metric.id)}</h3></div>
           <button type="button" class="section-heading-toggle" aria-label="展开">展开</button>
         </div>
         <div class="recommendation-row">${(metric.cards || []).map(renderRecommendedCard).join('')}</div>
@@ -2827,11 +2893,11 @@ function hideCardPreview() {
 }
 
 document.addEventListener('pointerover', (event) => {
-  const trigger = event.target.closest('.mtg-card, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot');
+  const trigger = event.target.closest('.mtg-card, .construction-card-item, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot');
   if (trigger && !trigger.contains(event.relatedTarget)) showCardPreview(trigger);
 });
 document.addEventListener('pointerout', (event) => {
-  const trigger = event.target.closest('.mtg-card, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot');
+  const trigger = event.target.closest('.mtg-card, .construction-card-item, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot');
   if (trigger && !trigger.contains(event.relatedTarget)) hideCardPreview();
 });
 document.addEventListener('focusin', (event) => { if (event.target.matches('.mtg-card, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img')) showCardPreview(event.target); });
@@ -3051,11 +3117,12 @@ function initScrollAnimations() {
     });
   }, { rootMargin: '50px 0px 50px 0px' });
 
-  // Apply animations to major sections, but exclude recommendation section
-  // (it contains many dynamic cards, better to keep it stable)
-  document.querySelectorAll('.catalog-section:not(#recommendation-section), .result-card').forEach((el) => {
+  // 推荐区卡片多，整段淡入位移显得晃：只保留顶部的进入条动画（strip-only
+  // 跳过 opacity/transform，::before 的 scaleX 照常播放）
+  document.querySelectorAll('.catalog-section, .result-card').forEach((el) => {
     if (el.dataset.scrollAnimated) return;
     el.dataset.scrollAnimated = '1';
+    if (el.id === 'recommendation-section') el.classList.add('strip-only');
     el.classList.add('scroll-reveal');
     observer.observe(el);
   });
