@@ -240,8 +240,30 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .catalog-section.scroll-reveal.in-view::before { transform: scaleX(1); }
 :root.light-mode .catalog-section.scroll-reveal::before { background: #6b8a00; }
 .results { margin-top: 64px; content-visibility: auto; }
-.deck-strip { display: flex; justify-content: space-between; gap: 20px; align-items: end; padding-bottom: 26px; border-bottom: 1px solid var(--hairline); }
+/* 结果页报头：左边标题区、右边主将原画，同在一块 surface 上。原画是从整张卡图上
+   裁下来的画框——标准边框（normal 尺寸 488×680）上画框实测为 x 32..452、y 76..380，
+   即宽 420、高 304 */
+.deck-strip { display: grid; grid-template-columns: minmax(0, 1fr) 250px; grid-template-areas: 'body covers'; overflow: hidden; background: var(--surface); border-radius: 20px; }
+.deck-strip-body { grid-area: body; position: relative; display: grid; align-content: center; gap: 8px; min-width: 0; padding: 22px 32px; }
+.deck-strip-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.deck-strip-top .eyebrow { margin: 0; }
+.deck-strip-top .ghost-button { position: absolute; top: 18px; right: 24px; }
 .deck-strip h2 { font-size: clamp(30px, 4vw, 52px); font-family: var(--font-display); letter-spacing: -.03em; }
+.deck-colors { align-items: center; }
+.deck-strip .deck-score-note { margin: 0; color: var(--muted); font-size: 13px; }
+.deck-score-note.is-up, .deck-score-note.is-down { color: var(--acid); font-weight: 700; }
+.deck-score-note.is-down { color: var(--orange); }
+.deck-covers { grid-area: covers; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-content: start; }
+/* 原画按高度裁：卡图高度撑到容器高度的 680/304（画框高 304），顶上收掉 76px
+   （占容器高度 25%），左右居中。容器随标题区高矮伸缩时画框始终填满——比画框
+   比例高就左右各多裁几像素，矮则由 min-height 兜住 */
+.deck-cover { position: relative; display: block; min-height: 181px; padding: 0; border: 0; background: var(--surface-2); overflow: hidden; cursor: zoom-in; }
+.deck-cover img { position: absolute; top: -25%; left: 50%; width: auto; max-width: none; height: 223.7%; transform: translateX(-50%); transition: transform .3s ease; }
+.deck-cover:hover img { transform: translateX(-50%) scale(1.025); }
+.deck-cover:focus-visible { outline: 2px solid var(--acid); outline-offset: -3px; }
+/* 双主将各占一半宽：画框裁不下两份，退回居中铺满 */
+.deck-cover.is-cover img { top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; transform: none; }
+.deck-cover.is-cover:hover img { transform: scale(1.025); }
 /* 深度分三层，一屏只允许一种噪点来源：
    L0 数据内部保持素面——网格、字阶、色条承载信息；不再用描边围出格子，
    分组靠 surface 底色阶与留白；
@@ -390,19 +412,17 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .manabase-land-stat small { display: block; text-transform: none; letter-spacing: 0; }
 .manabase-formula { margin: 14px 0 22px; color: var(--muted); font-size: 13px; }
 .manabase-formula strong { color: var(--ink); }
-.manabase-colors-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+.manabase-colors-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 30px 0 12px; }
 .manabase-colors-heading span { font: 700 12px var(--font-ui); letter-spacing: .08em; color: var(--blue); }
 .manabase-colors-heading small { color: var(--muted); font-size: 12px; }
 .manabase-color-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .manabase-color { border: 0; padding: 16px 18px; background: var(--surface-2); border-radius: 14px; }
 :root.light-mode .manabase-color { background: #e2e5e0; }
 .manabase-color-head { display: flex; gap: 12px; align-items: center; margin-bottom: 11px; }
-.mana-symbol { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 50%; background: var(--blue); color: #10120d; font-weight: 850; }
-.mana-symbol.w { background: #f9f6e8; color: #0e100d; }
-.mana-symbol.u { background: #6db7e3; color: #0e100d; }
-.mana-symbol.b { background: #6a6a74; color: #f4f2e9; }
-.mana-symbol.r { background: #e0674f; color: #0e100d; }
-.mana-symbol.g { background: #7fb06d; color: #0e100d; }
+/* 法术力符号是自绘的内联 SVG（见 app.js 顶部）：圆底与图形自带配色，
+   这里的 .mana-symbol 只是给它定个 34px 的框 */
+.mana-symbol { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px; }
+.mana-symbol .mana-s { width: 100%; height: 100%; }
 .manabase-color-head > div { color: var(--muted); font-size: 13px; line-height: 1.4; }
 .manabase-color-head strong { color: var(--ink); }
 .manabase-color-bar { height: 6px; background: #30342d; overflow: hidden; }
@@ -416,35 +436,46 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .manabase-table-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 18px 0 10px; }
 .manabase-table-heading span { font: 700 12px var(--font-ui); letter-spacing: .08em; color: var(--blue); }
 .manabase-table-heading small { color: var(--muted); font-size: 12px; }
-.manabase-pips { display: grid; gap: 12px; }
-.manabase-pips-hint { margin: -4px 0 10px; font-size: 12px; color: var(--muted); }
-/* 第三列定宽：百分数读数各行宽窄不一，auto 列会把中间的灰色底条挤得
-   长短不齐；统一 172px 后所有底条右缘对齐 */
-.manabase-pip-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 172px; align-items: center; gap: 14px; }
-@media (max-width: 560px) { .manabase-pip-row { grid-template-columns: 34px minmax(0, 1fr); } .manabase-pip-metrics { grid-column: 2; } }
-/* Moxfield-style mana production: bars come first — they are the main visual — with
-   the two percentage readouts trailing after them. The fill is a real <i> child so
-   the rAF pixel-width pass can animate it (inline percents get dropped by some
-   embedded renderers). */
-.manabase-pip-tracks { display: grid; gap: 4px; min-width: 0; }
+/* 比例条的填充是真实的 <i> 子元素：rAF 那一遍按像素定宽才有过渡可播
+   （有些内嵌渲染器会丢掉内联百分比宽度） */
+.manabase-pip-tracks { display: grid; gap: 4px; min-width: 0; width: 100%; }
 .manabase-pip-track { height: 8px; background: #30342d; border-radius: 4px; overflow: hidden; }
 :root.light-mode .manabase-pip-track { background: #c8cdc4; }
 .manabase-pip-track i { display: block; width: 0; height: 100%; border-radius: 4px; transition: width .5s ease; }
-.manabase-pip-row[data-color="W"] .manabase-pip-track i { background: #f9f6e8; }
-.manabase-pip-row[data-color="U"] .manabase-pip-track i { background: #6db7e3; }
-.manabase-pip-row[data-color="B"] .manabase-pip-track i { background: #6a6a74; }
-.manabase-pip-row[data-color="R"] .manabase-pip-track i { background: #e0674f; }
-.manabase-pip-row[data-color="G"] .manabase-pip-track i { background: #7fb06d; }
-.manabase-pip-row.is-colorless .mana-symbol { background: #9aa0a6; color: #10120d; }
-.manabase-pip-row.is-colorless .manabase-pip-track i { background: #9aa0a6; }
-:root.light-mode .manabase-pip-row.is-colorless .mana-symbol { background: #8b9096; color: #10120d; }
+.manabase-color-col[data-color="W"] .manabase-pip-track i { background: #f9f6e8; }
+.manabase-color-col[data-color="U"] .manabase-pip-track i { background: #6db7e3; }
+.manabase-color-col[data-color="B"] .manabase-pip-track i { background: #6a6a74; }
+.manabase-color-col[data-color="R"] .manabase-pip-track i { background: #e0674f; }
+.manabase-color-col[data-color="G"] .manabase-pip-track i { background: #7fb06d; }
+.manabase-color-col[data-color="C"] .manabase-pip-track i { background: #9aa0a6; }
 .manabase-pip-track.is-land { height: 5px; opacity: .55; }
-/* 两个读数上下堆叠、与上方两条横条（全部/地牌）逐行对应；并排放不进定宽第三列
-   ——span 不许 nowrap，否则 body 的 overflow-wrap:anywhere 会把「50%」逐字符挤成竖排 */
-.manabase-pip-metrics { display: grid; gap: 3px; }
-.manabase-pip-metric { display: flex; align-items: baseline; gap: 5px; min-width: 0; font-size: 12px; color: var(--muted); }
-.manabase-pip-metric strong { flex: none; min-width: 40px; white-space: nowrap; font-size: 16px; color: var(--ink); font-variant-numeric: tabular-nums; }
-.manabase-pip-metric span { min-width: 0; }
+
+/* 法术力生产：六色各一列（学 Moxfield 的颜色分析）。列里自上而下是符号、占全部
+   符号的大数、两条比例条（上：占全部符号，下：占地牌符号）、占地牌符号的读数。
+   牌组里没有的颜色整列压暗而不是删掉，六列的位置才是固定的 */
+.manabase-color-cols { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px 22px; margin-top: 8px; }
+.manabase-color-col { display: grid; justify-items: center; align-content: start; gap: 4px; min-width: 0; }
+.manabase-color-col.is-absent { opacity: .38; }
+.manabase-color-share { font-size: 30px; line-height: 1.1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.manabase-color-caption { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 4px; color: var(--muted); font-size: 12px; text-align: center; }
+.manabase-color-caption b { color: var(--ink); font-weight: 700; }
+.manabase-color-col .manabase-pip-tracks { margin: 6px 0 2px; }
+@media (max-width: 900px) { .manabase-color-cols { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px) {
+  /* 窄屏下钻面板的标题：张数说明另起一行，不把「法术力值 N 的牌」挤成两截 */
+  .manabase-drill .manabase-table-heading { flex-direction: column; align-items: flex-start; gap: 2px; }
+}
+
+/* 曲线与下钻面板并排（窄屏上下排）：左边看形状，右边看某一档里具体是哪些牌 */
+.manabase-curve-grid { display: grid; grid-template-columns: minmax(0, 9fr) minmax(0, 11fr); gap: 4px 40px; align-items: start; }
+@media (max-width: 900px) { .manabase-curve-grid { grid-template-columns: minmax(0, 1fr); } }
+.manabase-curve-col, .manabase-drill { min-width: 0; }
+.mana-value-group + .mana-value-group { margin-top: 12px; }
+.mana-value-group h4 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 2px; font: 700 13px var(--font-ui); color: var(--ink); }
+.mana-value-group h4 span { color: var(--muted); font-weight: 400; font-size: 12px; }
+.manabase-drill .deck-row-main { padding: 4px 0; font-size: 13px; }
+/* 牌多的一档在面板内部滚动，面板高度和左边的曲线大致齐平 */
+.manabase-drill-list { max-height: 310px; overflow-y: auto; margin-right: -8px; padding-right: 8px; }
 .manabase-table { display: grid; grid-template-columns: 2fr 1fr; border: 0; }
 .manabase-table-row { display: contents; }
 .manabase-table-row span, .manabase-table-row strong { padding: 9px 4px; border-bottom: 1px solid var(--hairline); }
@@ -533,7 +564,8 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .construction-card-info { display: grid; gap: 3px; }
 .construction-card-item strong { font-size: 12px; }
 .construction-card-item > .construction-card-info span { color: var(--muted); font-size: 11px; }
-.construction-card-meta { color: var(--ink); opacity: .72; }
+.construction-card-meta { color: var(--ink); opacity: .72; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.construction-card-meta .mana-s, .construction-card-meta .mana-pip { width: 14px; height: 14px; min-width: 14px; font-size: 9px; }
 .construction-metric > p { padding: 0 2px 14px; }
 .catalog-section { margin-top: 68px; content-visibility: auto; }
 /* 区块幽灵序号：右上角一枚描边空心大数字（01…04），编辑刊物的栏目标记。
@@ -713,12 +745,14 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .builder-commander-row input { width: 100%; padding: 13px 15px; border: 1px solid #555a50; color: var(--ink); background: #0e100d; font: 13px var(--font-ui); }
 .builder-commander-row input:focus { outline: 0; border-color: var(--acid); }
 .builder-commander-preview { display: flex; gap: 14px; align-items: flex-start; margin-top: 14px; padding: 14px; border: 0; background: var(--surface-2); border-radius: 16px; }
-.builder-commander-preview-entry { position: relative; display: flex; gap: 14px; align-items: flex-start; }
-.builder-commander-preview img, .builder-commander-preview .builder-candidate-placeholder { flex: 0 0 72px; width: 72px; height: 100px; object-fit: cover; border-radius: 6px; background: #14150f; }
+/* 预览条左侧是一段主将原画（取画框，裁法同结果页报头），不是一张小缩略图配空白 */
+.builder-commander-preview-entry { position: relative; display: flex; flex: 1 1 0; min-width: 0; gap: 14px; align-items: center; }
+.builder-commander-crop { position: relative; flex: 0 0 150px; width: 150px; aspect-ratio: 420 / 304; overflow: hidden; border-radius: 8px; background: #14150f; }
+.builder-commander-crop img { position: absolute; top: -25%; left: 50%; width: auto; max-width: none; height: 223.7%; transform: translateX(-50%); }
+.builder-commander-preview .builder-candidate-placeholder { flex: 0 0 72px; width: 72px; height: 100px; object-fit: cover; border-radius: 6px; background: #14150f; }
 .builder-commander-preview-body { display: grid; gap: 5px; align-items: start; }
 .builder-commander-preview-body strong { font-size: 17px; }
 .builder-commander-preview-body small { color: var(--muted); font-size: 13px; }
-.builder-commander-preview .card-zoom-button { top: auto; right: 8px; bottom: 8px; }
 .builder-partner-row { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; }
 .builder-partner-row input { width: 100%; padding: 13px 15px; border: 1px solid #555a50; color: var(--ink); background: #0e100d; font: 13px var(--font-ui); }
 .builder-partner-row input:focus { outline: 0; border-color: var(--acid); }
@@ -727,15 +761,25 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .builder-commander-suggestions li:hover, .builder-commander-suggestions li.active { background: var(--acid); color: #10120d; }
 .builder-workflow { display: grid; grid-template-columns: 1fr 320px; gap: 22px; margin-top: 22px; }
 .builder-workflow[hidden] { display: none; }
+/* 候选区横排还是三张并排由容器查询决定（见下方 @container）。查询锚点是它的
+   父容器 .builder-main：元素不能拿自己当查询容器，规则只对容器的子元素生效 */
+.builder-main { container-type: inline-size; min-width: 0; }
 .builder-candidates { display: grid; gap: 12px; }
-.builder-candidate { display: flex; gap: 16px; padding: 16px; border: 0; background: var(--surface-2); border-radius: 18px; color: var(--ink); text-align: left; cursor: pointer; transition: background .15s; }
+/* 卡自身定位：右上角的「大」钮以它为基准，不跑到外层去 */
+.builder-candidate { position: relative; display: flex; gap: 16px; padding: 16px; border: 0; background: var(--surface-2); border-radius: 18px; color: var(--ink); text-align: left; cursor: pointer; transition: background .15s; }
 .builder-candidate:hover { background: #232719; }
 /* 缩略图与正/反切换同住一列：双面卡在缩略图正下方给翻面入口。 */
 .builder-candidate-art { flex: 0 0 auto; width: 88px; display: grid; gap: 2px; }
 .builder-candidate-art .card-faces button { padding: 5px; font-size: 10px; }
-.builder-candidate img, .builder-candidate-placeholder { flex: 0 0 88px; width: 88px; height: 123px; object-fit: cover; border-radius: 6px; background: #14150f; }
+.builder-candidate-placeholder { flex: 0 0 88px; width: 88px; height: 123px; object-fit: cover; border-radius: 6px; background: #14150f; }
+/* 缩略图框：窄容器里放整张卡的小图 */
+.builder-candidate-crop { position: relative; width: 88px; height: 123px; overflow: hidden; border-radius: 6px; background: #14150f; }
+.builder-candidate-crop img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .builder-candidate-body { display: grid; gap: 7px; align-content: start; align-items: start; justify-items: start; }
 .builder-candidate-title { display: flex; align-items: center; gap: 6px; }
+/* 费用符号 + 类型行：选牌先看它是几费、是什么 */
+.builder-candidate-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; color: var(--muted); font-size: 12px; }
+.builder-candidate-facts .deck-row-cost:empty { display: none; }
 /* 右上角悬浮的"大"圆钮占了内容区右缘 46px：标题/协同度/补足这三行可能落在
    同一高度，右侧让位 48px 强制提前换行，长卡名不会从按钮底下穿过；
    异能文本起得更低，不受影响，保持整行宽度。 */
@@ -748,11 +792,31 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
    最多 5 行截断（完整文本仍走"大"图层），中文可用时由前端异步整段替换。 */
 .builder-oracle { justify-self: stretch; width: 100%; margin: 0; font-size: 12px; line-height: 1.45; color: var(--muted); white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; }
 .builder-oracle:empty { display: none; }
+/* 宽容器（桌面）下三张并排成真正的卡：卡图取画框放大，一屏看全三张。裁法同
+   结果页报头——画框高 304、上沿距卡顶 76：卡图高度撑到容器的 680/304，顶上收掉
+   25%，左右居中。窄容器（手机、窄窗口）保持上面的横排；不支持容器查询的旧内核
+   也停在横排，不会坏 */
+@container (min-width: 660px) {
+  .builder-candidates { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .builder-candidate { flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden; }
+  .builder-candidate-art { width: 100%; }
+  .builder-candidate-crop { width: 100%; height: auto; aspect-ratio: 420 / 304; border-radius: 0; }
+  .builder-candidate-crop img { position: absolute; top: -25%; left: 50%; width: auto; max-width: none; height: 223.7%; transform: translateX(-50%); }
+  .builder-candidate-art .card-faces button { padding: 9px; font-size: 11px; }
+  .builder-candidate-body { align-items: stretch; justify-items: stretch; padding: 12px 14px 14px; }
+  /* 「大」钮这会儿浮在卡图上，不再压文字 */
+  .builder-candidate-title, .builder-synergy, .builder-candidate-body small { padding-right: 0; }
+  .builder-candidate-title strong { font-size: 17px; }
+  /* 异能按 6 行留位：中文译文回填前后的长度不一样，不留位三张卡会一起跳 */
+  .builder-oracle { -webkit-line-clamp: 6; min-height: calc(6 * 1.45em); }
+}
 .builder-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 16px; }
 .builder-basics { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .builder-basics-label { color: var(--muted); font-size: 13px; }
-.builder-basics button { width: 36px; height: 36px; border: 1px solid #555a50; border-radius: 50%; color: var(--ink); background: #1a1c18; font-weight: 800; font-size: 14px; }
+.builder-basics button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid #555a50; border-radius: 50%; color: var(--ink); background: #1a1c18; font-weight: 800; font-size: 14px; }
+.builder-basics button .mana-s { width: 24px; height: 24px; transition: transform .15s; }
 .builder-basics button:hover { border-color: var(--acid); color: var(--acid); }
+.builder-basics button:hover .mana-s { transform: scale(1.12); }
 .builder-lands-panel { border: 0; background: var(--surface-2); border-radius: 16px; padding: 18px; margin-top: 14px; }
 .builder-staples-panel { border: 0; background: var(--surface-2); border-radius: 16px; padding: 18px; margin-top: 14px; }
 .builder-lands-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
@@ -812,6 +876,8 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
   .builder-commander-row { flex-direction: column; }
   .builder-workflow { grid-template-columns: 1fr; }
   .builder-sidebar { position: static; }
+  /* 窄屏预览条：原画缩窄，给名字留出一行多的位置 */
+  .builder-commander-crop { flex-basis: 108px; width: 108px; }
 }
 .editor-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 14px 16px; border: 0; background: var(--surface-2); border-radius: 14px; }
 .deck-drawer-panel .editor-toolbar { border-right: 0; border-left: 0; }
@@ -914,19 +980,23 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .deck-row-cost-part { display: inline-flex; gap: 2px; }
 .deck-row-cost-sep { padding: 0 2px; color: var(--muted); font-size: 11px; }
 /* 费用符号小圆点：配色与 .mana-symbol 一致，底色与字色由 app.js 按符号内联 */
-.mana-pip { display: inline-grid; place-items: center; min-width: 17px; height: 17px; padding: 0 3px; border-radius: 999px; background: #9aa0a6; color: #10120d; font: 800 10.5px/1 var(--font-ui); font-style: normal; }
+.mana-pip { display: inline-grid; place-items: center; min-width: 17px; height: 17px; padding: 0 3px; border-radius: 999px; background: #9aa0a6; color: #10120d; font: 800 10.5px/1 var(--font-ui); font-style: normal; vertical-align: -3px; }
+/* 符号与数字圆点同尺寸：费用串里并排，规则文本里随字排 */
+.mana-s { width: 17px; height: 17px; flex: none; vertical-align: -3px; }
+.mana-s-row { display: inline-flex; gap: 3px; }
 /* 文字行里的 +/− 是行尾两枚小方钮（卡图网格里才是牌下方的整条控件） */
 .deck-drawer-panel .deck-row .card-edit-controls { width: auto; height: auto; flex: 0 0 auto; grid-template-rows: none; gap: 4px; padding-left: 8px; border-top: 0; border-left: 1px solid var(--hairline); }
 .deck-drawer-panel .deck-row .card-edit-controls button { width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 6px; }
 :root.light-mode .deck-drawer-panel .deck-row .card-edit-controls button { border-color: #a9ae9e; }
 @media (max-width: 560px) {
-  /* 窄屏一行放不下「数量 + 牌名 + 费用 + 控件」：费用折到牌名下方第二行；
-     触屏的 +/− 放大到接近 40px 的可点面积 */
-  .deck-row-main { grid-template-columns: 28px minmax(0, 1fr); row-gap: 1px; }
-  .deck-row-cost { grid-column: 2; }
+  /* 抽屉里一行放不下「数量 + 牌名 + 费用 + 控件」：费用折到牌名下方第二行；
+     触屏的 +/− 放大到接近 40px 的可点面积。只限抽屉——法力曲线旁的下钻面板
+     没有加减钮，费用放得下，不必折行 */
+  .deck-drawer-panel .deck-row-main { grid-template-columns: 28px minmax(0, 1fr); row-gap: 1px; }
+  .deck-drawer-panel .deck-row-cost { grid-column: 2; }
   .deck-drawer-panel .deck-row .card-edit-controls button { width: 38px; height: 38px; }
   /* 窄屏没有预览栏兜底，牌名不再省略而是折行——全名得直接看得见 */
-  .deck-row-name { white-space: normal; overflow-wrap: anywhere; }
+  .deck-drawer-panel .deck-row-name { white-space: normal; overflow-wrap: anywhere; }
 }
 
 /* 抽屉主体：左栏吸顶预览 + 右栏牌表。预览栏只在宽屏出现（断点与 app.js 的
@@ -1026,7 +1096,8 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .card-zoom-button { position: absolute; top: 8px; right: 8px; z-index: 5; width: 34px; height: 34px; padding: 0; border: 1px solid rgba(255,255,255,.25); border-radius: 50%; background: rgba(14,16,13,.82); color: #fff; font-size: 16px; line-height: 1; cursor: pointer; display: grid; place-items: center; transition: background .15s; }
 .card-zoom-button:hover { background: var(--acid); color: #10120d; }
 .builder-candidate .card-zoom-button { top: 12px; right: 12px; }
-.builder-commander-preview-entry .card-zoom-button { top: auto; right: 4px; bottom: 4px; }
+/* 预览条的「大」钮钉在条带右上角：和候选卡上的位置一致，也不压名字 */
+.builder-commander-preview-entry .card-zoom-button { top: 0; right: 0; bottom: auto; }
 @media (prefers-reduced-motion: reduce) {
   .card-preview { transition: none; }
   #submit-button, .ghost-button { transition: none; }
@@ -1063,7 +1134,16 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
   .construction-grid { grid-template-columns: 1fr; }
   .manabase-hero { grid-template-columns: 1fr; }
   .manabase-color-grid { grid-template-columns: 1fr; }
-  .deck-strip, .section-heading { align-items: flex-start; flex-direction: column; }
+  .section-heading { align-items: flex-start; flex-direction: column; }
+  /* 窄屏报头上下排：原画在上当封面，标题区在下。封面不取整个画框（要占 230px 高），
+     改取画面的中上段压成一条——宽度仍按画框放满（否则两侧露出卡牌边框），
+     高度上是画框的约 66%，上沿落在画框顶下约 20% 处 */
+  .deck-strip { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'covers' 'body'; }
+  .deck-strip-body { padding: 16px 20px 20px; }
+  .deck-strip-top .ghost-button { position: static; }
+  .deck-cover { min-height: 0; aspect-ratio: 2.1 / 1; }
+  .deck-cover img { top: -50.6%; left: -9.2%; width: 120%; height: auto; transform: none; }
+  .deck-cover.is-cover img { top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; transform: none; }
   .editor-toolbar { flex-direction: column; }
   .editor-add-row { flex: 1 1 auto; }
   .editor-actions { flex-wrap: wrap; }
@@ -1078,12 +1158,14 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 :root.light-mode .builder-commander-row input { background: #f9faf8; border-color: #a8ada2; }
 :root.light-mode .builder-commander-preview { background: #e2e5e0; }
 :root.light-mode .builder-commander-preview img,
+:root.light-mode .builder-commander-crop,
 :root.light-mode .builder-commander-preview .builder-candidate-placeholder { background: #f5f6f4; }
 :root.light-mode .builder-partner-row input { background: #f9faf8; border-color: #a8ada2; }
 :root.light-mode .builder-commander-suggestions { background: #f5f6f4; box-shadow: var(--shadow-pop); }
 :root.light-mode .builder-candidate { background: #e2e5e0; }
 :root.light-mode .builder-candidate:hover { background: #e9edda; }
 :root.light-mode .builder-candidate img,
+:root.light-mode .builder-candidate-crop,
 :root.light-mode .builder-candidate-placeholder { background: #f5f6f4; }
 :root.light-mode .builder-basics button { background: #e4e6e2; border-color: #a8ada2; }
 :root.light-mode .builder-lands-panel,
@@ -1108,6 +1190,28 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 :root.light-mode .manabase-colors-heading span,
 :root.light-mode .manabase-table-heading span,
 :root.light-mode .card-name-list-preview strong { color: #2f6cb3; }
+
+/* 常驻汇总条：首屏评分滚出视口后从底部滑入（出现时机见 app.js 的
+   syncDeckSummary）。材质与吸顶导航一致；层级压在牌表抽屉下面，抽屉拉出时
+   被它盖住 */
+.deck-summary { position: fixed; left: 0; right: 0; bottom: 0; z-index: 39; display: flex; align-items: center; gap: 18px; min-height: 48px; padding: 0 20px; background: rgba(16, 17, 15, .96); backdrop-filter: blur(12px); border-top: 1px solid var(--line); transform: translateY(100%); transition: transform .25s ease; }
+.deck-summary.is-shown { transform: none; }
+:root.light-mode .deck-summary { background: rgba(250, 251, 249, .96); }
+.deck-summary-identity { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 0; padding: 6px 0; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
+.deck-summary-identity:focus-visible { outline: 2px solid var(--acid); outline-offset: -2px; }
+.deck-summary-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 700; }
+.deck-summary-score.health-badge { padding: 4px 10px; font-size: 13px; }
+/* 类型构成与缺口横向排开，窄屏下整段横向滚动、不出滚动条 */
+.deck-summary-scroll { display: flex; align-items: center; gap: 18px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.deck-summary-scroll::-webkit-scrollbar { display: none; }
+.deck-summary-types { display: flex; gap: 14px; margin: 0; padding: 0; list-style: none; white-space: nowrap; }
+.deck-summary-types span { color: var(--muted); font-size: 12px; }
+.deck-summary-types strong { margin-left: 4px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.deck-summary-facts { display: flex; gap: 12px; white-space: nowrap; color: var(--acid); font: 700 12px var(--font-ui); }
+.deck-summary-facts span + span::before { content: "·"; margin-right: 12px; color: var(--muted); }
+/* 汇总条一出来就常驻到离开结果页：底部留白随之固定，不随显隐跳 */
+body.has-summary { padding-bottom: 48px; }
+body.has-summary .update-banner { bottom: 64px; }
 
 /* 版本页脚 + 更新横幅（发现新版本时由 app.js 插入，可关闭） */
 .app-version { margin: 26px 0 0; color: var(--muted); font-size: 12px; text-align: center; letter-spacing: .04em; }

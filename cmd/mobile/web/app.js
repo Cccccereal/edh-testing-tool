@@ -105,19 +105,134 @@ let recentShown = [];           // sliding window of names shown (not chosen) in
 const BASIC_LANDS = ['Plains', 'Island', 'Swamp', 'Mountain', 'Forest', 'Wastes'];
 const BUILD_TARGET = window.PL_CONFIG.buildTarget;
 
-// Canonical WUBRG order for the color-pip composition and symbol mapping. Symbols are
-// Scryfall-style glyphs ({W} → "{W}"), so they render as recognizable mana letters.
+// Canonical WUBRG order for the color-pip composition and symbol mapping.
 const MANA_COLORS = ['W', 'U', 'B', 'R', 'G'];
-function manaSymbolFor(color) {
-  switch (color) {
-    case 'W': return '{W}';
-    case 'U': return '{U}';
-    case 'B': return '{B}';
-    case 'R': return '{R}';
-    case 'G': return '{G}';
-    default: return color;
+
+// --- 法术力符号（内联 SVG） ------------------------------------------------------
+// 五色、无色与横置符号都是自绘的内联 SVG，不引第三方字体：镜像同步只管文件、
+// 移动端壳也带不上 fonts/，内联 SVG 两边都不用额外照顾。配色沿用站点原有的
+// 五色圆（.mana-symbol），图形取各自更深的一档——实体卡上的符号也是这么画的。
+const MANA_DISC = { W: '#f9f6e8', U: '#6db7e3', B: '#6a6a74', R: '#e0674f', G: '#7fb06d', C: '#9aa0a6' };
+const MANA_INK = { W: '#d3a93a', U: '#1d5a86', B: '#ece8dc', R: '#7c2113', G: '#21481d', C: '#3d4147' };
+const MANA_NAMES = { W: '白', U: '蓝', B: '黑', R: '红', G: '绿', C: '无色', T: '横置' };
+// 花括号记号认这些写法：数字、五色、无色、X、横置、混血、非瑞克西亚；
+// 其余（{E}、{S}…）不在表里，原样保留
+const MANA_TOKEN = /\{([0-9]{1,2}|[WUBRGCXT]|[WUBRG]\/[WUBRG2P])\}/gi;
+const manaCoord = (value) => Number(value.toFixed(2));
+
+// 白：太阳——中心圆 + 八道尖芒。芒的三个顶点按极坐标算，不手抄坐标
+function sunGlyphPath() {
+  const point = (radius, angle) => `${manaCoord(12 + radius * Math.cos(angle))} ${manaCoord(12 + radius * Math.sin(angle))}`;
+  let path = 'M12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0-6.2Z';
+  for (let ray = 0; ray < 8; ray++) {
+    const angle = (Math.PI / 4) * ray;
+    path += `M${point(10.3, angle)}L${point(4.4, angle - 0.31)}L${point(4.4, angle + 0.31)}Z`;
   }
+  return path;
 }
+
+// 横置：顺时针绕大半圈的箭头，缺口留在正上方，箭头在左上、指向十二点
+function tapArrowMarkup() {
+  const centerX = 12;
+  const centerY = 12.4;
+  const radius = 5.6;
+  const start = (-62 * Math.PI) / 180;
+  const end = (232 * Math.PI) / 180;
+  const at = (r, angle) => [centerX + r * Math.cos(angle), centerY + r * Math.sin(angle)];
+  const pair = ([x, y]) => `${manaCoord(x)} ${manaCoord(y)}`;
+  const [endX, endY] = at(radius, end);
+  const tangent = [-Math.sin(end), Math.cos(end)];
+  const normal = [Math.cos(end), Math.sin(end)];
+  const arc = `M${pair(at(radius, start))}A${radius} ${radius} 0 1 1 ${manaCoord(endX)} ${manaCoord(endY)}`;
+  // 箭头比弧线宽出一截——小到 17px 时也认得出是个箭头，而不是电源键
+  const head = `M${pair([endX + tangent[0] * 4.2, endY + tangent[1] * 4.2])}` +
+    `L${pair([endX + normal[0] * 3.1, endY + normal[1] * 3.1])}L${pair([endX - normal[0] * 3.1, endY - normal[1] * 3.1])}Z`;
+  return `<path d="${arc}" fill="none" stroke="#26281f" stroke-width="2.3" stroke-linecap="round"/><path d="${head}" fill="#26281f"/>`;
+}
+
+// 图形单独成 symbol（currentColor），圆底在每次使用时现画——非瑞克西亚与
+// 混血符号要换底色或半圆裁切，图形与底色分开才拼得出来
+function installManaSprite() {
+  const glyphs = {
+    W: `<path d="${sunGlyphPath()}"/>`,
+    U: '<path d="M12 4.3C10.5 7.3 6.9 11.3 6.9 14.3A5.1 5.1 0 0 0 17.1 14.3C17.1 11.3 13.5 7.3 12 4.3Z"/>',
+    B: '<path fill-rule="evenodd" d="M12 5.3C8.5 5.3 6.3 7.9 6.3 11C6.3 12.9 7.3 14.1 8.7 14.8L8.7 17.6Q8.7 18.3 9.4 18.3L14.6 18.3Q15.3 18.3 15.3 17.6L15.3 14.8C16.7 14.1 17.7 12.9 17.7 11C17.7 7.9 15.5 5.3 12 5.3ZM9.8 9.6A1.5 1.8 0 1 0 9.8 13.2A1.5 1.8 0 1 0 9.8 9.6ZM14.2 9.6A1.5 1.8 0 1 0 14.2 13.2A1.5 1.8 0 1 0 14.2 9.6ZM12 12.5L12.6 14.3L11.4 14.3ZM10.5 15.9L11.1 15.9L11.1 18.3L10.5 18.3ZM12.9 15.9L13.5 15.9L13.5 18.3L12.9 18.3Z"/>',
+    R: '<path fill-rule="evenodd" d="M12 4.3C13.3 6.9 16.7 8.6 16.7 12.9C16.7 15.5 15.1 17.7 12 17.7C8.9 17.7 7.3 15.5 7.3 12.9C7.3 11.3 8 10.2 9.1 9.1C9.2 10.5 9.9 11.2 10.6 11.4C10.2 8.9 10.9 6.3 12 4.3ZM12 12.4C12.9 13.3 13.7 13.9 13.7 14.9C13.7 15.9 12.9 16.5 12 16.5C11.1 16.5 10.3 15.9 10.3 14.9C10.3 13.9 11.1 13.3 12 12.4Z"/>',
+    G: '<path d="M12 4.9L15.6 9.7L14.1 9.7L17.2 13.3L15.3 13.3L18.6 17L13.1 17L13.1 19.2L10.9 19.2L10.9 17L5.4 17L8.7 13.3L6.8 13.3L9.9 9.7L8.4 9.7Z"/>',
+    C: '<path d="M7.6 7.2L16.4 7.2Q17.3 7.2 16.9 8L14.3 16.2Q14.1 16.8 13.5 16.8L10.5 16.8Q9.9 16.8 9.7 16.2L7.1 8Q6.7 7.2 7.6 7.2Z"/>'
+  };
+  const sprite = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  sprite.setAttribute('aria-hidden', 'true');
+  sprite.setAttribute('focusable', 'false');
+  sprite.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+  sprite.innerHTML = Object.entries(glyphs).map(([letter, glyph]) =>
+    `<symbol id="mg-${letter.toLowerCase()}" viewBox="0 0 24 24"><g fill="currentColor">${glyph}</g></symbol>`).join('') +
+    `<symbol id="ms-t" viewBox="0 0 24 24"><rect x="1" y="1" width="22" height="22" rx="4.5" fill="#d9dbd2"/>${tapArrowMarkup()}</symbol>`;
+  document.body.prepend(sprite);
+}
+installManaSprite();
+
+// 圆底 + 图形：letter 是五色/无色字母；数字则直接写在灰底上（混血的 {2/W} 用）
+function manaDisc(letter, disc, ink) {
+  if (/^[0-9]{1,2}$/.test(letter)) {
+    return `<circle cx="12" cy="12" r="12" fill="${MANA_DISC.C}"/><text x="12" y="12.4" text-anchor="middle" dominant-baseline="central" font-size="${letter.length > 1 ? 9.5 : 11}" font-weight="800" fill="#10120d">${letter}</text>`;
+  }
+  return `<circle cx="12" cy="12" r="12" fill="${disc || MANA_DISC[letter]}"/><use href="#mg-${letter.toLowerCase()}" style="color:${ink || MANA_INK[letter]}"/>`;
+}
+
+let manaHalfSeq = 0;
+// 花括号里的一个记号 → 标记。labelled 为真时给读屏一个名字（规则文本里用）；
+// 费用串整个容器已经 aria-hidden，单枚就不再报
+function manaSymbolMarkup(body, labelled) {
+  const token = String(body || '').toUpperCase();
+  const access = (name) => (labelled ? ` role="img" aria-label="${escapeHTML(name)}"` : ' aria-hidden="true"');
+  if (/^[0-9]{1,2}$/.test(token) || token === 'X') return `<i class="mana-pip"${access(token)}>${token}</i>`;
+  if (token === 'T') return `<svg class="mana-s" viewBox="0 0 24 24"${access(MANA_NAMES.T)}><use href="#ms-t"/></svg>`;
+  if (MANA_DISC[token]) return `<svg class="mana-s" viewBox="0 0 24 24"${access(MANA_NAMES[token])}>${manaDisc(token)}</svg>`;
+  const phyrexian = token.match(/^([WUBRG])\/P$/);
+  if (phyrexian) {
+    const [, letter] = phyrexian;
+    return `<svg class="mana-s" viewBox="0 0 24 24"${access(`${MANA_NAMES[letter]}（非瑞克西亚）`)}>${manaDisc(letter, '#2c2c35', MANA_DISC[letter])}</svg>`;
+  }
+  const hybrid = token.match(/^([WUBRG2])\/([WUBRG2])$/);
+  if (hybrid) {
+    const [, left, right] = hybrid;
+    const clip = `mana-half-${++manaHalfSeq}`;
+    return `<svg class="mana-s" viewBox="0 0 24 24"${access(`${MANA_NAMES[left] || left}/${MANA_NAMES[right] || right}`)}>` +
+      `<defs><clipPath id="${clip}"><path d="M12 0A12 12 0 0 1 12 24L12 0Z"/></clipPath></defs>` +
+      `${manaDisc(left)}<g clip-path="url(#${clip})">${manaDisc(right)}</g>` +
+      '<path d="M12 0V24" stroke="rgba(16,18,13,.4)" stroke-width=".9"/></svg>';
+  }
+  return `{${body}}`;
+}
+
+function manaSymbolFor(color) {
+  return manaSymbolMarkup(color, false);
+}
+
+// 把已转义文本里的花括号记号换成符号——规则文本与类型行后面的费用串都走这里
+function symbolizeMana(escapedText) {
+  return String(escapedText).replace(MANA_TOKEN, (match, body) => manaSymbolMarkup(body, true));
+}
+
+function oracleHTML(text) {
+  return symbolizeMana(escapeHTML(text));
+}
+
+function manaCostMarkup(cost) {
+  return String(cost || '').replace(MANA_TOKEN, (match, body) => manaSymbolMarkup(body, false));
+}
+
+// 「快速加基本地」的六枚圆钮：颜色字换成对应的法术力符号，全名留给读屏与悬停
+const BASIC_LAND_NAMES = { Plains: '平原', Island: '海岛', Swamp: '沼泽', Mountain: '山脉', Forest: '树林', Wastes: '荒地' };
+const BASIC_LAND_SYMBOL = { Plains: 'W', Island: 'U', Swamp: 'B', Mountain: 'R', Forest: 'G', Wastes: 'C' };
+document.querySelectorAll('[data-basic]').forEach((button) => {
+  const land = button.dataset.basic;
+  if (!BASIC_LAND_SYMBOL[land]) return;
+  button.setAttribute('aria-label', `加一张${BASIC_LAND_NAMES[land]}`);
+  button.title = BASIC_LAND_NAMES[land];
+  button.innerHTML = manaSymbolMarkup(BASIC_LAND_SYMBOL[land], false);
+});
 
 // A card (basic lands excepted) is a singleton: one copy at most in the Commander
 // mainboard. We check the authoritative draft list, not the name-only `buildChosen`
@@ -157,14 +272,15 @@ function renderCommanderPreview(commanders) {
   }
   builderCommanderPreview.innerHTML = commanders.map((commander) => {
     const card = commander.card || {};
-    const image = cardImage(card) || cardPreviewImage(card);
+    // 用大图：预览条里放的是放大到画框的原画，小图会糊
+    const previewImage = cardPreviewImage(card) || cardImage(card);
+    const image = previewImage;
     const isPartner = commander.is_partner;
-    const previewImage = cardPreviewImage(card) || image;
     const faces = picturedFacesOf(card);
     const faceData = faces.length > 1 ? ` data-faces="${escapeHTML(JSON.stringify(faces))}"` : '';
     return `
       <div class="builder-commander-preview-entry"${faceData} data-preview-src="${escapeHTML(previewImage)}" data-preview-name="${escapeHTML(commander.name)}" data-card-text="${escapeHTML(previewTextFor(card))}">
-        <img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(commander.name)}">
+        <div class="builder-commander-crop">${image ? `<img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(commander.name)}">` : ''}</div>
         <button type="button" class="card-zoom-button" data-zoom-src="${escapeHTML(previewImage)}" data-preview-name="${escapeHTML(commander.name)}" data-card-text="${escapeHTML(previewTextFor(card))}" aria-label="查看 ${escapeHTML(commander.name)} 大图">大</button>
         <div class="builder-commander-preview-body">
           <strong>${escapeHTML(commander.name)}</strong>
@@ -313,6 +429,7 @@ function openBuilder() {
   inputView.hidden = true;
   resultsView.hidden = true;
   builderView.hidden = false;
+  hideDeckSummary();
   window.scrollTo(0, 0);
   builderCommanderInput.focus();
 }
@@ -806,28 +923,43 @@ async function startBuild() {
   }
 }
 
+// 组牌候选的异能文本里去掉类型行：类型已经单独列在名字下面，规则文本开头
+// 再带一遍是重复。source 是卡（或它的简中印刷），按「\n\n」分块后整块相等的才丢
+function dropTypeLines(text, source) {
+  const typeLines = new Set([source || {}, ...((source && source.faces) || [])]
+    .flatMap((face) => [face.type_line, face.chinese_type_line])
+    .map((line) => String(line || '').trim())
+    .filter(Boolean));
+  return String(text || '').split('\n\n').filter((block) => !typeLines.has(block.trim())).join('\n\n');
+}
+
 function applyBuildCandidates(candidates) {
   buildCandidates = Array.isArray(candidates) ? candidates : [];
   builderCandidates.innerHTML = buildCandidates.map((card, index) => {
-    const image = cardImage(card.card);
-    const preview = cardPreviewImage(card.card);
+    // 缩略图直接用大图：宽屏下三张并排时卡图要放大到画框那么大，小图会糊；
+    // 悬停预览本来也要加载这张
+    const image = cardPreviewImage(card.card);
+    const preview = image;
     const cardText = previewTextFor(card.card);
     const faces = picturedFacesOf(card.card);
     const faceSwitch = faceSwitchMarkup(faces);
     const faceData = faces.length > 1 ? ` data-faces="${escapeHTML(JSON.stringify(faces))}"` : '';
     const fills = (card.fills || []).map((id) => buildMetricLabel(id)).filter(Boolean).join(' · ');
     const gcBadge = card.game_changer ? '<span class="builder-gc-tag" title="Game Changer">GC</span>' : '';
+    // 类型行看正面（多面牌两行拼起来太长）
+    const typeLine = String(faces[0]?.type_line || card.card?.type_line || '').trim();
     return `
       <div role="button" tabindex="0" class="builder-candidate"${faceData} data-candidate="${index}" data-preview-src="${escapeHTML(preview)}" data-preview-name="${escapeHTML(card.name)}" data-card-text="${escapeHTML(cardText)}">
         <div class="builder-candidate-art">
-          ${image ? `<img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(card.name)}">` : '<div class="builder-candidate-placeholder"></div>'}
+          <div class="builder-candidate-crop">${image ? `<img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(card.name)}">` : ''}</div>
           ${faceSwitch}
         </div>
         <div class="builder-candidate-body">
           <div class="builder-candidate-title">${gcBadge}<strong>${escapeHTML(card.name)}</strong></div>
+          <div class="builder-candidate-facts"><span class="deck-row-cost" aria-hidden="true">${deckRowCost(card.card || {})}</span>${typeLine ? `<span>${escapeHTML(typeLine)}</span>` : ''}</div>
           <span class="builder-synergy">Synergy ${(Number(card.synergy) || 0).toFixed(2)}%</span>
           ${fills ? `<small>补足：${escapeHTML(fills)}</small>` : ''}
-          <p class="builder-oracle">${escapeHTML(cardText)}</p>
+          <p class="builder-oracle">${oracleHTML(dropTypeLines(cardText, card.card))}</p>
         </div>
         <button type="button" class="card-zoom-button" data-zoom-src="${escapeHTML(preview)}" data-preview-name="${escapeHTML(card.name)}" data-card-text="${escapeHTML(cardText)}" aria-label="查看 ${escapeHTML(card.name)} 大图">大</button>
       </div>`;
@@ -844,9 +976,9 @@ function localizeBuilderCandidates() {
     const oracle = row.querySelector('.builder-oracle');
     if (!name || !oracle) return;
     fetchChineseCard(name).then((zh) => {
-      const block = zh ? chineseTextBlock(zh) : '';
+      const block = zh ? dropTypeLines(chineseTextBlock(zh), zh) : '';
       if (!block) return;
-      oracle.textContent = block;
+      oracle.innerHTML = oracleHTML(block);
       row.dataset.cardText = block;
       row.dataset.zhLoaded = '1';
       row.querySelector('.card-zoom-button')?.setAttribute('data-card-text', block);
@@ -1076,7 +1208,7 @@ function renderBuilderSidebar() {
       const pct = Math.min(100, Math.round((actual / Math.max(1, metric.target)) * 100));
       return `<div class="builder-metric"><div class="builder-metric-head"><span>${metric.label}</span><strong>${actual} / ${metric.target}</strong></div><div class="builder-metric-bar"><i style="width:${pct}%"></i></div></div>`;
     }).join('')}
-    <div class="builder-color-identity"><span>主将色组</span><strong>${(buildColors || []).map((color) => escapeHTML(color)).join(' ') || '无色'}</strong></div>
+    <div class="builder-color-identity"><span>主将色组</span><strong class="mana-s-row">${(buildColors || []).length ? (buildColors || []).map((color) => manaSymbolFor(color)).join('') : '无色'}</strong></div>
     <div class="builder-chosen">
       <div class="builder-chosen-head"><strong>已选牌</strong><span>${buildCards.length}</span></div>
       ${chosenList ? `<ul class="builder-chosen-list">${chosenList}</ul>` : '<p class="builder-chosen-empty">还没有选择任何牌</p>'}
@@ -1298,32 +1430,24 @@ document.addEventListener('click', (event) => {
   }
 });
 
-// Clicking a mana-curve bar filters the full deck list to cards of that mana value;
-// clicking the same bar again (or a bar outside the filter) clears the selection.
+// Clicking a mana-curve bar switches the drill-down panel next to the curve to the
+// cards of that mana value (and filters the deck list in the drawer if it is open);
+// clicking the same bar again clears the selection and falls back to the tallest bar.
 document.addEventListener('click', (event) => {
   const row = event.target.closest('.manabase-curve-row');
   if (!row) return;
   const mv = row.dataset.manaValue;
   if (mv === undefined || mv === '') return;
   const value = Number(mv);
-  if (curveSelectedMv === value) {
-    curveSelectedMv = null;
-  } else {
-    curveSelectedMv = value;
-  }
+  curveSelectedMv = curveSelectedMv === value ? null : value;
   document.querySelectorAll('.manabase-curve-row').forEach((r) => {
     r.classList.toggle('is-selected', Number(r.dataset.manaValue) === curveSelectedMv);
   });
+  renderManaValueDrill();
   // Re-render from the current editor state so the filter applies to live edits too.
   renderDeckCards(editorCards.length ? editorCards : currentDeckCards);
-  // 牌表住在抽屉里而抽屉不再自动展开：下钻时先把它拉出来，筛选结果才看得见
-  const panel = document.querySelector('.deck-drawer-panel');
-  if (deckDrawer.hidden || panel?.classList.contains('is-collapsed')) openDeckDrawer();
-  // 筛选结果在抽屉里一目了然，柱子旁那份钉住的名称列表就不必再留——
-  // 它会压在抽屉的预览栏上
+  // 该档的牌就在曲线旁，柱子旁那份钉住的名称列表不必再留
   hideListPreview();
-  const list = document.querySelector('#deck-card-list');
-  if (list) list.classList.remove('collapsed');
 });
 
 // Theme toggle
@@ -1488,8 +1612,138 @@ function showInputView() {
   if (links) links.hidden = true;
   if (navBackButton) navBackButton.hidden = true;
   document.body.classList.remove('has-sticky-nav');
+  hideDeckSummary();
   closeDeckDrawer();
   window.scrollTo(0, 0);
+}
+
+// --- 结果页报头 + 常驻汇总条 -----------------------------------------------------
+// 报头右侧的主将原画是从整张卡图上裁出的画框（裁法见 styles.css 的 .deck-cover）。
+// 整块是「看大图」按钮，悬停走浮动预览——顺手就能读主将的规则
+function renderDeckCovers(commanders) {
+  const host = document.querySelector('#deck-covers');
+  if (!host) return;
+  host.hidden = !commanders.length;
+  host.innerHTML = commanders.map((item) => {
+    const card = item.card || {};
+    const image = proxiedImage(card.image_normal || card.image_small || '');
+    const shape = `class="deck-cover${commanders.length > 1 ? ' is-cover' : ''}"`;
+    if (!image) return `<div ${shape} aria-hidden="true"></div>`;
+    return `<button type="button" ${shape} data-zoom-src="${escapeHTML(image)}" data-preview-src="${escapeHTML(image)}" data-preview-name="${escapeHTML(card.name || '')}" data-card-text="${escapeHTML(previewTextFor(card))}" aria-label="查看主将 ${escapeHTML(card.name || '')} 的大图"><img src="${escapeHTML(image)}" alt=""></button>`;
+  }).join('');
+}
+
+// 色组：主将的 color_identity 去重后按 WUBRG 排
+function deckColorIdentity(commanders) {
+  const present = new Set();
+  for (const item of commanders) {
+    for (const color of item.card?.color_identity || []) {
+      if (MANA_DISC[color]) present.add(color);
+    }
+  }
+  return [...MANA_COLORS, 'C'].filter((color) => present.has(color));
+}
+
+// 「较上次」：同一副牌（牌表文本一字未改）健康分变了，多半是评分口径更新——
+// 口径变化此前在界面上没有任何出口。上次的牌表与分数按牌组 id 记在本机；
+// 牌表本身变过的，分数变化是牌变了，不提示
+const DECK_HISTORY_KEY = 'powerlevel.deck.history.v1';
+
+function loadDeckHistory() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DECK_HISTORY_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function renderDeckScoreNote(payload) {
+  const note = document.querySelector('#deck-score-note');
+  if (!note) return;
+  note.hidden = true;
+  note.textContent = '';
+  const deckId = String(payload.deck?.id || '');
+  const list = String(payload.canonical_decklist || '');
+  const score = Number(payload.health?.score);
+  if (!deckId || !list || !Number.isFinite(score)) return;
+  const history = loadDeckHistory();
+  const previous = Number(history[deckId]?.score);
+  if (history[deckId]?.list === list && Number.isFinite(previous) && previous !== score) {
+    const delta = score - previous;
+    note.textContent = `牌表与上次分析时相同，健康分较上次 ${delta > 0 ? '+' : ''}${formatNumber(delta, 1)}`;
+    note.classList.toggle('is-up', delta > 0);
+    note.classList.toggle('is-down', delta < 0);
+    note.hidden = false;
+  }
+  // 只留最近的一小把牌组：牌表文本不短，别把本机存储占满
+  history[deckId] = { list, score, at: Date.now() };
+  const kept = Object.entries(history).sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, 12);
+  try { localStorage.setItem(DECK_HISTORY_KEY, JSON.stringify(Object.fromEntries(kept))); } catch { /* 存储不可写就只在本次会话生效 */ }
+}
+
+// 常驻汇总条：首屏的评分滚出视口后从底部滑入——长页面里随时知道「这是谁的牌、
+// 多强、缺什么」，不用滚回顶部（学 Moxfield 牌表页底部的常驻条）
+function renderDeckSummary(payload) {
+  const name = document.querySelector('#deck-name').textContent;
+  document.querySelector('#deck-summary-name').textContent = name;
+
+  const health = payload.health;
+  const hasHealth = Boolean(health && health.grade && health.grade !== '—');
+  const score = document.querySelector('#deck-summary-score');
+  score.hidden = !hasHealth;
+  score.textContent = hasHealth ? String(Number(health.score) || 0) : '';
+  score.className = `deck-summary-score${hasHealth ? ` health-badge health-grade-${String(health.grade).toLowerCase()}` : ''}`;
+
+  const totals = new Map();
+  for (const item of payload.deck_cards || []) {
+    const key = deckGroupKey(item);
+    totals.set(key, (totals.get(key) || 0) + (item.quantity || 1));
+  }
+  document.querySelector('#deck-summary-types').innerHTML = DECK_GROUPS
+    .filter(([id]) => id !== 'commander' && totals.has(id))
+    .map(([id, label]) => `<li><span>${label}</span><strong>${totals.get(id)}</strong></li>`).join('');
+
+  // 缺什么只列没达标的指标；都达标就说一句达标
+  const facts = [];
+  const bracket = payload.results?.edhpowerlevel?.metrics?.evaluated_bracket ?? payload.results?.commandersalt?.metrics?.evaluated_bracket;
+  if (bracket !== undefined && bracket !== null) facts.push(`Bracket ${formatNumber(bracket, 0)}`);
+  const metrics = payload.construction_report?.metrics || [];
+  for (const metric of metrics) {
+    if (Number(metric.gap) > 0) facts.push(`${metric.label} ${metric.actual}/${metric.target}`);
+  }
+  if (metrics.length && !metrics.some((metric) => Number(metric.gap) > 0)) facts.push('构筑指标已达标');
+  document.querySelector('#deck-summary-facts').innerHTML = facts.map((text) => `<span>${escapeHTML(text)}</span>`).join('');
+  document.querySelector('#deck-summary').hidden = !name || name === '—';
+}
+
+// 报头与两张评分卡（首屏的主体）整体滚到吸顶导航之上后，汇总条才出现
+function syncDeckSummary() {
+  const bar = document.querySelector('#deck-summary');
+  if (!bar || bar.hidden || resultsView.hidden) return;
+  // 限定在结果区里找：加载骨架屏里也有一份 .result-grid（隐藏着，量出来是 0）
+  const navBottom = document.querySelector('.sticky-nav')?.offsetHeight || 0;
+  const shown = (document.querySelector('#results .result-grid')?.getBoundingClientRect().bottom ?? 0) < navBottom;
+  bar.classList.toggle('is-shown', shown);
+}
+
+function hideDeckSummary() {
+  document.body.classList.remove('has-summary');
+  document.querySelector('#deck-summary')?.classList.remove('is-shown');
+}
+document.querySelector('[data-summary-top]')?.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+function renderDeckHeader(commanders, payload) {
+  renderDeckCovers(commanders);
+  const colors = deckColorIdentity(commanders);
+  const colorHost = document.querySelector('#deck-colors');
+  colorHost.hidden = !colors.length;
+  colorHost.innerHTML = colors.map((color) => manaSymbolMarkup(color)).join('');
+  colorHost.setAttribute('aria-label', `主将色组：${colors.map((color) => MANA_NAMES[color]).join('、')}`);
+  renderDeckScoreNote(payload);
+  renderDeckSummary(payload);
 }
 
 /** @param {Analysis} payload */
@@ -1511,6 +1765,8 @@ function render(payload) {
   ]);
   warning.hidden = !payload.warnings?.length;
   warning.textContent = payload.warnings?.join(' ') || '';
+  // 新的一副牌从「没点过柱子」开始：上一副留下的档位不能筛这份新牌表
+  curveSelectedMv = null;
   renderManabase(payload.manabase);
   renderConstructionReport(payload.construction_report, payload.deck_cards || []);
   renderCardImpacts(payload.results?.edhpowerlevel?.metrics?.card_impacts, payload.deck_cards || []);
@@ -1519,9 +1775,11 @@ function render(payload) {
   collapsedDeckGroups.clear(); // 新的一副牌：类型分组的收起状态归零
   renderDeckCards(payload.deck_cards || []);
   currentDeckCards = payload.deck_cards || [];
+  renderManaValueDrill(); // 曲线旁的下钻面板读的是这份牌表
   currentDeckText = payload.canonical_decklist || buildDeckText(currentDeckCards);
   renderHealth(payload.health);
-  curveSelectedMv = null; // a fresh analysis starts with the unfiltered deck list
+  renderDeckHeader((payload.deck_cards || []).filter((item) => item.commander), payload);
+  document.body.classList.add('has-summary');
   beginEditing(payload.deck?.id || '', currentDeckCards);
   results.hidden = false;
   // Fresh analyses start with 关联卡牌与组合 folded: it is the tallest section
@@ -1572,6 +1830,8 @@ function renderHealth(health) {
 function renderManabase(manabase) {
   const section = document.querySelector('#manabase-section');
   const container = document.querySelector('#manabase-content');
+  // 档位状态先归零：没有法术力报告时上一副牌的档位不能留给下钻面板
+  curveDefaultMv = null;
   if (!manabase) {
     section.hidden = true;
     return;
@@ -1601,9 +1861,10 @@ function renderManabase(manabase) {
     short: '地数不足'
   }[deltaClass];
 
-  // 法术力生产（Moxfield 式）：每行一个颜色，显示该色符号占「全部符号」的比例
-  // （大数，含地牌上能产出的彩色符号）和占「地牌符号」的比例（小数）两行口径
-  // 同源于后端 color_pips / land_color_pips；全部符号的基数 = 非地符号 + 地牌符号
+  // 法术力生产（学 Moxfield 的颜色分析）：六色各占一列。大数是该色占「全部符号」
+  // 的比例（含地牌上能产出的彩色符号），下面两条分别是它占全部符号、占地牌符号的
+  // 比例——两条长短差得多，说明地牌的产色配比和牌组的用色需求对不上。口径同源于
+  // 后端 color_pips / land_color_pips；全部符号的基数 = 非地符号 + 地牌符号
   const colorPips = (manabase.color_pips || {});
   const landColorPips = (manabase.land_color_pips || {});
   const colorlessPips = Number(manabase.colorless_pips || 0);
@@ -1615,46 +1876,33 @@ function renderManabase(manabase) {
     const landSymbols = MANA_COLORS.reduce((sum, c) => sum + Number(landColorPips[c] || 0), 0);
     const pctOfAll = (n) => (allSymbols > 0 ? Math.round((n / allSymbols) * 100) : 0);
     const pctOfLands = (n) => (landSymbols > 0 ? Math.round((n / landSymbols) * 100) : 0);
-    // Colors the deck's lands simply don't produce are omitted from the rows —
-    // Moxfield renders only the colors that show up on lands, so a color with
-    // zero land symbols stays off the "of symbols on lands" readout entirely.
-    const rowColors = MANA_COLORS.filter((color) => Number(landColorPips[color] || 0) > 0);
-    const pipRows = rowColors.map((color) => {
-      const count = symbolCount(color);
-      const landCount = Number(landColorPips[color] || 0);
-      const symbol = manaSymbolFor(color);
-      return `
-        <div class="manabase-pip-row" data-color="${color}">
-          <span class="mana-symbol ${color.toLowerCase()}">${symbol}</span>
-          <div class="manabase-pip-tracks">
-            <div class="manabase-pip-track"><i data-pct="${pctOfAll(count)}" title="全部符号 ${count}"></i></div>
-            <div class="manabase-pip-track is-land"><i data-pct="${pctOfLands(landCount)}" title="地牌符号 ${landCount}"></i></div>
-          </div>
-          <div class="manabase-pip-metrics">
-            <div class="manabase-pip-metric"><strong>${pctOfAll(count)}%</strong><span>of all symbols</span></div>
-            <div class="manabase-pip-metric"><strong>${pctOfLands(landCount)}%</strong><span>of symbols on lands</span></div>
-          </div>
-        </div>`;
+    // 牌组里没有的颜色压暗而不是删掉：六列的位置固定，扫一眼就知道缺了哪一色
+    const columns = [...MANA_COLORS, 'C'].map((color) => {
+      const colorless = color === 'C';
+      const count = colorless ? colorlessPips : symbolCount(color);
+      const landCount = colorless ? 0 : Number(landColorPips[color] || 0);
+      const shareAll = count > 0 ? pctOfAll(count) : 0;
+      const shareLand = landCount > 0 ? pctOfLands(landCount) : 0;
+      return `<div class="manabase-color-col${count > 0 ? '' : ' is-absent'}" data-color="${color}">
+        <span class="mana-symbol">${manaSymbolFor(color)}</span>
+        <strong class="manabase-color-share">${count > 0 ? `${shareAll}%` : '—'}</strong>
+        <span class="manabase-color-caption">占全部符号</span>
+        <div class="manabase-pip-tracks">
+          <div class="manabase-pip-track"><i data-pct="${shareAll}" title="全部符号 ${count}"></i></div>
+          <div class="manabase-pip-track is-land"><i data-pct="${shareLand}" title="地牌符号 ${landCount}"></i></div>
+        </div>
+        <span class="manabase-color-caption">${colorless ? '<span>无地牌符号</span>' : `<b>${shareLand}%</b><span>占地牌符号</span>`}</span>
+      </div>`;
     }).join('');
-    // 无色行：地牌产出的无色法力不算「彩色符号」，这行只有占全部符号的比例有意义，
-    // 第二格固定 0%；灰色沿用 Moxfield 的无色配色
-    const colorlessRow = colorlessPips > 0 ? `
-        <div class="manabase-pip-row is-colorless">
-          <span class="mana-symbol colorless">{C}</span>
-          <div class="manabase-pip-tracks">
-            <div class="manabase-pip-track"><i data-pct="${pctOfAll(colorlessPips)}" title="全部符号 ${colorlessPips}"></i></div>
-            <div class="manabase-pip-track is-land"><i data-pct="0" title="地牌符号 0"></i></div>
-          </div>
-          <div class="manabase-pip-metrics">
-            <div class="manabase-pip-metric"><strong>${pctOfAll(colorlessPips)}%</strong><span>of all symbols</span></div>
-            <div class="manabase-pip-metric"><strong>0%</strong><span>of symbols on lands</span></div>
-          </div>
-        </div>` : '';
+    // 无色：地牌产出的无色法力不算「彩色符号」，只有占全部符号的比例有意义
     composition = `
       <div class="manabase-table-heading"><span>法术力生产</span></div>
-      <p class="manabase-pips-hint">每个颜色两条：全部符号占比 与 地牌符号占比</p>
-      <div class="manabase-pips">${pipRows}${colorlessRow}</div>`;
+      <div class="manabase-color-cols">${columns}</div>`;
   }
+
+  // 下钻面板默认落在张数最多的一档
+  const tallest = costCounts.reduce((best, bucket) => ((Number(bucket.count) || 0) > (Number(best?.count) || 0) ? bucket : best), null);
+  curveDefaultMv = tallest ? Number(tallest.mana_value) : null;
 
   const curveHTML = costCounts.length ? (() => {
     const max = Math.max(1, ...costCounts.map((bucket) => Number(bucket.count) || 0));
@@ -1687,14 +1935,19 @@ function renderManabase(manabase) {
       <span class="manabase-stat"><span>中位数</span><strong>${fmt(medianNoLands)}</strong><small>不含地</small></span>
       <span class="manabase-stat"><span>总法力值</span><strong>${Number.isFinite(totalMv) ? Math.round(totalMv) : '—'}</strong><small>全部非地牌</small></span>`;
     return `
-      <div class="manabase-table-heading"><span>法术力曲线</span></div>
-      <div class="manabase-curve-legend">
-        <span class="manabase-legend-item is-permanent"><i></i>永久物</span>
-        <span class="manabase-legend-item is-all"><i></i>全部法术</span>
-      </div>
-      <p class="manabase-curve-hint">统计非地牌（含主将与加速物）；点击柱子筛选下方牌表中对应法术力值的卡牌</p>
-      <div class="manabase-curve">${rows}</div>
-      ${statsKnown ? `<div class="manabase-stats">${statsHTML}</div>` : ''}`;
+      <div class="manabase-curve-grid">
+        <div class="manabase-curve-col">
+          <div class="manabase-table-heading"><span>法术力曲线</span></div>
+          <div class="manabase-curve-legend">
+            <span class="manabase-legend-item is-permanent"><i></i>永久物</span>
+            <span class="manabase-legend-item is-all"><i></i>全部法术</span>
+          </div>
+          <p class="manabase-curve-hint">统计非地牌（含主将与加速物）；点击柱子查看该费用的牌</p>
+          <div class="manabase-curve">${rows}</div>
+          ${statsKnown ? `<div class="manabase-stats">${statsHTML}</div>` : ''}
+        </div>
+        <div id="manabase-drill" class="manabase-drill"></div>
+      </div>`;
   })() : '';
 
   container.innerHTML = `
@@ -1704,8 +1957,8 @@ function renderManabase(manabase) {
       <div class="manabase-land-stat ${deltaClass}"><span>偏差</span><strong>${deltaText}</strong><small>${landDeltaLabel}</small></div>
     </div>
     <p class="manabase-formula">平均法术力值 <strong>${avgMv}</strong> · 地牌/抽牌信用 <strong>${ramp}</strong> · 快法力 <strong>${fastMana}</strong></p>
-    ${composition}
     ${curveHTML}
+    ${composition}
     ${findings.length ? `
       <div class="manabase-colors-heading"><span>颜色来源需求</span><small>需要 vs 当前（加权）</small></div>
       <div class="manabase-color-grid">${findings.map(renderColorFinding).join('')}</div>` : ''}`;
@@ -1771,8 +2024,7 @@ function renderConstructionReport(report, deckCards) {
       const metaBits = [];
       if (data?.type_line) metaBits.push(escapeHTML(data.type_line));
       else if (faces[0]?.type_line) metaBits.push(escapeHTML(faces[0].type_line));
-      if (data?.mana_cost) metaBits.push(escapeHTML(data.mana_cost));
-      else if (faces[0]?.mana_cost) metaBits.push(escapeHTML(faces[0].mana_cost));
+      if (data && deckRowCost(data)) metaBits.push(deckRowCost(data));
       return `<li class="construction-card-item"${faceData} data-preview-src="${escapeHTML(previewImage || '')}" data-preview-name="${escapeHTML(card.name)}" data-card-text="${escapeHTML(data ? previewTextForCard(data) : '')}"${zoomAttr}>
         ${image ? `<img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(card.name)}">` : '<div class="construction-card-placeholder"></div>'}
         <div class="construction-card-info">
@@ -2093,7 +2345,7 @@ function renderDeckCards(cards) {
   if (deckDrawer && !cards.length) closeDeckDrawer();
   let visible = cards;
   if (curveSelectedMv !== null) {
-    visible = cards.filter((item) => Number(item.card?.cmc) === curveSelectedMv);
+    visible = cards.filter((item) => matchesCurveBucket(item, curveSelectedMv));
   }
   // Filter note stays outside the re-rendered container so it survives re-renders.
   if (decklistFilterNote) {
@@ -2148,12 +2400,13 @@ const DECK_GROUPS = [
   ['other', '其他']
 ];
 
-// 服务端判「地牌」的口径是类别行含 land（多面卡的类别行是正反面用 // 拼接），
-// 这里沿用；其余按类别行归类，生物排在结界/神器前面——「结界生物」归生物
+// 按类别行归类，生物排在结界/神器前面——「结界生物」归生物。多面牌只看正面：
+// 和法力曲线分档的口径一致（见 curveBucketOf），「生物 // 地」算生物不算地
 function deckGroupKey(item) {
   if (item.commander) return 'commander';
-  const type = String(item.card?.type_line || '').toLowerCase();
-  if (item.land || type.includes('land')) return 'land';
+  const faces = Array.isArray(item.card?.faces) ? item.card.faces : [];
+  const type = String(faces[0]?.type_line || item.card?.type_line || '').toLowerCase();
+  if (type.includes('land')) return 'land';
   if (type.includes('creature')) return 'creature';
   if (type.includes('planeswalker')) return 'planeswalker';
   if (type.includes('instant')) return 'instant';
@@ -2188,24 +2441,6 @@ function readDeckViewMode() {
   return 'list';
 }
 
-// 费用符号的小圆点：配色沿用 .mana-symbol 的五色圆；数字与 {X} 落在无色灰圆上，
-// 混血 / 非瑞克亚符号（{G/U}、{B/P}）用两色斜分近似
-const MANA_PIP_COLORS = { w: '#f9f6e8', u: '#6db7e3', b: '#6a6a74', r: '#e0674f', g: '#7fb06d', c: '#9aa0a6', p: '#9aa0a6' };
-
-function manaCostMarkup(cost) {
-  const symbols = String(cost || '').match(/\{[^}]+\}/g) || [];
-  return symbols.map((raw) => {
-    const text = raw.slice(1, -1);
-    const parts = text.toLowerCase().split('/').filter(Boolean);
-    const colors = parts.map((part) => MANA_PIP_COLORS[part] || MANA_PIP_COLORS.c);
-    const first = colors[0] || MANA_PIP_COLORS.c;
-    const second = colors[1];
-    const background = second ? `linear-gradient(135deg, ${first} 50%, ${second} 50%)` : first;
-    const color = parts[0] === 'b' ? '#f4f2e9' : '#10120d';
-    return `<i class="mana-pip" style="background:${background};color:${color}">${escapeHTML(text)}</i>`;
-  }).join('');
-}
-
 // 多面卡的顶层 mana_cost 为空，费用在各面上；两个面费用不同（分裂牌）时都列出
 function deckRowCost(card) {
   const faces = Array.isArray(card.faces) ? card.faces : [];
@@ -2224,21 +2459,77 @@ function renderEditControls(name) {
 }
 
 // 牌表文字行：数量 + 牌名 + 费用，行尾是 +/−。牌名是「看大图」按钮（触屏没有
-// 悬停，点名字走放大层）。data-* 与卡图网格同一套约定，悬停预览与中文化直接复用
-function renderDeckRow(item) {
+// 悬停，点名字走放大层）。data-* 与卡图网格同一套约定，悬停预览与中文化直接复用。
+// editable 关掉就不带 +/−——法力曲线的下钻面板只看不改
+function deckRowMarkup(item, editable = true, extraClass = '') {
   const card = item.card || {};
   const name = card.name || '';
   const faces = picturedFacesOf(card);
   const previewImage = proxiedImage(card.image_normal || card.image_small || faces[0]?.image_normal || faces[0]?.image_small || '');
   const faceData = faces.length > 1 ? ` data-faces="${escapeHTML(JSON.stringify(faces))}"` : '';
-  return `<div class="deck-row"${faceData} data-preview-src="${escapeHTML(previewImage)}" data-preview-name="${escapeHTML(name)}" data-card-text="${escapeHTML(previewTextFor(card))}">
+  return `<div class="deck-row${extraClass ? ` ${extraClass}` : ''}"${faceData} data-preview-src="${escapeHTML(previewImage)}" data-preview-name="${escapeHTML(name)}" data-card-text="${escapeHTML(previewTextFor(card))}">
     <button type="button" class="deck-row-main"${previewImage ? ` data-zoom-src="${escapeHTML(previewImage)}"` : ''} aria-label="查看 ${escapeHTML(name)} 大图">
       <span class="deck-row-qty">${item.quantity || 1}×</span>
       <span class="deck-row-name">${escapeHTML(name || 'Unknown card')}</span>
       <span class="deck-row-cost" aria-hidden="true">${deckRowCost(card)}</span>
     </button>
-    ${renderEditControls(name)}
+    ${editable ? renderEditControls(name) : ''}
   </div>`;
+}
+
+function renderDeckRow(item) {
+  return deckRowMarkup(item, true);
+}
+
+// --- 法力曲线下钻 ---------------------------------------------------------------
+// 曲线旁常驻一份「这一档有哪些牌」：没点柱子时是张数最多的那一档，点了柱子
+// 换成那一档（学 Moxfield 曲线旁的 Cards with Mana Value）。牌表抽屉开着时，
+// 同一筛选也作用到抽屉的牌表上
+let curveDefaultMv = null;
+
+// 曲线分档的口径，镜像后端 internal/manabase/classify.go 的 toCardFact 与
+// addSpellRequirement——下钻面板里的牌数必须和柱子上的数字对得上：
+//   - 是不是地只看正面的类别行（「法术 // 地」的双面牌算法术，进曲线）；
+//   - 多面牌的法术力值按正面的费用算：Scryfall 的 cmc 是各面之和，会把分裂牌
+//     抬高（Dollmaker's Shop 两面各 2 和 6，Scryfall 给 8，曲线按 2 算）；
+//   - 带 X/Y/Z 的牌不进曲线；7 及以上并成一档。
+// 返回所属档位，不进曲线的返回 null
+function curveBucketOf(item) {
+  const card = item.card || {};
+  const faces = Array.isArray(card.faces) ? card.faces : [];
+  const front = faces[0];
+  const typeLine = String(front?.type_line || card.type_line || '');
+  if (typeLine.toLowerCase().includes('land')) return null;
+  const cost = String(front?.mana_cost || card.mana_cost || '');
+  if (/\{[XYZ]\}/i.test(cost)) return null;
+  if (!faces.length) return Math.max(0, Math.min(Math.trunc(Number(card.cmc) || 0), 7));
+  let value = 0;
+  for (const symbol of cost.match(/\{[^}]+\}/g) || []) {
+    // 混血符号 {2/W} 斜杠前是数字就按数字算，{G/U} 记 1——与后端一致
+    const head = symbol.slice(1, -1).split('/')[0];
+    value += /^\d+$/.test(head) ? Number(head) : 1;
+  }
+  return Math.max(0, Math.min(value, 7));
+}
+
+function matchesCurveBucket(item, mv) {
+  return curveBucketOf(item) === mv;
+}
+
+function renderManaValueDrill() {
+  const host = document.querySelector('#manabase-drill');
+  if (!host) return;
+  const mv = curveSelectedMv ?? curveDefaultMv;
+  const items = mv === null ? [] : currentDeckCards.filter((item) => matchesCurveBucket(item, mv));
+  const count = (list) => list.reduce((sum, item) => sum + (item.quantity || 1), 0);
+  const groups = deckGroupsOf(items);
+  host.innerHTML = `
+    <div class="manabase-table-heading"><span>法术力值 ${mv ?? '—'} 的牌</span><small>${count(items)} 张 · ${curveSelectedMv === null ? '张数最多的一档，点柱子切换' : '再点一次柱子取消'}</small></div>
+    ${groups.length ? `<div class="manabase-drill-list">${groups.map((group) => `
+      <section class="mana-value-group">
+        <h4>${group.label}<span>${count(group.items)}</span></h4>
+        <div class="deck-rows">${group.items.map((item) => deckRowMarkup(item, false)).join('')}</div>
+      </section>`).join('')}</div>` : '<p class="editor-empty">这一档没有非地牌</p>'}`;
 }
 
 // --- light deck editor --------------------------------------------------------
@@ -2690,7 +2981,11 @@ document.addEventListener('click', (event) => {
   const face = faces[Number(button.dataset.face)];
   if (!face) return;
   const imageElement = cardElement.querySelector('img');
-  imageElement?.setAttribute('src', proxiedImage(face.image_small || face.image_normal || ''));
+  // 组牌候选的卡图在宽屏下放大到画框那么大，优先换大图；其余位置沿用小图
+  const faceImage = cardElement.classList.contains('builder-candidate')
+    ? (face.image_normal || face.image_small || '')
+    : (face.image_small || face.image_normal || '');
+  imageElement?.setAttribute('src', proxiedImage(faceImage));
   imageElement?.setAttribute('alt', face.name || '');
   cardElement.dataset.previewSrc = proxiedImage(face.image_normal || face.image_small || '');
   cardElement.dataset.previewName = face.name || '';
@@ -2709,6 +3004,8 @@ document.addEventListener('click', (event) => {
   // 重新拼接（页面缓存命中，不会再发请求）
   cardElement.dataset.zhLoaded = '';
   if (activePreviewCard === cardElement) showCardPreview(cardElement);
+  // 抽屉预览栏正显示这张卡时同样重画，符号化后的规则文本跟着换面
+  if (deckPaneCard === cardElement) showDeckPane(cardElement);
 });
 
 const preview = document.querySelector('#card-preview');
@@ -2757,7 +3054,7 @@ function syncDeckPaneText(card) {
     : (card.dataset.previewName || '');
   deckPreviewName.hidden = false;
   const text = card.dataset.cardText || '';
-  deckPreviewOracle.textContent = text;
+  deckPreviewOracle.innerHTML = oracleHTML(text);
   deckPreviewOracle.hidden = !text;
 }
 
@@ -2841,7 +3138,7 @@ function openCardZoom(trigger) {
   zoomName.textContent = host.dataset.previewName || '';
   const oracle = host.dataset.cardText || '';
   if (oracle) {
-    zoomOracle.textContent = oracle;
+    zoomOracle.innerHTML = oracleHTML(oracle);
     zoomOracle.hidden = false;
   } else {
     zoomOracle.textContent = '';
@@ -2890,7 +3187,7 @@ zoomFacesBar.addEventListener('click', (event) => {
   zoomName.textContent = face.name || '';
   const text = previewTextForCard({ name: face.name, mana_cost: face.mana_cost, type_line: face.type_line, oracle_text: face.oracle_text });
   if (text) {
-    zoomOracle.textContent = text;
+    zoomOracle.innerHTML = oracleHTML(text);
     zoomOracle.hidden = false;
   } else {
     zoomOracle.textContent = '';
@@ -3017,8 +3314,8 @@ function syncFloatingPreviewText(card) {
     : (card.dataset.previewName || '');
   // Show the oracle text (type line + rules) read from the hovered card's own
   // data, so a hover can answer "what does this card do" without a click.
-  previewOracle.textContent = card.dataset.cardText || '';
-  previewOracle.hidden = !previewOracle.textContent;
+  previewOracle.innerHTML = oracleHTML(card.dataset.cardText || '');
+  previewOracle.hidden = !card.dataset.cardText;
 }
 
 function showCardPreview(trigger) {
@@ -3093,7 +3390,8 @@ function showMvNameList(mv, anchor) {
   const source = editorCards.length ? editorCards : currentDeckCards;
   const counts = new Map();
   for (const item of source) {
-    if (Number(item.card?.cmc) !== Number(mv)) continue;
+    // 与曲线同一口径（见 curveBucketOf），悬停柱子时列出的就是这一档曲线里的牌
+    if (!matchesCurveBucket(item, Number(mv))) continue;
     const name = String(item.card?.name || '');
     if (!name) continue;
     counts.set(name, (counts.get(name) || 0) + (item.quantity || 1));
@@ -3134,11 +3432,11 @@ function hideCardPreview() {
 }
 
 document.addEventListener('pointerover', (event) => {
-  const trigger = event.target.closest('.mtg-card, .construction-card-item, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot, .deck-row');
+  const trigger = event.target.closest('.mtg-card, .construction-card-item, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot, .deck-row, .deck-cover');
   if (trigger && !trigger.contains(event.relatedTarget)) showCardPreview(trigger);
 });
 document.addEventListener('pointerout', (event) => {
-  const trigger = event.target.closest('.mtg-card, .construction-card-item, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot, .deck-row');
+  const trigger = event.target.closest('.mtg-card, .construction-card-item, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot, .deck-row, .deck-cover');
   if (trigger && !trigger.contains(event.relatedTarget)) hideCardPreview();
 });
 document.addEventListener('focusin', (event) => { if (event.target.matches('.mtg-card, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .deck-row-main')) showCardPreview(event.target); });
@@ -3425,6 +3723,8 @@ function showStickyNav() {
       if (section.getBoundingClientRect().top + window.scrollY <= focusLine) currentHref = `#${section.id}`;
     });
     navLinks.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === currentHref));
+    // 同一次滚动里顺手判断常驻汇总条该不该出现
+    syncDeckSummary();
   }
 
   // showStickyNav runs again after every analysis; wire the listeners once.

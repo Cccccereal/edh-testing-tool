@@ -152,11 +152,12 @@
 
     <section id="skeleton" class="results" hidden aria-hidden="true">
       <div class="deck-strip">
-        <div>
+        <div class="deck-strip-body">
           <p class="eyebrow">ANALYSIS COMPLETE</p>
           <div class="skeleton skeleton-heading"></div>
           <div class="skeleton skeleton-text" style="width: 40%;"></div>
         </div>
+        <div class="deck-covers" aria-hidden="true"></div>
       </div>
       <div class="result-grid">
         <!-- 骨架卡与加载后的卡片同类名，顶部色条由 .result-card::before（橙粉）/.edh-card::before（蓝）统一提供 -->
@@ -179,15 +180,20 @@
 
     <section id="results" class="results" hidden aria-live="polite">
       <div class="deck-strip">
-        <div>
-          <p class="eyebrow">ANALYSIS COMPLETE</p>
+        <div class="deck-strip-body">
+          <div class="deck-strip-top">
+            <p class="eyebrow">ANALYSIS COMPLETE</p>
+            <button id="retry-button" class="ghost-button" type="button">重新分析</button>
+          </div>
           <div class="deck-heading-row">
             <h2 id="deck-name">—</h2>
             <span id="deck-health-badge" class="deck-health-badge" hidden></span>
+            <span id="deck-colors" class="deck-colors mana-s-row" role="img" aria-label="主将色组" hidden></span>
           </div>
           <p id="deck-meta">—</p>
+          <p id="deck-score-note" class="deck-score-note" hidden></p>
         </div>
-        <button id="retry-button" class="ghost-button" type="button">重新分析</button>
+        <div id="deck-covers" class="deck-covers" hidden></div>
       </div>
       <div id="warning" class="warning" hidden></div>
       <div class="result-grid">
@@ -236,6 +242,16 @@
     </section>
     </div>
   </main>
+  <div id="deck-summary" class="deck-summary" hidden>
+    <button type="button" class="deck-summary-identity" data-summary-top aria-label="回到结果顶部">
+      <span id="deck-summary-score" class="deck-summary-score" hidden></span>
+      <span id="deck-summary-name" class="deck-summary-name"></span>
+    </button>
+    <div class="deck-summary-scroll">
+      <ul id="deck-summary-types" class="deck-summary-types"></ul>
+      <span id="deck-summary-facts" class="deck-summary-facts"></span>
+    </div>
+  </div>
   <div id="deck-drawer" class="deck-drawer" hidden>
     <button type="button" class="deck-drawer-tab" aria-label="收起/展开牌表面板"><span aria-hidden="true">›</span></button>
     <aside class="deck-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="deck-drawer-title">
