@@ -1,13 +1,15 @@
 # 调参地图（tuning map）
 
-手动调整评分口径、词表、目标值时，按这张表找到对应位置。改完必做的三件事：
+手动调整评分口径、词表、目标值时，按这张表找到对应位置。改完必做的四件事：
 
 1. `go test ./...`——特别留意 `TestReferenceDecks`（参照牌组金测），
    每副参照牌哪个指标动了会逐条打印；
 2. 前端可调项改完跑 `bash scripts/sync-web.sh` 同步移动端；
 3. 如果改动会影响用户分数（公式、词表、目标值），把
    `internal/service/analyzer.go` 的 `ScoringVersion` +1——分析缓存立即失效，
-   用户不用等 TTL 过期就能看到新口径。
+   用户不用等 TTL 过期就能看到新口径；
+4. 如果改动影响 health 分，跑 `python eval/evaluate.py --server http://localhost:18781`
+   对比 `eval/baseline.json` 基线——ρ 不回退才合并（流程见 `eval/README.md`）。
 
 ## Go 侧
 
