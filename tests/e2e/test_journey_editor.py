@@ -19,12 +19,22 @@ def test_editor_recompare_and_export_journey(page, stubbed_server):
     _, payload = submit_analyze(page, url=CANONICAL_URL)
     wait_for_results(page)
 
-    # 分析完成后右侧牌表抽屉已自动展开（renderDeckCards 有卡即显示），编辑器就绪。
+    # 分析完成后牌表抽屉保持收起——结果页先让人看评分；从导航拉出来后编辑器就绪。
     # 注：#deck-drawer 是零宽定位容器，可见性要断 .deck-drawer-panel。
-    drawer_list = page.locator("#deck-card-list")
+    expect(page.locator("#deck-drawer")).to_be_hidden()
+    page.click("[data-deck-drawer-open]")
     expect(page.locator(".deck-drawer-panel")).to_be_visible()
+    drawer_list = page.locator("#deck-card-list")
     expect(drawer_list).to_be_visible()
     assert drawer_list.locator("[data-card-add]").count() > 0
+
+    # 文字行视图（默认）：按类型分组、每行一张牌；切到图像视图是卡图网格
+    assert drawer_list.locator(".deck-row").count() > 0
+    page.click("[data-deck-view='grid']")
+    expect(drawer_list.locator(".card-grid .mtg-card").first).to_be_visible()
+    expect(drawer_list.locator(".deck-row")).to_have_count(0)
+    page.click("[data-deck-view='list']")
+    expect(drawer_list.locator(".deck-row").first).to_be_visible()
 
     # 给 Sol Ring +1 → 编辑器进入脏状态，撤销可用
     page.click("[data-card-add='Sol Ring']")

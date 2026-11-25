@@ -57,6 +57,12 @@ const deckDrawer = document.querySelector('#deck-drawer');
 // Clicking the bucket's bar again clears the filter; a re-render resets it.
 let curveSelectedMv = null;
 let activeSourceId = '';
+// 牌表视图：'list' 是「数量 + 牌名 + 费用」的文字行（默认——一屏能扫三十来张，
+// 找牌不用翻卡图）；'grid' 是卡图网格。选择记在 localStorage。
+const DECK_VIEW_KEY = 'powerlevel.deck.view';
+let deckViewMode = readDeckViewMode();
+// 收起的类型分组：每次编辑都会重渲染列表，记下来才不会加一张牌就全部展开
+const collapsedDeckGroups = new Set();
 
 // --- guided deck builder state ---------------------------------------------
 const buildEntryButton = document.querySelector('#build-entry-button');
@@ -1308,22 +1314,16 @@ document.addEventListener('click', (event) => {
   document.querySelectorAll('.manabase-curve-row').forEach((r) => {
     r.classList.toggle('is-selected', Number(r.dataset.manaValue) === curveSelectedMv);
   });
-  // Pin the name-list hover to the selected bar so it stays readable while the
-  // pointer is elsewhere; clicking another bar re-pins, clicking the same bar
-  // again (clearing the filter) dismisses it.
-  const selected = document.querySelector('.manabase-curve-row.is-selected');
-  if (selected) {
-    showMvNameList(selected.dataset.manaValue, selected);
-  } else {
-    hideListPreview();
-  }
   // Re-render from the current editor state so the filter applies to live edits too.
   renderDeckCards(editorCards.length ? editorCards : currentDeckCards);
+  // 牌表住在抽屉里而抽屉不再自动展开：下钻时先把它拉出来，筛选结果才看得见
+  const panel = document.querySelector('.deck-drawer-panel');
+  if (deckDrawer.hidden || panel?.classList.contains('is-collapsed')) openDeckDrawer();
+  // 筛选结果在抽屉里一目了然，柱子旁那份钉住的名称列表就不必再留——
+  // 它会压在抽屉的预览栏上
+  hideListPreview();
   const list = document.querySelector('#deck-card-list');
-  if (list) {
-    list.classList.remove('collapsed');
-    list.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+  if (list) list.classList.remove('collapsed');
 });
 
 // Theme toggle
@@ -1350,8 +1350,12 @@ function openDeckDrawer() {
   document.body.style.overflow = 'hidden';
   const panel = document.querySelector('.deck-drawer-panel');
   panel?.classList.remove('is-collapsed');
-  const list = document.querySelector('#deck-card-list');
-  list?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  syncDeckDrawerToggle(false);
+  // 抽屉多半是收着的时候列表渲染的，预览栏要等露出来再落位
+  syncDeckPaneDefault();
+  // 滚到主体（筛选提示 + 预览栏 + 牌表）的顶部：筛选提示排在列表上方，
+  // 只滚列表的话它会留在可视区外
+  document.querySelector('.deck-drawer-body')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function closeDeckDrawer() {
   if (!deckDrawer) return;
@@ -1373,11 +1377,9 @@ document.addEventListener('click', (event) => {
   if (tab) {
     const panel = document.querySelector('.deck-drawer-panel');
     panel?.classList.toggle('is-collapsed');
-    if (panel?.classList.contains('is-collapsed')) {
-      document.body.style.overflow = '';
-    } else {
-      document.body.style.overflow = 'hidden';
-    }
+    const collapsed = panel?.classList.contains('is-collapsed');
+    document.body.style.overflow = collapsed ? '' : 'hidden';
+    syncDeckDrawerToggle(Boolean(collapsed));
     return;
   }
 });
@@ -1395,6 +1397,12 @@ const syncNavHeight = () => {
 syncNavHeight();
 window.addEventListener('load', syncNavHeight);
 window.addEventListener('resize', syncNavHeight, { passive: true });
+// 链接区显隐（输入层 ↔ 结果层）也会改导航高度，load/resize 两个时机都覆盖不到。
+// 直接盯住导航自身的尺寸变化，--nav-h 始终是实测值。
+if (typeof ResizeObserver === 'function') {
+  const nav = document.querySelector('.sticky-nav');
+  if (nav) new ResizeObserver(syncNavHeight).observe(nav);
+}
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -1508,6 +1516,7 @@ function render(payload) {
   renderCardImpacts(payload.results?.edhpowerlevel?.metrics?.card_impacts, payload.deck_cards || []);
   renderCombos(payload.combos || [], payload.combo_suggestions || []);
   renderRecommendations(payload.recommendations || [], payload.gap_recommendations || [], payload.recommendation_keywords || []);
+  collapsedDeckGroups.clear(); // 新的一副牌：类型分组的收起状态归零
   renderDeckCards(payload.deck_cards || []);
   currentDeckCards = payload.deck_cards || [];
   currentDeckText = payload.canonical_decklist || buildDeckText(currentDeckCards);
@@ -2036,23 +2045,31 @@ function renderRecommendedCard(item) {
 function renderRecommendationView() {
   const container = document.querySelector('#recommendation-list');
   if (recommendationTab === 'gap') {
-    container.innerHTML = gapRecommendationData.map((metric, index) => `
-      <section class="recommendation-group gap-recommendation-group is-collapsed" data-gap-id="${escapeHTML(metric.id || '')}" data-group-index="gap-${index}">
+  // 首组默认展开：全折叠时推荐区只剩一墙同色标题，页面像没加载完；
+  // 空分组不展开（展开也没内容可看）。
+  container.innerHTML = gapRecommendationData.map((metric, index) => {
+    const collapsed = index > 0 || !(metric.cards || []).length;
+    return `
+      <section class="recommendation-group gap-recommendation-group${collapsed ? ' is-collapsed' : ''}" data-gap-id="${escapeHTML(metric.id || '')}" data-group-index="gap-${index}">
         <div class="recommendation-group-heading toggleable" role="button" tabindex="0" data-recommendation-toggle="gap-${index}">
           <div><h3>${escapeHTML(metric.label || metric.id)}</h3></div>
-          <button type="button" class="section-heading-toggle" aria-label="展开">展开</button>
+          <button type="button" class="section-heading-toggle" aria-label="${collapsed ? '展开' : '收起'}">${collapsed ? '展开' : '收起'}</button>
         </div>
         <div class="recommendation-row">${(metric.cards || []).map(renderRecommendedCard).join('')}</div>
-      </section>`).join('');
+      </section>`;
+  }).join('');
   } else {
-    container.innerHTML = recommendationGroupsData.map((group, index) => `
-      <section class="recommendation-group is-collapsed" data-tag="${escapeHTML(group.tag || '')}" data-group-index="${index}">
+    container.innerHTML = recommendationGroupsData.map((group, index) => {
+      const collapsed = index > 0 || !(group.cards || []).length;
+      return `
+      <section class="recommendation-group${collapsed ? ' is-collapsed' : ''}" data-tag="${escapeHTML(group.tag || '')}" data-group-index="${index}">
         <div class="recommendation-group-heading toggleable" role="button" tabindex="0" data-recommendation-toggle="${index}">
           <div><h3>${escapeHTML(group.header || 'Recommendations')}</h3><span>${(group.cards || []).length} 张推荐</span></div>
-          <button type="button" class="section-heading-toggle" aria-label="展开">展开</button>
+          <button type="button" class="section-heading-toggle" aria-label="${collapsed ? '展开' : '收起'}">${collapsed ? '展开' : '收起'}</button>
         </div>
         <div class="recommendation-row">${(group.cards || []).map(renderRecommendedCard).join('')}</div>
-      </section>`).join('');
+      </section>`;
+    }).join('');
   }
 
   // Attach toggle handlers for each recommendation group (gap and category
@@ -2070,8 +2087,10 @@ function renderRecommendationView() {
 
 function renderDeckCards(cards) {
   const container = document.querySelector('#deck-card-list');
-  // 完整牌表整个住在右侧抽屉里；页面底部不再保留独立区块空牌组时连抽屉一起隐藏
-  if (deckDrawer) deckDrawer.hidden = !cards.length;
+  // 完整牌表整个住在右侧抽屉里，页面底部不再保留独立区块。抽屉不随渲染自动
+  // 展开：结果页刚出来先让人看评分，牌表由导航的「牌表编辑」或法力曲线下钻
+  // 按需拉出。空牌组时连抽屉一起收起。
+  if (deckDrawer && !cards.length) closeDeckDrawer();
   let visible = cards;
   if (curveSelectedMv !== null) {
     visible = cards.filter((item) => Number(item.card?.cmc) === curveSelectedMv);
@@ -2081,16 +2100,145 @@ function renderDeckCards(cards) {
     decklistFilterNote.hidden = !visible.length || curveSelectedMv === null;
     decklistFilterNote.textContent = curveSelectedMv === null ? '' : `已按法术力值 ${curveSelectedMv} 筛选完整牌表，共 ${visible.length} 张非地牌`;
   }
-  const groups = [
-    ['Commander', visible.filter((item) => item.commander)],
-    ['Nonlands', visible.filter((item) => !item.commander && !item.land)],
-    ['Lands', visible.filter((item) => !item.commander && item.land)]
-  ];
-  container.innerHTML = groups.filter(([, items]) => items.length).map(([title, items]) => `
-    <section class="deck-group"><h3>${title} <span>${items.reduce((sum, item) => sum + item.quantity, 0)}</span></h3><div class="card-grid">${items.map(renderCard).join('')}</div></section>`).join('') ||
-    '<p class="decklist-filter-empty">该法力值下没有匹配的卡牌</p>' +
-    '<div class="deck-card-list-expand-overlay" data-decklist-expand>点击展开完整牌表 ▾</div>' +
-    '<button type="button" class="deck-card-list-collapse-button" data-decklist-collapse>收起牌表 ▴</button>';
+  const renderItem = deckViewMode === 'grid' ? renderCard : renderDeckRow;
+  const listClass = deckViewMode === 'grid' ? 'card-grid' : 'deck-rows';
+  container.innerHTML = deckGroupsOf(visible).map((group) => `
+    <details class="deck-group" data-deck-group="${group.id}"${collapsedDeckGroups.has(group.id) ? '' : ' open'}>
+      <summary><h3>${group.label} <span>${group.items.reduce((sum, item) => sum + item.quantity, 0)}</span></h3></summary>
+      <div class="${listClass}">${group.items.map(renderItem).join('')}</div>
+    </details>`).join('') || '<p class="decklist-filter-empty">该法术力值下没有匹配的卡牌</p>';
+  container.querySelectorAll('details[data-deck-group]').forEach((group) => {
+    group.addEventListener('toggle', () => {
+      if (group.open) collapsedDeckGroups.delete(group.dataset.deckGroup);
+      else collapsedDeckGroups.add(group.dataset.deckGroup);
+    });
+  });
+  syncDeckPaneDefault();
+}
+
+function syncDeckViewButtons() {
+  document.querySelectorAll('[data-deck-view]').forEach((button) => {
+    const active = button.dataset.deckView === deckViewMode;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+}
+syncDeckViewButtons();
+document.querySelectorAll('[data-deck-view]').forEach((button) => {
+  button.addEventListener('click', () => {
+    if (button.dataset.deckView === deckViewMode) return;
+    deckViewMode = button.dataset.deckView;
+    try { localStorage.setItem(DECK_VIEW_KEY, deckViewMode); } catch { /* 存储不可写就只在本次会话生效 */ }
+    syncDeckViewButtons();
+    renderDeckCards(editorCards.length ? editorCards : currentDeckCards);
+  });
+});
+
+// --- 牌表抽屉：类型分组与两种视图 ----------------------------------------------
+// 分组与顺序学 Moxfield 的牌表分区：主将单列，其后按生物 → 旅法师 → 非永久物 → 地
+const DECK_GROUPS = [
+  ['commander', '主将'],
+  ['creature', '生物'],
+  ['planeswalker', '旅法师'],
+  ['instant', '瞬间'],
+  ['sorcery', '法术'],
+  ['artifact', '神器'],
+  ['enchantment', '结界'],
+  ['land', '地牌'],
+  ['other', '其他']
+];
+
+// 服务端判「地牌」的口径是类别行含 land（多面卡的类别行是正反面用 // 拼接），
+// 这里沿用；其余按类别行归类，生物排在结界/神器前面——「结界生物」归生物
+function deckGroupKey(item) {
+  if (item.commander) return 'commander';
+  const type = String(item.card?.type_line || '').toLowerCase();
+  if (item.land || type.includes('land')) return 'land';
+  if (type.includes('creature')) return 'creature';
+  if (type.includes('planeswalker')) return 'planeswalker';
+  if (type.includes('instant')) return 'instant';
+  if (type.includes('sorcery')) return 'sorcery';
+  if (type.includes('artifact')) return 'artifact';
+  if (type.includes('enchantment')) return 'enchantment';
+  return 'other';
+}
+
+// 组内按费用再按名字排：顺着法力曲线找牌，比接口的 map 顺序好找
+const byCostThenName = (a, b) =>
+  (Number(a.card?.cmc) || 0) - (Number(b.card?.cmc) || 0) ||
+  String(a.card?.name || '').localeCompare(String(b.card?.name || ''));
+
+function deckGroupsOf(items) {
+  const buckets = new Map();
+  for (const item of items) {
+    const key = deckGroupKey(item);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(item);
+  }
+  return DECK_GROUPS
+    .filter(([id]) => buckets.has(id))
+    .map(([id, label]) => ({ id, label, items: id === 'commander' ? buckets.get(id) : buckets.get(id).sort(byCostThenName) }));
+}
+
+function readDeckViewMode() {
+  try {
+    const saved = localStorage.getItem(DECK_VIEW_KEY);
+    if (saved === 'grid' || saved === 'list') return saved;
+  } catch { /* 存储不可用就走默认 */ }
+  return 'list';
+}
+
+// 费用符号的小圆点：配色沿用 .mana-symbol 的五色圆；数字与 {X} 落在无色灰圆上，
+// 混血 / 非瑞克亚符号（{G/U}、{B/P}）用两色斜分近似
+const MANA_PIP_COLORS = { w: '#f9f6e8', u: '#6db7e3', b: '#6a6a74', r: '#e0674f', g: '#7fb06d', c: '#9aa0a6', p: '#9aa0a6' };
+
+function manaCostMarkup(cost) {
+  const symbols = String(cost || '').match(/\{[^}]+\}/g) || [];
+  return symbols.map((raw) => {
+    const text = raw.slice(1, -1);
+    const parts = text.toLowerCase().split('/').filter(Boolean);
+    const colors = parts.map((part) => MANA_PIP_COLORS[part] || MANA_PIP_COLORS.c);
+    const first = colors[0] || MANA_PIP_COLORS.c;
+    const second = colors[1];
+    const background = second ? `linear-gradient(135deg, ${first} 50%, ${second} 50%)` : first;
+    const color = parts[0] === 'b' ? '#f4f2e9' : '#10120d';
+    return `<i class="mana-pip" style="background:${background};color:${color}">${escapeHTML(text)}</i>`;
+  }).join('');
+}
+
+// 多面卡的顶层 mana_cost 为空，费用在各面上；两个面费用不同（分裂牌）时都列出
+function deckRowCost(card) {
+  const faces = Array.isArray(card.faces) ? card.faces : [];
+  const costs = faces.map((face) => face.mana_cost).filter(Boolean);
+  if (costs.length > 1) {
+    return costs.map((cost) => `<span class="deck-row-cost-part">${manaCostMarkup(cost)}</span>`).join('<span class="deck-row-cost-sep">//</span>');
+  }
+  return manaCostMarkup(card.mana_cost || costs[0]);
+}
+
+function renderEditControls(name) {
+  return `<div class="card-edit-controls">
+    <button type="button" data-card-subtract="${escapeHTML(name)}" aria-label="减少 ${escapeHTML(name)}"><span aria-hidden="true">−</span></button>
+    <button type="button" data-card-add="${escapeHTML(name)}" aria-label="增加 ${escapeHTML(name)}"><span aria-hidden="true">+</span></button>
+  </div>`;
+}
+
+// 牌表文字行：数量 + 牌名 + 费用，行尾是 +/−。牌名是「看大图」按钮（触屏没有
+// 悬停，点名字走放大层）。data-* 与卡图网格同一套约定，悬停预览与中文化直接复用
+function renderDeckRow(item) {
+  const card = item.card || {};
+  const name = card.name || '';
+  const faces = picturedFacesOf(card);
+  const previewImage = proxiedImage(card.image_normal || card.image_small || faces[0]?.image_normal || faces[0]?.image_small || '');
+  const faceData = faces.length > 1 ? ` data-faces="${escapeHTML(JSON.stringify(faces))}"` : '';
+  return `<div class="deck-row"${faceData} data-preview-src="${escapeHTML(previewImage)}" data-preview-name="${escapeHTML(name)}" data-card-text="${escapeHTML(previewTextFor(card))}">
+    <button type="button" class="deck-row-main"${previewImage ? ` data-zoom-src="${escapeHTML(previewImage)}"` : ''} aria-label="查看 ${escapeHTML(name)} 大图">
+      <span class="deck-row-qty">${item.quantity || 1}×</span>
+      <span class="deck-row-name">${escapeHTML(name || 'Unknown card')}</span>
+      <span class="deck-row-cost" aria-hidden="true">${deckRowCost(card)}</span>
+    </button>
+    ${renderEditControls(name)}
+  </div>`;
 }
 
 // --- light deck editor --------------------------------------------------------
@@ -2473,10 +2621,7 @@ function renderCard(item) {
   const previewImage = proxiedImage(card.image_normal || card.image_small || faces[0]?.image_normal || faces[0]?.image_small);
   const faceSwitch = faceSwitchMarkup(faces);
   const faceData = faces.length > 1 ? ` data-faces="${escapeHTML(JSON.stringify(faces))}"` : '';
-  const editorControls = item.editor === false ? '' : `<div class="card-edit-controls">
-    <button type="button" data-card-subtract="${escapeHTML(card.name || '')}" aria-label="减少 ${escapeHTML(card.name || '')}"><span aria-hidden="true">−</span></button>
-    <button type="button" data-card-add="${escapeHTML(card.name || '')}" aria-label="增加 ${escapeHTML(card.name || '')}"><span aria-hidden="true">+</span></button>
-  </div>`;
+  const editorControls = item.editor === false ? '' : renderEditControls(card.name || '');
   return `<div class="mtg-card"${faceData} data-preview-src="${escapeHTML(previewImage || '')}" data-preview-name="${escapeHTML(card.name || '')}" data-card-text="${escapeHTML(previewTextForCard(card))}">
     <div class="mtg-card-face" aria-describedby="card-preview">${image ? `<img loading="lazy" src="${escapeHTML(image)}" alt="${escapeHTML(card.name)}">` : '<div class="card-placeholder"></div>'}<span class="card-quantity">${item.quantity || 1}×</span><strong>${escapeHTML(card.name || 'Unknown card')}</strong></div>
     ${faceSwitch}
@@ -2580,6 +2725,107 @@ let activePreviewCard = null;
 let previewImageCache = new Map(); // url -> resolved element (pre-loaded large art)
 let zoomFaceList = []; // 双面卡打开放大层时的面数据（正面优先），单面卡为空
 
+// 牌表抽屉的固定预览栏：抽屉里的卡不再用跟着鼠标飘的浮层，卡图与规则固定
+// 显示在列表左侧，滚动列表时留在原位（学 Moxfield 牌表旁的卡图栏）。只在宽屏
+// 出现，断点与 styles.css 的 .deck-drawer.has-pane 同步——JS 用同一个断点给
+// 抽屉打类，悬停时才知道该走预览栏还是浮动预览。
+const deckPreviewImage = document.querySelector('#deck-preview-image');
+const deckPreviewName = document.querySelector('#deck-preview-name');
+const deckPreviewOracle = document.querySelector('#deck-preview-oracle');
+const deckPreviewHint = document.querySelector('.deck-preview-hint');
+const deckPaneQuery = window.matchMedia('(min-width: 1024px)');
+let deckPaneCard = null; // 预览栏当前显示的卡（带 data-preview-src 的元素）
+
+function syncDeckPaneMode() {
+  if (!deckDrawer) return;
+  const hadPane = deckDrawer.classList.contains('has-pane');
+  deckDrawer.classList.toggle('has-pane', deckPaneQuery.matches);
+  // 窗口跨过断点变宽时预览栏才出现：补上默认那张卡，不留一片「请悬停」
+  if (!hadPane && deckPaneQuery.matches) syncDeckPaneDefault();
+}
+syncDeckPaneMode();
+deckPaneQuery.addEventListener('change', syncDeckPaneMode);
+
+// 抽屉里的卡且预览栏在场 → 预览走左栏；不传 card 时只问「预览栏在不在」
+function usesDeckPane(card) {
+  return Boolean(deckDrawer && deckDrawer.classList.contains('has-pane') && (!card || card.closest('#deck-card-list')));
+}
+
+function syncDeckPaneText(card) {
+  deckPreviewName.textContent = card.dataset.zhName
+    ? `${card.dataset.previewName || ''} · ${card.dataset.zhName}`
+    : (card.dataset.previewName || '');
+  deckPreviewName.hidden = false;
+  const text = card.dataset.cardText || '';
+  deckPreviewOracle.textContent = text;
+  deckPreviewOracle.hidden = !text;
+}
+
+function showDeckPane(card) {
+  deckPaneCard = card;
+  deckPreviewImage.alt = card.dataset.previewName || '';
+  // 当前行的淡底：让键盘用户知道预览栏说的是哪一张
+  deckDrawer.querySelectorAll('.deck-row.is-active').forEach((row) => row.classList.remove('is-active'));
+  if (card.classList.contains('deck-row')) card.classList.add('is-active');
+  const source = card.dataset.previewSrc;
+  deckPreviewHint.hidden = Boolean(source);
+  deckPreviewImage.hidden = !source;
+  if (!source) {
+    deckPreviewName.hidden = true;
+    deckPreviewOracle.hidden = true;
+    return;
+  }
+  syncDeckPaneText(card);
+  // 同一张卡重复进入不重绘：pointerover 在行内子元素之间会连发
+  if (deckPreviewImage.dataset.src !== source) {
+    deckPreviewImage.dataset.src = source;
+    loadPreviewArt(card, source, (src) => { if (deckPaneCard === card) deckPreviewImage.src = src; });
+  }
+  maybeLoadChinese(card);
+}
+
+function clearDeckPane() {
+  deckPaneCard = null;
+  deckPreviewHint.hidden = false;
+  deckPreviewImage.hidden = true;
+  deckPreviewImage.removeAttribute('src');
+  delete deckPreviewImage.dataset.src;
+  deckPreviewName.hidden = true;
+  deckPreviewOracle.hidden = true;
+}
+
+// 列表重渲染后预览栏的落点：原来那张还在就接着显示，否则回落到列表第一张
+// （主将在最前）——抽屉一拉开栏里就有内容，不是一片空白
+function syncDeckPaneDefault() {
+  if (deckDrawer?.hidden || !usesDeckPane()) return;
+  const rows = document.querySelectorAll('#deck-card-list [data-preview-src]');
+  const previous = deckPaneCard?.dataset.previewName;
+  const next = Array.from(rows).find((row) => row.dataset.previewName === previous) || rows[0] || null;
+  if (next) showDeckPane(next);
+  else clearDeckPane();
+}
+
+// 预览图两级加载：先上页面里已有的小图（已在缓存里，立刻有画面），大图加载完
+// 再换。apply 只在「当前仍是这张卡」时才生效，快速扫过一排卡不会被晚到的旧图覆盖。
+function loadPreviewArt(card, source, apply) {
+  const cached = previewImageCache.get(source);
+  if (cached) { apply(cached.src); return; }
+  const small = card.querySelector('img')?.src || '';
+  if (small) apply(small);
+  const img = new Image();
+  img.onload = () => { apply(source); previewImageCache.set(source, img); };
+  img.onerror = () => previewImageCache.delete(source);
+  img.src = source;
+}
+
+// 抽屉页签的箭头指向「点下去会发生的事」：展开态指右（收成窄条），收起后指左（拉回）
+function syncDeckDrawerToggle(collapsed) {
+  const tab = document.querySelector('.deck-drawer-tab');
+  if (!tab) return;
+  tab.querySelector('span').textContent = collapsed ? '‹' : '›';
+  tab.setAttribute('aria-expanded', String(!collapsed));
+}
+
 // Open a large card art view (mobile-friendly tap target). The trigger carries the
 // large art URL in data-zoom-src; clicking the backdrop or pressing Escape closes it.
 function openCardZoom(trigger) {
@@ -2587,10 +2833,13 @@ function openCardZoom(trigger) {
   if (!card) return;
   const source = card.dataset.zoomSrc || card.dataset.previewSrc;
   if (!source) return;
+  // 名称与规则文本认最近的宿主：牌表行的「看大图」按钮把数据都挂在行上，
+  // 中文译文只写回行——预览栏与放大层共用一份，不各存一份
+  const host = card.closest('[data-card-text]') || card;
   zoomImage.src = source;
-  zoomImage.alt = card.dataset.previewName || '';
-  zoomName.textContent = card.dataset.previewName || '';
-  const oracle = card.dataset.cardText || '';
+  zoomImage.alt = host.dataset.previewName || '';
+  zoomName.textContent = host.dataset.previewName || '';
+  const oracle = host.dataset.cardText || '';
   if (oracle) {
     zoomOracle.textContent = oracle;
     zoomOracle.hidden = false;
@@ -2617,7 +2866,7 @@ function openCardZoom(trigger) {
   document.body.style.overflow = 'hidden';
   // 放大层同样按需补中文：本次打开仍是英文，译文回来后写进 dataset，
   // 下次打开（或悬停）即带中文
-  maybeLoadChinese(card);
+  maybeLoadChinese(host);
 }
 function closeCardZoom() {
   zoomModal.hidden = true;
@@ -2754,25 +3003,15 @@ function maybeLoadChinese(card) {
     // 有中文就整段替换英文（异能本体用中文读）；没有中文的卡保持英文原文
     if (block) card.dataset.cardText = block;
     if (zh.chinese_name) card.dataset.zhName = zh.chinese_name;
+    // 译文落在哪块预览上就刷新哪块：抽屉的固定预览栏，或跟随鼠标的浮层
+    if (deckPaneCard === card) { syncDeckPaneText(card); return; }
     if (activePreviewCard !== card || preview.hidden) return;
-    if (block) {
-      previewOracle.textContent = card.dataset.cardText;
-      previewOracle.hidden = false;
-    }
-    if (card.dataset.zhName) previewName.textContent = `${name} · ${card.dataset.zhName}`;
+    syncFloatingPreviewText(card);
   });
 }
 
-function showCardPreview(trigger) {
-  if (!canHover.matches || !trigger) return;
-  const card = trigger.closest('[data-preview-src]');
-  const source = card?.dataset.previewSrc;
-  // The chosen-list rows have no <img> of their own, so "small" would be empty and the
-  // preview would stay blank until the large art loads. When no thumbnail exists, fall
-  // back to the large art directly.
-  if (!source) return;
-  activePreviewCard = card;
-  previewImage.alt = card.dataset.previewName || '';
+// 浮动预览层的文字块：名称（有译名就并排）+ 类型行与规则
+function syncFloatingPreviewText(card) {
   previewName.textContent = card.dataset.zhName
     ? `${card.dataset.previewName || ''} · ${card.dataset.zhName}`
     : (card.dataset.previewName || '');
@@ -2780,25 +3019,22 @@ function showCardPreview(trigger) {
   // data, so a hover can answer "what does this card do" without a click.
   previewOracle.textContent = card.dataset.cardText || '';
   previewOracle.hidden = !previewOracle.textContent;
-  // Show the small art immediately (it is already on the page and hot), then swap in
-  // the large art once it has finished loading, so the preview never hangs blank.
-  const small = card.querySelector('img')?.src || '';
-  const cached = previewImageCache.get(source);
-  if (cached) {
-    previewImage.src = cached.src;
-  } else if (small) {
-    previewImage.src = small;
-    const img = new Image();
-    img.onload = () => {
-      if (activePreviewCard === card) previewImage.src = source;
-      previewImageCache.set(source, img);
-    };
-    img.onerror = () => previewImageCache.delete(source);
-    img.src = source;
-  } else {
-    // No on-page thumbnail (e.g. the chosen-list rows): load the large art directly.
-    previewImage.src = source;
-  }
+}
+
+function showCardPreview(trigger) {
+  const card = trigger?.closest('[data-preview-src]');
+  if (!card) return;
+  // 牌表抽屉里走固定的预览栏：不跟着鼠标飘，也不挡住相邻的行
+  if (usesDeckPane(card)) { showDeckPane(card); return; }
+  if (!canHover.matches) return;
+  const source = card.dataset.previewSrc;
+  if (!source) return;
+  activePreviewCard = card;
+  previewImage.alt = card.dataset.previewName || '';
+  syncFloatingPreviewText(card);
+  // 先上页面里已有的小图（已在缓存里，立刻有画面），大图加载完再换，预览不会
+  // 挂着一片空白；页面里没有小图的（如组牌器的已选列表）直接上大图
+  loadPreviewArt(card, source, (src) => { if (activePreviewCard === card) previewImage.src = src; });
   preview.hidden = false;
   requestAnimationFrame(() => positionCardPreview(trigger));
   maybeLoadChinese(card);
@@ -2838,8 +3074,12 @@ function positionListPreview(anchor) {
   const gap = 10;
   const a = anchor.getBoundingClientRect();
   const box = el.getBoundingClientRect();
-  let left = a.right + gap;
-  if (left + box.width > window.innerWidth - gap) left = a.left - box.width - gap;
+  // 牌表抽屉开着时它就贴在曲线右侧：名称列表优先往柱子左边放，免得压在
+  // 抽屉的预览栏上；左边放不下再回到右边
+  const preferLeft = Boolean(deckDrawer && !deckDrawer.hidden);
+  let left = preferLeft ? a.left - box.width - gap : a.right + gap;
+  const overflows = preferLeft ? left < gap : left + box.width > window.innerWidth - gap;
+  if (overflows) left = preferLeft ? a.right + gap : a.left - box.width - gap;
   left = Math.max(gap, Math.min(left, window.innerWidth - box.width - gap));
   const top = Math.max(gap, Math.min(a.top, window.innerHeight - box.height - gap));
   el.style.left = `${left}px`;
@@ -2880,7 +3120,8 @@ document.addEventListener('pointerout', (event) => {
   if (!row || row.contains(event.relatedTarget)) return;
   // A pinned (clicked) bar keeps its name-list hover until another bar is picked
   // or the filter is cleared; only unpinned hover dismisses on pointer-out.
-  if (row.classList.contains('is-selected')) return;
+  // 牌表抽屉开着时不再钉住：筛选结果已经在抽屉里，这份列表留着只会压在抽屉上
+  if (row.classList.contains('is-selected') && !(deckDrawer && !deckDrawer.hidden)) return;
   hideListPreview();
 });
 
@@ -2893,15 +3134,15 @@ function hideCardPreview() {
 }
 
 document.addEventListener('pointerover', (event) => {
-  const trigger = event.target.closest('.mtg-card, .construction-card-item, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot');
+  const trigger = event.target.closest('.mtg-card, .construction-card-item, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot, .deck-row');
   if (trigger && !trigger.contains(event.relatedTarget)) showCardPreview(trigger);
 });
 document.addEventListener('pointerout', (event) => {
-  const trigger = event.target.closest('.mtg-card, .construction-card-item, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot');
+  const trigger = event.target.closest('.mtg-card, .construction-card-item, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .impact-dot, .deck-row');
   if (trigger && !trigger.contains(event.relatedTarget)) hideCardPreview();
 });
-document.addEventListener('focusin', (event) => { if (event.target.matches('.mtg-card, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img')) showCardPreview(event.target); });
-document.addEventListener('focusout', (event) => { if (event.target.matches('.mtg-card, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img')) hideCardPreview(); });
+document.addEventListener('focusin', (event) => { if (event.target.matches('.mtg-card, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .deck-row-main')) showCardPreview(event.target); });
+document.addEventListener('focusout', (event) => { if (event.target.matches('.mtg-card, .builder-candidate, .builder-chosen-item, .builder-commander-box-item, .builder-commander-preview img, .deck-row-main')) hideCardPreview(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') hideCardPreview(); });
 window.addEventListener('scroll', hideCardPreview, { passive: true });
 window.addEventListener('resize', hideCardPreview);
@@ -2967,11 +3208,16 @@ function renderEDHBracketDetails(details) {
   const reasons = Array.isArray(details.rules_bracket_reasons)
     ? details.rules_bracket_reasons.map((reason) => String(reason ?? '').trim()).filter(Boolean)
     : [];
+  // 原文形如 "Recommended Bracket: 3. Minimum Bracket: 1."，两项各占一行。
+  // 逐行去掉行首的句点：只靠替换拆行的话，句点会单独落成一行 "."
   const evaluatedReason = String(details.evaluated_bracket_reason ?? '')
     .replace(/(Recommended Bracket:\s*\d+)/gi, '$1\n')
     .replace(/(Minimum Bracket:\s*\d+)/gi, '$1\n')
     .replace(/\.\s+(?=[A-Z])/g, '.\n')
-    .trim();
+    .split('\n')
+    .map((line) => line.replace(/^\.+\s*/, '').trim())
+    .filter(Boolean)
+    .join('\n');
   const counters = [
     ['Game Changers', Number(details.game_changers) || 0, details.game_changer_names || []],
     ['Early 2-Card Combos', Number(details.early_2_card_combos) || 0, details.early_2_card_combo_names || []],
@@ -3104,8 +3350,8 @@ function escapeHTML(value) {
 }
 
 // Scroll-triggered reveal, one-shot: 元素首次进入视口时加 in-view 并停止观察。
-// 之前的 toggle 式会在向上回滚时把已看过的区块再播一遍镜像进出，观感
-// 很怪；一次性 reveal 后内容看过即定格。dataset 防止重复分析对同一元素
+// 显现动作只有「顶部色条 scaleX 划入」一种（位移淡入是最模板化的入场，
+// 已删）；一次性 reveal 后内容看过即定格。dataset 防止重复分析对同一元素
 // 重复注册。触屏设备与 reduced-motion 由 CSS 侧整体关闭。
 function initScrollAnimations() {
   const observer = new IntersectionObserver((entries, obs) => {
@@ -3117,12 +3363,9 @@ function initScrollAnimations() {
     });
   }, { rootMargin: '50px 0px 50px 0px' });
 
-  // 推荐区卡片多，整段淡入位移显得晃：只保留顶部的进入条动画（strip-only
-  // 跳过 opacity/transform，::before 的 scaleX 照常播放）
   document.querySelectorAll('.catalog-section, .result-card').forEach((el) => {
     if (el.dataset.scrollAnimated) return;
     el.dataset.scrollAnimated = '1';
-    if (el.id === 'recommendation-section') el.classList.add('strip-only');
     el.classList.add('scroll-reveal');
     observer.observe(el);
   });

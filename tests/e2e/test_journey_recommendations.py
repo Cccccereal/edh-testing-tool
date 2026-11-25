@@ -25,8 +25,7 @@ def test_gap_recommendation_journey(page, stubbed_server):
     assert gap_recs, "stub 牌组应有缺口词条推荐"
     assert len(recommendations) >= 2, "stub EDHREC 页应至少留下两个类别分组"
 
-    # 分析完成后右侧牌表抽屉会自动展开遮住主页面，先收起再操作推荐区
-    page.click("#deck-drawer-close")
+    # 分析完成后牌表抽屉保持收起，推荐区不被遮挡
     expect(page.locator("#deck-drawer")).to_be_hidden()
 
     section = page.locator("#recommendation-section")
