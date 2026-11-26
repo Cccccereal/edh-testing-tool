@@ -155,6 +155,9 @@ h2 { margin: 0; font-size: 29px; letter-spacing: -.02em; }
    like Commander bracket terminology, so the numeral carries the meaning. */
 .deck-heading-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .deck-heading-row h2 { margin: 0; }
+/* 牌组名超长时限三行截断（完整名还在悬停提示与浏览器标题里）：不设上限的
+   话五行的名字会把报头撑到一屏高，封面裁切也被拉成一条细横带 */
+.deck-heading-row h2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
 .deck-health-badge { display: inline-flex; align-items: center; line-height: 1; }
 .deck-health-badge[hidden] { display: none; }
 .health-badge-wrap { position: relative; display: inline-flex; align-items: center; cursor: default; }
@@ -247,13 +250,16 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .deck-strip-body { grid-area: body; position: relative; display: grid; align-content: center; gap: 8px; min-width: 0; padding: 22px 32px; }
 .deck-strip-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .deck-strip-top .eyebrow { margin: 0; }
-.deck-strip-top .ghost-button { position: absolute; top: 18px; right: 24px; }
+/* 「重新分析」留在文档流里（和 eyebrow 同一行右端）：绝对定位会让折行的
+   长牌组名从按钮底下穿过 */
 .deck-strip h2 { font-size: clamp(30px, 4vw, 52px); font-family: var(--font-display); letter-spacing: -.03em; }
 .deck-colors { align-items: center; }
 .deck-strip .deck-score-note { margin: 0; color: var(--muted); font-size: 13px; }
 .deck-score-note.is-up, .deck-score-note.is-down { color: var(--acid); font-weight: 700; }
 .deck-score-note.is-down { color: var(--orange); }
-.deck-covers { grid-area: covers; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-content: start; }
+.deck-covers { grid-area: covers; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+/* 封面默认 181px，但跟着报头长：标题折行把报头撑高时封面铺满整行高度，
+   不留出下方一条面板色的缝 */
 /* 原画按高度裁：卡图高度撑到容器高度的 680/304（画框高 304），顶上收掉 76px
    （占容器高度 25%），左右居中。容器随标题区高矮伸缩时画框始终填满——比画框
    比例高就左右各多裁几像素，矮则由 min-height 兜住 */
@@ -835,6 +841,13 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 .builder-sidebar { border: 0; background: var(--surface-2); padding: 20px; border-radius: 18px; align-self: start; position: sticky; top: 92px; }
 .builder-progress { display: flex; align-items: baseline; gap: 8px; margin-bottom: 16px; }
 .builder-progress strong { font-size: 42px; line-height: .9; letter-spacing: -.03em; color: var(--acid); }
+/* 组满 100 张时侧栏脉冲一次（app.js 加 complete-pulse 类，2 秒后摘除）——
+   此前只加类没有样式，反馈并不存在 */
+@keyframes builder-complete-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(200, 232, 74, 0); }
+  45% { box-shadow: 0 0 0 6px rgba(200, 232, 74, .35); }
+}
+.builder-sidebar.complete-pulse { animation: builder-complete-pulse 1s ease 2; }
 .builder-progress span { color: var(--muted); font-size: 14px; }
 .builder-metric { margin-bottom: 13px; }
 .builder-metric-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
@@ -881,9 +894,7 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 }
 .editor-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 14px 16px; border: 0; background: var(--surface-2); border-radius: 14px; }
 .deck-drawer-panel .editor-toolbar { border-right: 0; border-left: 0; }
-.deck-drawer-panel .deck-card-list.collapsed { max-height: none; overflow: visible; }
-.deck-drawer-panel .deck-card-list-expand-overlay { display: none; }
-.deck-drawer-panel .deck-card-list-collapse-button { display: none; }
+.deck-drawer-panel .card-edit-controls { grid-template-columns: 1fr 1fr; }
 .editor-add-row { display: flex; gap: 8px; flex: 1 1 260px; }
 .editor-add-field { position: relative; flex: 1; }
 .editor-add-row input { width: 100%; flex: 1; padding: 10px 12px; border: 1px solid #555a50; color: var(--ink); background: #0e100d; font: 14px var(--font-ui); }
@@ -913,46 +924,6 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 /* 编辑抽屉里 +/− 行与卡面同宽、固定高度：不再随卡名长短上下浮动。 */
 .deck-drawer-panel .card-edit-controls { width: 100%; box-sizing: border-box; height: 36px; grid-template-rows: 36px; align-items: stretch; }
 .deck-drawer-panel .card-edit-controls button { height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; }
-.deck-card-list.collapsed { max-height: 510px; overflow: hidden; position: relative; }
-.deck-card-list-expand-overlay {
-  display: none;
-  position: absolute;
-  inset: auto 0 0;
-  height: 130px;
-  background: linear-gradient(transparent, #11130f);
-  cursor: pointer;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 24px;
-  color: var(--acid);
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.05em;
-  transition: color 0.2s;
-  z-index: 10;
-}
-:root.light-mode .deck-card-list-expand-overlay { background: linear-gradient(transparent, #fafbf9); }
-.deck-card-list-expand-overlay:hover { color: var(--ink); }
-.deck-card-list.collapsed .deck-card-list-expand-overlay { display: flex; }
-.deck-card-list-collapse-button {
-  display: none;
-  margin: 24px auto 0;
-  padding: 12px 24px;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--ink);
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
-}
-.deck-card-list-collapse-button:hover {
-  border-color: var(--acid);
-  color: var(--acid);
-  background: rgba(200, 232, 74, 0.06);
-}
-.deck-card-list:not(.collapsed) .deck-card-list-collapse-button { display: block; }
 /* 类型分组：<details> 整组可折叠，组头是标题 + 张数（学 Moxfield 的
    「Creatures (26) ▾」）；收起状态记在 app.js，重渲染后照旧 */
 .deck-group { margin-top: 14px; }
@@ -1140,7 +1111,6 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
      高度上是画框的约 66%，上沿落在画框顶下约 20% 处 */
   .deck-strip { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'covers' 'body'; }
   .deck-strip-body { padding: 16px 20px 20px; }
-  .deck-strip-top .ghost-button { position: static; }
   .deck-cover { min-height: 0; aspect-ratio: 2.1 / 1; }
   .deck-cover img { top: -50.6%; left: -9.2%; width: 120%; height: auto; transform: none; }
   .deck-cover.is-cover img { top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; transform: none; }
@@ -1199,7 +1169,7 @@ input:focus { box-shadow: inset 0 0 0 2px var(--acid); outline: 2px solid var(--
 :root.light-mode .deck-summary { background: rgba(250, 251, 249, .96); }
 .deck-summary-identity { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 0; padding: 6px 0; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
 .deck-summary-identity:focus-visible { outline: 2px solid var(--acid); outline-offset: -2px; }
-.deck-summary-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 700; }
+.deck-summary-name { min-width: 0; max-width: min(320px, 42vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 700; }
 .deck-summary-score.health-badge { padding: 4px 10px; font-size: 13px; }
 /* 类型构成与缺口横向排开，窄屏下整段横向滚动、不出滚动条 */
 .deck-summary-scroll { display: flex; align-items: center; gap: 18px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }

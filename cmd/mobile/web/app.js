@@ -22,8 +22,6 @@ const inputView = document.querySelector('#input-view');
 const resultsView = document.querySelector('#results-view');
 const builderView = document.querySelector('#builder-view');
 const navBackButton = document.querySelector('#nav-back');
-const decklistToggle = document.querySelector('#decklist-toggle');
-const copyDecklistButton = document.querySelector('#copy-decklist');
 const clearDecklistButton = document.querySelector('#clear-decklist');
 const themeToggle = document.querySelector('#theme-toggle');
 let currentDeckText = '';
@@ -1337,6 +1335,18 @@ builderAnalyze.addEventListener('click', () => {
 });
 builderBackEdit.addEventListener('click', backToBuilderEdit);
 
+// 候选卡是 role="button" 的 div，回车 / 空格也要能选（键盘用户的唯一途径）；
+// 焦点在卡内嵌的「大」钮或翻面钮上时让位给它们自己的点击行为
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const candidate = event.target.closest?.('[data-candidate]');
+  if (!candidate) return;
+  if (event.target.closest('.card-zoom-button, .card-faces button')) return;
+  event.preventDefault();
+  const data = buildCandidates[Number(candidate.dataset.candidate)];
+  if (data) addBuildCard(data);
+});
+
 // Delegate builder candidate clicks through the global click listener. Basic lands
 // are wired here, self-contained and gated to the commander's color identity is
 // optional; all five are offered for simplicity.
@@ -1389,13 +1399,6 @@ document.addEventListener('click', (event) => {
   }
 });
 
-copyDecklistButton?.addEventListener('click', async () => {
-  if (!currentDeckText) return;
-  const ok = await copyTextToClipboard(currentDeckText);
-  if (copyDecklistButton) copyDecklistButton.textContent = ok ? '已复制' : '复制失败';
-  setTimeout(() => { if (copyDecklistButton) copyDecklistButton.textContent = '复制牌表'; }, 1600);
-});
-
 retryButton?.addEventListener('click', () => {
   showInputView();
   input.focus();
@@ -1409,25 +1412,6 @@ navBackButton?.addEventListener('click', () => {
 clearDecklistButton?.addEventListener('click', () => {
   decklistInput.value = '';
   decklistInput.focus();
-});
-
-// Delegate decklist expand/collapse to the container
-document.addEventListener('click', (event) => {
-  const expandTrigger = event.target.closest('[data-decklist-expand]');
-  if (expandTrigger) {
-    const list = document.querySelector('#deck-card-list');
-    if (list) list.classList.remove('collapsed');
-    return;
-  }
-  const collapseTrigger = event.target.closest('[data-decklist-collapse]');
-  if (collapseTrigger) {
-    const list = document.querySelector('#deck-card-list');
-    if (list) {
-      list.classList.add('collapsed');
-      list.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-    return;
-  }
 });
 
 // Clicking a mana-curve bar switches the drill-down panel next to the curve to the
@@ -1455,14 +1439,18 @@ themeToggle.addEventListener('click', () => {
   const root = document.documentElement;
   const isLight = root.classList.toggle('light-mode');
   themeToggle.textContent = isLight ? '亮色' : '暗色';
-  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+  // 浏览器「屏蔽站点数据」会让这里抛 SecurityError——主题记忆丢了可以接受，
+  // 冒泡出去把整个脚本的后续初始化打断不行
+  try { localStorage.setItem('theme', isLight ? 'light' : 'dark'); } catch { /* 存储不可用就只在本次会话生效 */ }
 });
 
 // Load saved theme preference
-if (localStorage.getItem('theme') === 'light') {
-  document.documentElement.classList.add('light-mode');
-  themeToggle.textContent = '亮色';
-}
+try {
+  if (localStorage.getItem('theme') === 'light') {
+    document.documentElement.classList.add('light-mode');
+    themeToggle.textContent = '亮色';
+  }
+} catch { /* 存储不可用就保持默认暗色 */ }
 
 // 打开右侧牌表编辑抽屉：把录入/删改牌表的操作区随时拉出来列表内容在
 // renderDeckCards 里已经渲染，这里只负责显隐与滚动锁定
@@ -1507,8 +1495,12 @@ document.addEventListener('click', (event) => {
     return;
   }
 });
+// Esc 只关最上层：放大层（z-index 1100）压着牌表抽屉（40），都开着时第一个
+// Esc 关放大层、抽屉保持，第二个 Esc 才关抽屉
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && deckDrawer && !deckDrawer.hidden) closeDeckDrawer();
+  if (event.key !== 'Escape') return;
+  if (!zoomModal.hidden) return; // 放大层有自己的监听（zoom 侧），这里让位
+  if (deckDrawer && !deckDrawer.hidden) closeDeckDrawer();
 });
 
 // 抽屉面板顶部要贴住吸顶导航下缘（styles.css 的 --nav-h）：导航实际高度随字体
@@ -2220,7 +2212,7 @@ function renderCombos(combos, suggestions) {
   section.hidden = !combos.length && !(suggestions || []).length;
   container.innerHTML = combos.map((combo) => `
     <article class="combo-card">
-      <div class="combo-header"><div><span class="source-badge">COMMANDER SPELLBOOK</span>${comboCategoryBadge(combo)}<h3>${escapeHTML(combo.name)}</h3></div>${combo.source_url ? `<a href="${escapeHTML(combo.source_url)}" target="_blank" rel="noopener noreferrer">查看来源 ↗</a>` : ''}</div>
+      <div class="combo-header"><div><span class="source-badge">COMMANDER SPELLBOOK</span>${comboCategoryBadge(combo)}<h3>${escapeHTML(combo.name)}</h3></div>${combo.source_url ? `<a href="${safeExternalHref(combo.source_url, 'https://commanderspellbook.com/')}" target="_blank" rel="noopener noreferrer">查看来源 ↗</a>` : ''}</div>
       <div class="combo-components">${(combo.components || []).map((item) => renderCard({ ...item, editor: false })).join('')}</div>
       ${combo.result ? `<p class="combo-result"><strong>结果</strong>${escapeHTML(combo.result)}</p>` : ''}
       ${combo.steps?.length ? `<details><summary>执行步骤</summary><ol>${combo.steps.map((step) => `<li>${escapeHTML(step)}</li>`).join('')}</ol></details>` : ''}
@@ -2229,7 +2221,7 @@ function renderCombos(combos, suggestions) {
   suggestionBlock.hidden = !nearMisses.length;
   suggestionList.innerHTML = nearMisses.map((suggestion) => `
     <article class="combo-card combo-suggestion-card">
-      <div class="combo-header"><div><span class="source-badge">SPELLBOOK · 组合缺件</span>${comboCategoryBadge(suggestion)}<h3>${escapeHTML(suggestion.name)}</h3></div>${suggestion.source_url ? `<a href="${escapeHTML(suggestion.source_url)}" target="_blank" rel="noopener noreferrer">查看来源 ↗</a>` : ''}</div>
+      <div class="combo-header"><div><span class="source-badge">SPELLBOOK · 组合缺件</span>${comboCategoryBadge(suggestion)}<h3>${escapeHTML(suggestion.name)}</h3></div>${suggestion.source_url ? `<a href="${safeExternalHref(suggestion.source_url, 'https://commanderspellbook.com/')}" target="_blank" rel="noopener noreferrer">查看来源 ↗</a>` : ''}</div>
       <div class="combo-components">${(suggestion.owned || []).map((item) => renderCard({ ...item, editor: false })).join('')}${(suggestion.missing || []).map((item) => `<div class="combo-missing-card">${renderCard({ ...item, editor: false })}<span class="combo-missing-pill">＋缺 ${escapeHTML(String(item.quantity || 1))} 张</span></div>`).join('')}</div>
       ${suggestion.result ? `<p class="combo-result"><strong>成组合后</strong>${escapeHTML(suggestion.result)}</p>` : ''}
     </article>`).join('');
@@ -2282,7 +2274,7 @@ function renderRecommendedCard(item) {
   const meta = fromScryfall
     ? `<div><span>热度排名</span><strong>${rank > 0 ? '#' + rank : '—'}</strong></div><div><span>来源</span><strong>语义检索</strong></div>`
     : `<div><span>Synergy</span><strong>${(Number(item.synergy || 0) * 100).toFixed(1)}%</strong></div><div><span>Inclusion</span><strong>${(Number(item.inclusion_rate || 0) * 100).toFixed(1)}%</strong></div>`;
-  const link = `<a href="${escapeHTML(item.source_url || (fromScryfall ? 'https://scryfall.com/' : 'https://edhrec.com/'))}" target="_blank" rel="noopener noreferrer">查看详情 ↗</a>`;
+  const link = `<a href="${safeExternalHref(item.source_url, fromScryfall ? 'https://scryfall.com/' : 'https://edhrec.com/')}" target="_blank" rel="noopener noreferrer">查看详情 ↗</a>`;
   return `<article class="recommendation-card${fromScryfall ? ' is-scryfall' : ''}">
     ${renderCard({ card: item.card, quantity: 1, editor: false })}
     ${fromScryfall ? '<span class="recommendation-source">词条检索</span>' : ''}
@@ -3173,7 +3165,8 @@ function closeCardZoom() {
   zoomFaceList = [];
   zoomFacesBar.innerHTML = '';
   zoomFacesBar.hidden = true;
-  document.body.style.overflow = '';
+  // 滚动锁归抽屉管：放大层可以叠在开着的抽屉上，关掉放大层不能顺带解锁页面
+  document.body.style.overflow = deckDrawer && !deckDrawer.hidden ? 'hidden' : '';
 }
 // 放大层翻面：图片/名称/异能都切到所选面（打开时默认正反面全文并列，
 // 翻到某一面则聚焦该面的规则文本）
@@ -3244,12 +3237,6 @@ function previewTextFor(card) {
 
 // Alias kept for the decklist card renderer, which uses the longer name.
 function previewTextForCard(card) {
-  return previewTextFor(card);
-}
-
-// The hover preview's text block. Same content as the full decklist cards, but
-// the builder flow keeps it in the same place so both show the Chinese oracle.
-function builderPreviewTextFor(card) {
   return previewTextFor(card);
 }
 
@@ -3645,6 +3632,12 @@ function escapeHTML(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
   })[char]);
+}
+
+// 接口给的外链只允许 https：转义防的是注入，防不了 javascript: 协议——
+// 上游被篡改时宁可让链接指向兜底站点，也不给脚本执行机会
+function safeExternalHref(url, fallback) {
+  return /^https:\/\//i.test(String(url || '')) ? escapeHTML(url) : fallback;
 }
 
 // Scroll-triggered reveal, one-shot: 元素首次进入视口时加 in-view 并停止观察。
