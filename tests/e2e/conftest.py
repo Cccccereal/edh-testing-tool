@@ -110,6 +110,8 @@ def page(stubbed_server):
     with sync_playwright() as manager:
         browser = manager.chromium.launch(headless=True)
         context = browser.new_context(base_url=stubbed_server["base_url"])
+        # 导出牌表是剪贴板优先：旅程要读回剪贴板内容来核对导出的牌表
+        context.grant_permissions(["clipboard-read", "clipboard-write"])
         opened = context.new_page()
         opened.set_default_timeout(15_000)
         # 记录谁改了 #deck-drawer 的 hidden（排障用；读取 window.__drawer_mutations）

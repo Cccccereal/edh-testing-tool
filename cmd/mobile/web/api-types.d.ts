@@ -673,8 +673,9 @@ export interface components {
         };
         AutocompleteResponse: {
             suggestions: {
+                /** @description Canonical English card name */
                 name: string;
-                /** Simplified Chinese alias for display; absent when unknown */
+                /** @description Simplified Chinese alias for display; omitted when unknown */
                 chinese?: string;
             }[];
         };

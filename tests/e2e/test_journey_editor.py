@@ -9,7 +9,7 @@ X-Cache 应为 miss——编辑后的牌表是新的缓存 key。
 import pytest
 from playwright.sync_api import expect
 
-from journey_lib import CANONICAL_URL, open_home, submit_analyze, wait_for_results
+from journey_lib import CANONICAL_URL, open_home, read_clipboard_text, submit_analyze, wait_for_results
 
 pytestmark = pytest.mark.ui
 
@@ -56,14 +56,44 @@ def test_editor_recompare_and_export_journey(page, stubbed_server):
     expect(result).to_be_visible()
     expect(result.locator(".swap-delta").first).to_be_visible()
 
-    # 导出编辑后的牌表
+    # 导出编辑后的牌表：剪贴板优先——「复制 → 粘贴进 Moxfield」是主工作流，桌面
+    # 客户端（Tauri WebView）里 <a download> 又不可靠；复制失败才退回文件下载
+    # （见下一条旅程）。上面给 Sol Ring +1，导出的牌表里它是 2 张、且只占一行
+    page.click("#editor-export")
+    expect(page.locator("#editor-export")).to_have_text("已复制")
+    text = read_clipboard_text(page)
+    assert text.startswith("Commander\n")
+    assert [line for line in text.splitlines() if "Sol Ring" in line] == ["2 Sol Ring"]
+
+
+def test_editor_export_downloads_when_clipboard_is_unavailable(page, stubbed_server):
+    """剪贴板不可用时（安卓 WebView 的常态）导出退回文件下载。
+
+    两条复制路径都掐掉——navigator.clipboard 与 document.execCommand('copy')——
+    否则剪贴板可用时根本不会有下载事件。
+    """
+    # 注入脚本要写成裸语句：add_init_script 只对脚本求值，写成箭头函数不会被调用
+    page.add_init_script(
+        """
+        Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+        document.execCommand = () => false;
+        """
+    )
+    open_home(page)
+    submit_analyze(page, url=CANONICAL_URL)
+    wait_for_results(page)
+    page.click("[data-deck-drawer-open]")
+    expect(page.locator(".deck-drawer-panel")).to_be_visible()
+
     with page.expect_download() as download_info:
         page.click("#editor-export")
+    # 「已下载」只显示约 1.6 秒，先断它再读文件
+    expect(page.locator("#editor-export")).to_have_text("已下载")
     download = download_info.value
     assert download.suggested_filename == "decklist.txt"
-    text = download.path() and _read_download(download)
+    text = _read_download(download)
+    assert text.startswith("Commander\n")
     assert "Sol Ring" in text
-    assert text.count("Sol Ring") == 1 or "2 Sol Ring" in text
 
 
 def _read_download(download) -> str:

@@ -26,8 +26,8 @@ stub 上游计数（一次分析恰好一次编排）。
 |---|---|---|
 | ① 输入 URL → 解析与双评分 | `test_journey_analyze.py` | 骨架屏、双评分卡、健康徽章、缓存 miss→hit、文本录入模式 |
 | ② 构筑缺口报告 | `test_journey_construction.py` | 六类指标 UI 与 API 逐项对齐（一处定义两处用） |
-| ③ 缺口推荐 | `test_journey_recommendations.py` | 分组收起/展开、「直接加入构筑」写回编辑器 |
-| ④ 编辑器 → 即时测算 → 导出 | `test_journey_editor.py` | +/− 改牌、重新测算（新缓存 key，X-Cache=miss）、delta 对比表、牌表下载 |
+| ③ 缺口推荐 | `test_journey_recommendations.py` | 分组首组默认展开、可折叠、「直接加入构筑」写回编辑器 |
+| ④ 编辑器 → 即时测算 → 导出 | `test_journey_editor.py` | +/− 改牌、重新测算（新缓存 key，X-Cache=miss）、delta 对比表、牌表导出（剪贴板优先并读回核对；剪贴板不可用时退回文件下载） |
 | ⑤ 组牌器 | `test_journey_builder.py` | 主将补全、三选一、出地/常见单卡、组满 100 张导出 |
 
 本地运行：`pip install playwright && python -m playwright install chromium`，然后

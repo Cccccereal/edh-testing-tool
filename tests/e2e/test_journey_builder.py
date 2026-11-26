@@ -8,7 +8,7 @@ build-lands / build-staples。全程不触第三方。
 import pytest
 from playwright.sync_api import expect
 
-from journey_lib import open_home
+from journey_lib import open_home, read_clipboard_text
 
 pytestmark = pytest.mark.ui
 
@@ -67,10 +67,17 @@ def test_builder_journey(page, stubbed_server):
     )
     expect(page.locator("#builder-complete")).to_be_visible()
 
-    # 导出草稿牌表
-    with page.expect_download() as download_info:
-        page.click("#builder-export")
-    assert download_info.value.suggested_filename == "decklist.txt"
+    # 导出草稿牌表：剪贴板优先（复制失败才退回文件下载，见编辑器旅程）。
+    # 草稿组满 100 张 = 主将 1 张 + 主板 99 张
+    page.click("#builder-export")
+    expect(page.locator("#builder-export")).to_have_text("已复制")
+    exported = read_clipboard_text(page)
+    commander, _, mainboard = exported.partition("\n\nDeck\n")
+    assert commander == "Commander\n1 Sram, Senior Edificer"
+    mainboard_lines = mainboard.splitlines()
+    assert len(mainboard_lines) == len(set(mainboard_lines)), "同一张牌不应拆成多行"
+    assert sum(int(line.split(" ", 1)[0]) for line in mainboard_lines) == 99
+    assert "Plains" in mainboard
 
 
 def test_builder_random_commander(page, stubbed_server):

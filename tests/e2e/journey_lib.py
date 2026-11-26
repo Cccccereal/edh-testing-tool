@@ -64,11 +64,21 @@ def wait_for_results(page):
     expect(page.locator("#deck-name")).to_have_text(CANONICAL_DECK_NAME)
 
 
+def read_clipboard_text(page) -> str:
+    """读回剪贴板文本，行尾统一成 LF。
+
+    导出牌表走剪贴板（应用写的是 LF），但 Windows 剪贴板会把它存成 CRLF，
+    读回来直接和 LF 文本比较会不相等。
+    """
+    return page.evaluate("navigator.clipboard.readText()").replace("\r\n", "\n")
+
+
 __all__ = [
     "CANONICAL_DECK_NAME",
     "CANONICAL_URL",
     "TEXT_DECKLIST",
     "open_home",
+    "read_clipboard_text",
     "submit_analyze",
     "wait_for_results",
 ]
