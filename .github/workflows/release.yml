@@ -1,10 +1,12 @@
 name: Release
 
 on:
-  # 推送到 main 分支自动触发，版本号 = 提交时间
-  push:
+  # CI 在 main 上跑完且通过才发版：发布曾在 CI 红着的时候照常出去（徽章可查证），
+  # 客户端的更新横幅会把用户导向没过测试的版本。手动触发仍可用（自担风险）。
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
-  # 手动触发（版本号同样取最后一次提交的时间）
   workflow_dispatch:
 
 # 防止多次 push 的构建同时进行，互相抢 Release
@@ -18,9 +20,14 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # workflow_run 触发时固定在 CI 刚验证过的那个提交上；默认会取分支最新
+          # 提交，若期间又有推送，版本与测试结果就对不上了
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -123,6 +130,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # 与 build 作业一致：钉在 CI 刚验证过的提交上
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -177,6 +187,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # 与 build 作业一致：钉在 CI 刚验证过的提交上
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Go
         uses: actions/setup-go@v5

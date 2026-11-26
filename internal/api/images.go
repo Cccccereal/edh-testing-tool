@@ -7,10 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -35,12 +39,29 @@ type imageProxy struct {
 // extension doubles as the content type on serve, so no metadata sidecar is
 // needed; the hash sidesteps unicode/path issues the same way the card
 // catalog's disk cache does.
-type imageDiskCache struct{ dir string }
+type imageDiskCache struct {
+	dir    string
+	mu     sync.Mutex
+	writes int
+}
 
 const (
 	imageMaxSize     = 10 << 20
 	imageFetchErrors = 2 // attempts for transport-level failures only
+
+	// Scryfall 的缓存键是 ?<unix 秒> 这类短版本号。限制查询串的形状有两个目的：
+	// 无法被用来把缓存键撑到任意长度；同一路径换查询串刷缓存的空间也随之收窄
+	// （路径本身已按段白名单校验）。
+	imageMaxQuery = 64
+
+	// 磁盘上限：每次写入递增计数，到阈值做一次全目录清点，超过则按修改时间
+	// 从旧到新删除。镜像没有索引文件，计数器重启归零——最坏情况是重启后第一次
+	// 清理推迟到再写 500 张，可以接受。
+	imageMaxFiles       = 20000
+	imagePruneThreshold = 500
 )
+
+var imageQueryRe = regexp.MustCompile(`^[A-Za-z0-9._=&-]{1,` + fmt.Sprint(imageMaxQuery) + `}$`)
 
 var imageMimeByExt = map[string]string{
 	".jpg":  "image/jpeg",
@@ -80,6 +101,10 @@ func (p *imageProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ext := strings.ToLower(filepath.Ext(rel))
 	// The CDN's ?<version> query is part of the cache identity: Scryfall bumps
 	// it when art updates, and ignoring it would serve old art forever.
+	if r.URL.RawQuery != "" && !imageQueryRe.MatchString(r.URL.RawQuery) {
+		writeError(w, http.StatusBadRequest, "INVALID_IMAGE_QUERY", "无效的图片版本参数。")
+		return
+	}
 	key := rel
 	if r.URL.RawQuery != "" {
 		key += "?" + r.URL.RawQuery
@@ -208,7 +233,41 @@ func (d *imageDiskCache) put(key string, data []byte) {
 	_ = os.Remove(d.path(key))
 	if err := os.Rename(name, d.path(key)); err != nil {
 		os.Remove(name)
+		return
 	}
+	d.maybePrune()
+}
+
+// maybePrune runs the size-cap cleanup every imagePruneThreshold writes. Errors
+// are swallowed: pruning is best-effort housekeeping and must never fail a
+// request that just succeeded.
+func (d *imageDiskCache) maybePrune() {
+	d.mu.Lock()
+	d.writes++
+	due := d.writes%imagePruneThreshold == 0
+	d.mu.Unlock()
+	if !due {
+		return
+	}
+	entries, err := os.ReadDir(d.dir)
+	if err != nil || len(entries) <= imageMaxFiles {
+		return
+	}
+	type stale struct {
+		name    string
+		modTime time.Time
+	}
+	items := make([]stale, 0, len(entries))
+	for _, entry := range entries {
+		if info, err := entry.Info(); err == nil {
+			items = append(items, stale{entry.Name(), info.ModTime()})
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].modTime.Before(items[j].modTime) })
+	for _, item := range items[:len(items)-imageMaxFiles] {
+		_ = os.Remove(filepath.Join(d.dir, item.name))
+	}
+	slog.Info("image cache pruned", "removed", len(items)-imageMaxFiles, "kept", imageMaxFiles)
 }
 
 func (d *imageDiskCache) path(key string) string {

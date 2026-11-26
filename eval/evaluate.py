@@ -54,7 +54,7 @@ CSV_FIELDS = ["deck_id", "name", "commander", "source_url", "supervisor_rank", "
 
 # 快照里采集的评分候选口径。评测时用 --metric 选一个。
 METRIC_KEYS = ["health", "commandersalt.salt", "commandersalt.power_level",
-               "edhpowerlevel.power_level", "edhpowerlevel.bracket"]
+               "edhpowerlevel.power_level", "edhpowerlevel.evaluated_bracket"]
 
 
 # ---------------------------------------------------------------- 统计（带并列秩修正）
@@ -181,9 +181,15 @@ def extract_candidates(body):
     results = body.get("results") or {}
     cs = (results.get("commandersalt") or {}).get("metrics") or {}
     ep = (results.get("edhpowerlevel") or {}).get("metrics") or {}
-    for key, source in [("commandersalt.salt", cs), ("commandersalt.power_level", cs),
-                        ("edhpowerlevel.power_level", ep), ("edhpowerlevel.bracket", ep)]:
-        value = source.get(key.split(".", 1)[1])
+    sources = {"commandersalt": cs, "edhpowerlevel": ep}
+    # METRIC_KEYS 是口径的单一来源：--metric 的候选与这里的提取共用一份清单，
+    # 此前两处各写一份，bracket 的字段名改过之后只有一处跟着改，导致该口径
+    # 永远提取不到分数
+    for key in METRIC_KEYS:
+        if key == "health":
+            continue
+        provider, field = key.split(".", 1)
+        value = sources.get(provider, {}).get(field)
         if isinstance(value, (int, float)):
             candidates[key] = round(float(value), 2)
     status = {name: (results.get(name) or {}).get("status", "missing")
@@ -215,7 +221,9 @@ def collect(args, rows):
             continue
         candidates, status = extract_candidates(body)
         # URL 首采成功就把牌表快照落地，之后回归不再依赖外链是否还活着。
-        if "decklist" in payload and body.get("canonical_decklist"):
+        # 已有快照不覆盖：外链上的牌被作者改动后按 README 规范视为新牌组，
+        # 静默覆盖会让历史评测的语料悄悄漂移。
+        if "url" in payload and body.get("canonical_decklist"):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(body["canonical_decklist"], encoding="utf-8")
             print(f"        牌表快照已存 {path.relative_to(EVAL_DIR)}")
@@ -334,13 +342,37 @@ def save_baseline(metric, rho, tau, entries):
 
 
 def compare_baseline(rho, metric, entries, fail_drop):
+    """对比基线，返回进程退出码。strict（fail_on_drop > 0）时，任何「无法公平
+    对比」的情形都算失败——门禁的意义是坏改动不许悄悄通过。"""
+    strict = fail_drop > 0
     if not BASELINE.exists():
         print("\n（无基线。调参前先 --save-baseline，之后就能看出每次改动的 ρ 变化。）")
+        if strict:
+            print("[门禁] 没有基线可比，不允许合并。先在改动前跑一次 --save-baseline。")
+            return 1
         return 0
     baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
     if baseline.get("metric") != metric:
         print(f"\n[提示] 基线口径是 {baseline['metric']}，本次是 {metric}，ρ 不可直接对比。")
+        if strict:
+            print("[门禁] 口径与基线不一致，不允许合并。用 --metric 切回基线口径再测。")
+            return 1
         return 0
+    # 样本漂移：少一套牌（分数缺失/采集失败）或多一套牌，ρ 就不在同一把尺子上。
+    base_ids = set(baseline.get("labeled") or [])
+    current_ids = {e["deck_id"] for e in entries}
+    if base_ids != current_ids:
+        added = sorted(current_ids - base_ids)
+        removed = sorted(base_ids - current_ids)
+        parts = []
+        if added:
+            parts.append(f"新增 {added}")
+        if removed:
+            parts.append(f"缺少 {removed}")
+        print(f"\n[提示] 参与统计的牌组与基线不一致（{'；'.join(parts)}），ρ 不可直接对比。")
+        if strict:
+            print("[门禁] 先查清楚为什么样本变了（多半是分析失败导致分数缺失）。")
+            return 1
     delta = None if rho is None else rho - baseline.get("rho", rho)
     print(f"\n=== 基线对比（{baseline.get('git_commit') or '未知版本'}，"
           f"{baseline.get('generated_at', '?')}）===")
@@ -377,7 +409,7 @@ def worksheet(rows):
     random.shuffle(shuffled)
     print("标注工作表（顺序已打乱；请主管按强度从强到弱编 1..N，1 = 最强，")
     print("填入 corpus/decks.csv 的 supervisor_rank 列。故意不显示任何分数，避免锚定）：\n")
-    for r in entries:
+    for r in shuffled:
         name = r.get("name") or r["deck_id"]
         commander = r.get("commander") or ""
         tail = f" — 主将 {commander}" if commander else ""
@@ -435,6 +467,9 @@ def main():
     rho, entries = evaluate_with_ranks(snapshot, args.metric, ranks)
 
     exit_code = 0
+    if rho is None and args.fail_on_drop > 0:
+        print("\n[门禁] 本次无法计算秩相关（参与统计的牌组不足 3 套），不允许合并。")
+        sys.exit(1)
     if rho is not None:
         tau = kendall_tau_b([len(entries) + 1 - e["rank"] for e in entries],
                             [e["score"] for e in entries])

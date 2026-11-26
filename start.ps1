@@ -31,7 +31,7 @@ function Get-ManagedProcess {
 }
 
 function Get-HealthURL {
-    $address = if ($env:APP_ADDRESS) { $env:APP_ADDRESS.Trim() } else { ":18781" }
+    $address = if ($env:APP_ADDRESS) { $env:APP_ADDRESS.Trim() } else { "127.0.0.1:18781" }
     if ($address.StartsWith(":")) { return "http://127.0.0.1$address/healthz" }
     if ($address.StartsWith("0.0.0.0:")) { return "http://127.0.0.1:$($address.Substring(8))/healthz" }
     if ($address.StartsWith("[::]:")) { return "http://127.0.0.1:$($address.Substring(5))/healthz" }

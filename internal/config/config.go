@@ -43,7 +43,10 @@ type Config struct {
 
 func Load() Config {
 	return Config{
-		Address:               env("APP_ADDRESS", ":18781"),
+		// 回环地址兜底：接口无鉴权，绑 ：18781 会把分析端点暴露到所有网络接口
+		// （LAN/VPN 同网段可直接调用）。桌面客户端与安卓壳各自显式传 127.0.0.1；
+		// 要对外提供服务时用 APP_ADDRESS 覆盖（如 Docker 里 :18781）。
+		Address:               env("APP_ADDRESS", "127.0.0.1:18781"),
 		RequestTimeout:        durationEnv("REQUEST_TIMEOUT", 90*time.Second),
 		ProviderTimeout:       durationEnv("PROVIDER_TIMEOUT", 60*time.Second),
 		CacheTTL:              durationEnv("CACHE_TTL", 30*time.Minute),
